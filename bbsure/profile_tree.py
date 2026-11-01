@@ -47,14 +47,17 @@ import json
 from concurrent.futures import ThreadPoolExecutor
 import os
 import re
-import sys
 
 import numpy as np
 import yaml
 from scipy.interpolate import interp1d
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import decision_tree as dt  # noqa: E402
+from bbsure.config import build_config, free_param_names, iter_param_entries
+from bbsure.fitter import Fitter, NoValidStart
+from bbsure.log import DecisionLog
+from bbsure.models import (amp_name, cand_group, candidate_groups,
+    group_spectra, Model, model_from_label, MOMENT_GROUPS, slope_name)
+from bbsure.runner import BBCompSepRunner
 
 ap = argparse.ArgumentParser()
 ap.add_argument('src', nargs='?')
@@ -92,8 +95,8 @@ os.makedirs(out, exist_ok=True)
 
 tc = yaml.safe_load(open(cfg_path))
 tc['paths']['runs_dir'] = out
-log = dt.DecisionLog(out)
-F = dt.Fitter(dt.BBCompSepRunner(tc, log),
+log = DecisionLog(out)
+F = Fitter(BBCompSepRunner(tc, log),
               hpd_frac=tc['thresholds'].get('hpd_frac', 0.68))
 R = F.R
 mc = tc['moments']
@@ -107,10 +110,10 @@ _c = os.path.join(tree, 'conclusion_tree.json')
 concl = json.load(open(_c if os.path.isfile(_c) else
                        os.path.join(tree, 'conclusion.json')))
 ev = json.load(open(os.path.join(tree, 'decision_log.json')))
-M0 = dt.model_from_label(concl['model'])
+M0 = model_from_label(concl['model'])
 cands = [e['model'] for e in ev if e['node'] == 'fit' and 'M_1,r' in
          e.get('question', '') and e.get('model', '').endswith('_r')]
-M1c = dt.model_from_label(cands[-1]) if cands else None
+M1c = model_from_label(cands[-1]) if cands else None
 if M1c is None or M1c.moments <= M0.moments:
     # il tree non ha trovato nessun momento nuovo da provare (niente rivelato
     # in Res_r0): nessun candidato, il risultato e' il profilo di M_0,r
@@ -120,11 +123,11 @@ else:
     # aggiungono al modello finale solo i suoi gruppi nuovi (con la stessa
     # potatura), cosi' M_0 e' annidato in M_0 + C
     newg = M1c.moments - M0.moments
-    amps_new = {dt.amp_name(p, sp) for _, p, sp in dt.group_spectra(newg)}
-    M1c = dt.Model(M0.moments | newg, True,
+    amps_new = {amp_name(p, sp) for _, p, sp in group_spectra(newg)}
+    M1c = Model(M0.moments | newg, True,
                    M0.off | (M1c.off & amps_new))
 cfg = yaml.safe_load(open(os.path.join(tree, f'{M0.label}_PC', 'config.yml')))
-names = dt.free_param_names(cfg['BBCompSep'])
+names = free_param_names(cfg['BBCompSep'])
 samp = np.loadtxt(os.path.join(tree, f'{M0.label}_PC', 'polychord',
                                'pch_equal_weights.txt'), ndmin=2)[:, 2:]
 r_b = samp[:, names.index('r_tensor')]
@@ -190,7 +193,7 @@ def profile(M, tag):
             if np.isfinite(f.chi2):
                 fits[r] = f
     if not any(np.isfinite(f.chi2) for f in fits.values()):
-        raise dt.NoValidStart(f'no valid ML start for the profile of '
+        raise NoValidStart(f'no valid ML start for the profile of '
                               f'{M.label}')
     # un intero tratto di fit non convergiti (plateau) non si vede come
     # "bump" rispetto ai vicini: si rifittano tutti i punti partendo dal
@@ -260,7 +263,7 @@ PROF_FITS = {}     # label -> {r della griglia: fit ML}
 
 
 # prior su r del tree (tophat) per il posterior con il profilo come likelihood
-_rp = next(v for k, v in dt.iter_param_entries(R.base['BBCompSep']).items()
+_rp = next(v for k, v in iter_param_entries(R.base['BBCompSep']).items()
            if k == 'r_tensor')
 R_PRIOR = (float(_rp[2][0]), float(_rp[2][-1]))
 
@@ -308,7 +311,7 @@ def base_at(M, r, tag, centers=None):
                       if not re.match(r'A_[ds]_(w10w10|w01w01)$', x)})
         res = R.ml(m, tag + '_ML0', fixed={'r_tensor': r}, centers=start)
     if not np.isfinite(res.chi2):
-        raise dt.NoValidStart(f'no valid ML start for {M.label} at r = {r}')
+        raise NoValidStart(f'no valid ML start for {M.label} at r = {r}')
     res.best = dict(res.best, r_tensor=r)
     return res
 
@@ -317,9 +320,9 @@ def local_logz(M, base, free, tag):
     """Evidenza di M attorno al best fit `base` (r fissato): liberi solo i
     parametri in `free`; se nessuno e' libero, -chi2/2."""
     fixed = {k: v for k, v in base.best.items() if k not in free}
-    cs = dt.build_config(R.base, M.with_r(False), 'polychord',
+    cs = build_config(R.base, M.with_r(False), 'polychord',
                          fixed)['BBCompSep']
-    if not dt.free_param_names(cs):
+    if not free_param_names(cs):
         return -0.5 * base.chi2
     return R.polychord(M.with_r(False), tag, fixed=fixed,
                        centers=base.best)[0]
@@ -328,10 +331,10 @@ def local_logz(M, base, free, tag):
 def null_logz(base, group, tag):
     """Evidenza del nullo: base, ampiezze del gruppo a zero, liberi solo i
     parametri spettrali del gruppo presenti nel modello."""
-    free = set(dt.MOMENT_GROUPS[dt.cand_group(group)]['free'])
+    free = set(MOMENT_GROUPS[cand_group(group)]['free'])
     fixed = {k: v for k, v in base.best.items() if k not in free}
-    cs = dt.build_config(R.base, base.model, 'polychord', fixed)['BBCompSep']
-    if not dt.free_param_names(cs):
+    cs = build_config(R.base, base.model, 'polychord', fixed)['BBCompSep']
+    if not free_param_names(cs):
         return -0.5 * base.chi2
     logZ, _, _, _, _ = R.polychord(base.model, tag, fixed=fixed,
                                    centers=base.best)
@@ -369,7 +372,7 @@ if not m10 and M1c is None:
              M0.label)
     n_it = 0
 if m10:
-    cur = dt.model_from_label(m10[-1]['question'].split('(')[1]
+    cur = model_from_label(m10[-1]['question'].split('(')[1]
                               .split(')')[0]).with_r(True)
     cand = None
     log.node('adopt', f'M_1,0 was preferred in the tree (ln B = '
@@ -384,7 +387,7 @@ for it in range(1, n_it + 1):
                  r_bayes_tree=med, sigma_bayes_tree=sig, **summary(fine, cf))
         try:
             base = base_at(cur, r_k, f'ml_{cur.label}_r{it}')
-        except dt.NoValidStart as err:
+        except NoValidStart as err:
             log.node('resid', 'Res_wr*: no valid ML start at r_k', 'stop',
                      reason=str(err))
             break
@@ -396,7 +399,7 @@ for it in range(1, n_it + 1):
         # 2. profilo del modello corrente + candidato -> r_k
         try:
             fine, cf, r_k = prof(cand, f'it{it}')
-        except dt.NoValidStart as err:
+        except NoValidStart as err:
             # candidato non fittabile (vincoli sui momenti): respinto
             rejected.add(g_c)
             log.node('profile', f'profile of {cand.label}', 'unfittable',
@@ -416,12 +419,12 @@ for it in range(1, n_it + 1):
         def moment_spectra(M):
             """Ampiezze e pendenze degli spettri dei momenti di M."""
             return {f(p, sp) for _, p, sp in M.spectra()
-                    for f in (dt.amp_name, dt.slope_name)}
+                    for f in (amp_name, slope_name)}
 
         # gli STESSI beta liberi nei due modelli (quelli dei gruppi del
         # candidato, che contiene il modello corrente): la differenza e' solo
         # negli spettri dei momenti, il fattore di Occam dei beta si cancella
-        betas = set().union(*(dt.MOMENT_GROUPS[g]['free']
+        betas = set().union(*(MOMENT_GROUPS[g]['free']
                               for g in cand.moments)) if cand.moments else set()
         free1 = moment_spectra(cand) | betas
         free0 = moment_spectra(cur) | betas
@@ -432,7 +435,7 @@ for it in range(1, n_it + 1):
             lz1 = local_logz(cand, b1, free1, f'loc_{cand.label}_r{it}')
             lz0 = local_logz(cur, b0, free0, f'loc_{cur.label}_r{it}')
             lnb_full = lz1 - lz0
-        except dt.NoValidStart as err:
+        except NoValidStart as err:
             log.node('pref', f'{cand.label} at r_{it}', 'unfittable',
                      reason=str(err))
             lnb_full, lz1, lz0 = -np.inf, None, None
@@ -459,14 +462,14 @@ for it in range(1, n_it + 1):
             # diagnostica: Res_wr* sul modello corrente rifittato a r = r_k
             try:
                 base = base_at(cur, r_k, f'ml_{cur.label}_r{it}')
-            except dt.NoValidStart as err:
+            except NoValidStart as err:
                 log.node('resid', 'Res_wr*: no valid ML start at r_k',
                          'stop', reason=str(err))
                 break
     # 4. Res_wr*: ogni gruppo g si testa al SUO r: r_g = minimo del profilo
     #    di (modello corrente + g); residui del modello corrente rifittato a
     #    r = r_g; screening HPD, poi evidenza contro il nullo nello stesso punto
-    groups = [g for g in dt.candidate_groups(cur.with_r(False), GROUPS,
+    groups = [g for g in candidate_groups(cur.with_r(False), GROUPS,
                                              extra_requires=REQ)
               if g not in rejected]
     passed = []
@@ -476,7 +479,7 @@ for it in range(1, n_it + 1):
             fg_, cg_, r_g = prof(Mg, f'g{it}_{g}')
             base_g = base_at(cur, r_g, f'ml_{cur.label}_r{it}_{g}')
             rr = F.residual_test(base_g, g)
-        except (dt.NoValidStart, ValueError) as err:
+        except (NoValidStart, ValueError) as err:
             log.node('resid_fit', f'Res_wr*: {g}', 'unfittable',
                      reason=str(err))
             continue

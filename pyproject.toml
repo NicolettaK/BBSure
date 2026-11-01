@@ -1,0 +1,13 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "bbsure"
+version = "0.1.0"
+description = "Decision tree for moment-expansion foreground modelling in BB analyses with BBPower"
+requires-python = ">=3.9"
+dependencies = ["numpy", "scipy", "pyyaml"]
+
+[tool.setuptools]
+packages = ["bbsure"]
