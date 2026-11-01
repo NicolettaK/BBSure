@@ -42,12 +42,14 @@ def main():
     if not tc['run'].get('profile_scheme', False):
         return
 
-    # ── profile scheme on the concluded tree (profile_tree.py) ────────────
+    # ── profile scheme on the concluded tree (run_profile.py) ─────────────
     with open(os.path.join(runs_dir, 'conclusion_tree.json'), 'w') as f:
         json.dump(result, f, indent=2, default=json_default)
     ps = tc.get('profile_scheme', {})
     pdir = os.path.join(runs_dir, 'profile')
-    cmd = [sys.executable, '-m', 'bbsure.profile_tree',
+    cmd = [sys.executable,
+           os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                        'run_profile.py'),
            '--config', os.path.abspath(args.config), '--tree-dir', runs_dir,
            '--out', pdir]
     for k in ('lnb_res', 'lnb_full', 'n', 'max_it', 'nproc'):

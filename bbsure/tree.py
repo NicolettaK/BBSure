@@ -44,8 +44,8 @@ Flowchart
     M_0,r, back to 1. Otherwise M_1,0: preferred over M_0,r -> frequentist
     branch (profile likelihood), otherwise 3 sigma test. With
     run: profile_scheme: true there is no frequentist branch: the tree goes
-    to the 3 sigma test and then the profile scheme starts (profile_tree.py)
-    from M_1.
+    to the 3 sigma test and then the profile scheme starts
+    (profile_scheme.py) from M_1.
     Res_wr is repeated as long as the replacements come from Res_wr (e.g.
     after M + d, s is tested); after a replacement from Res_r0 the tree
     always goes directly to Res_r0.
@@ -111,7 +111,7 @@ class DecisionTree:
         self.max_it = tc['run']['max_iterations']
         self.freq_replaces = tc['run'].get('frequentist_replaces_baseline',
                                            True)
-        # profile scheme (profile_tree.py) instead of the frequentist branch:
+        # profile scheme (profile_scheme.py) instead of the frequentist branch:
         # the tree ends with the 3 sigma test, then the scheme is launched
         self.profile_scheme = tc['run'].get('profile_scheme', False)
 
