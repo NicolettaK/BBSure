@@ -12,8 +12,9 @@ weight is ~ the inverse noise variance of the hits-scaled noise of
 generate_maps.py (--hits-noise), so the spectra are inverse-variance
 weighted inside the footprint.
 
-Usage: python make_masks.py [--apo 7] [--hits norm_nHits_SA_35FOV_G.fits]
-Writes data/masks/mask_hits_C2_<apo>deg.fits.gz (at nside 64; at other nside
+Usage: python scripts/make_mask.py [--apo 7]
+           [--hits norm_nHits_SA_35FOV_G_nside128.fits] [--mask-dir data/masks]
+Writes <mask-dir>/mask_hits_C2_<apo>deg.fits.gz (at nside 64; at other nside
 the name ends in _nside<N>, e.g. mask_hits_C2_7deg_nside128.fits.gz)
 """
 import argparse
@@ -22,14 +23,15 @@ import numpy as np
 import healpy as hp
 import pymaster as nmt
 
-WORK_DIR = os.path.dirname(os.path.abspath(__file__))
-MASK_DIR = os.path.join(WORK_DIR, 'data', 'masks')
+from bbsure.sims.sky import DATA_DIR
 
 p = argparse.ArgumentParser()
 p.add_argument('--apo', type=float, default=7.0)
 p.add_argument('--hits', default='norm_nHits_SA_35FOV_G.fits')
 p.add_argument('--hmin', type=float, default=1e-3)
+p.add_argument('--mask-dir', default=os.path.join(DATA_DIR, 'masks'))
 args = p.parse_args()
+MASK_DIR = args.mask_dir
 
 hits = hp.read_map(os.path.join(MASK_DIR, args.hits))
 hits = hits / hits.max()

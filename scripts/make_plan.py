@@ -1,17 +1,17 @@
 """
-Piano della validazione: 100 realizzazioni di CMB + rumore (seed 7000-7099).
+Plan of the validation: 100 realizations of CMB + noise (seeds 7000-7099).
 
-Ogni realizzazione ha il suo r:
-  - 10 realizzazioni (a caso) con r = 0;
-  - le altre 90 con r log-uniforme in [1e-3, 0.03].
-Ogni realizzazione si analizza due volte: con d9s4 e con un cielo PySM scelto
-a caso tra d9/d10/d12 x s4/s5/s7 (escluso d9s4).
+Each realization has its own r:
+  - 10 realizations (at random) with r = 0;
+  - the other 90 with r log-uniform in [1e-3, 0.03].
+Each realization is analysed twice: with d9s4 and with a PySM sky chosen at
+random among d9/d10/d12 x s4/s5/s7 (d9s4 excluded).
 
-Scrive:
-  plan/sets.csv     index, seed, sky_rand        (si puo' guardare)
-  truth/r_true.csv  index, r                     (NON aprire fino alla fine)
+Writes:
+  plan/sets.csv     index, seed, sky_rand        (can be looked at)
+  truth/r_true.csv  index, r                     (do NOT open until the end)
 
-Uso: python make_plan.py <root>
+Usage: python scripts/make_plan.py <root>
 """
 import csv
 import os

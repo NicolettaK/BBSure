@@ -1,5 +1,5 @@
 """
-Fit the PySM foregrounds with the Gaussian model of generate_maps.py, to
+Fit the PySM foregrounds with the Gaussian model of the simulations, to
 build Gaussian covariance sims that match the PySM data.
 
 For dust (at nu0_d = 353 GHz) and synchrotron (at nu0_s = 23 GHz),
@@ -13,18 +13,19 @@ spectral parameters (beta_d, T_d, beta_s) are computed inside the mask,
 both with uniform weights and weighted by the polarized intensity P^2
 (which is what sets the effective SED of the Gaussian model).
 
-Writes a yaml with the FG_PARAMS keys of generate_maps.py, usable with
+Writes a yaml with the FG_PARAMS keys of bbsure/sims/sky.py, usable with
 `generate_maps.py --fg-params`. alpha_d / alpha_s are taken from BB (the
 generator uses a single slope for EE and BB); the EE slopes are reported.
 
 With --nside-in N (e.g. 512) PySM runs at N and the maps are downgraded to
---nside in harmonic space (gm.harmonic_downgrade_qu), as generate_maps.py
+--nside in harmonic space (sky.harmonic_downgrade_qu), as generate_maps.py
 --pysm-nside-in does for the data; without it PySM runs directly at --nside
 (pixel-space ud_grade: pixel window and aliasing in the foreground maps).
 
-Usage: python fit_fg_spectra.py [--model d1s1] [--mask mask_apo_C2_7deg]
-                                [--nside 64] [--nside-in 0]
-                                [--lmin 30] [--lmax 190] [--out config/fg_params_d1s1.yml]
+Usage: python scripts/fit_fg_spectra.py [--model d1s1]
+           [--mask mask_hits_C2_7deg_nside128] [--nside 128] [--nside-in 512]
+           [--edges bpw_edges_nside128.txt] [--lmin 30] [--lmax 250]
+           --out configs/fg_params_d1s1_hits_n128.yml
 """
 import argparse
 import os
@@ -36,7 +37,7 @@ import yaml
 import pysm3
 import pysm3.units as u
 
-import generate_maps as gm
+from bbsure.sims import sky as gm
 
 p = argparse.ArgumentParser()
 p.add_argument('--model', default='d1s1')
@@ -46,9 +47,9 @@ p.add_argument('--nside-in', type=int, default=0)
 p.add_argument('--edges', default='bpw_edges.txt')
 p.add_argument('--lmin', type=float, default=30)
 p.add_argument('--lmax', type=float, default=190)
-p.add_argument('--out', default=None)
+p.add_argument('--out', required=True)
 args = p.parse_args()
-out = args.out or os.path.join(gm.WORK_DIR, 'config', f'fg_params_{args.model}.yml')
+out = args.out
 
 nside = args.nside
 mask = hp.read_map(os.path.join(gm.DATA_DIR, 'masks', f'{args.mask}.fits.gz'))

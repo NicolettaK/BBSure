@@ -1,31 +1,30 @@
 """
-Covarianza del best fit per un set: la covarianza delle sims (fiduciale d1s1,
-r = 0) piu' la correzione gaussiana (Knox) per la differenza tra lo spettro
-del best fit del tree e il fiduciale delle sims:
+Best-fit covariance for a data set: the covariance of the sims (fiducial
+d1s1, r = 0) plus the Gaussian (Knox) correction for the difference between
+the best-fit spectrum of the tree and the fiducial of the sims:
 
     M_bf = M_sims + K(S_bf + N) - K(S_fid + N)
 
-K e' la covarianza di Knox dei cross-spettri a ogni bandpower b,
+K is the Knox covariance of the cross-spectra at each bandpower b,
 
     K[(ij), (kl)] = (C_ik C_jl + C_il C_jk) / nu_b ,
 
-con C = S + N matrici 6x6 tra le frequenze (N = cells_noise). Il numero di
-modi effettivo nu_b e' calibrato sulle sims: mediana su (ij) di
-(C0_ii C0_jj + C0_ij^2) / M_sims[(ij),(ij)]. La parte che dipende dalla
-maschera e dal rumore resta quella delle sims; si aggiunge solo la varianza
-cosmica che manca (es. la parte tensoriale con r != 0).
+with C = S + N 6x6 matrices between the frequencies (N = cells_noise). The
+effective number of modes nu_b is calibrated on the sims: median over (ij)
+of (C0_ii C0_jj + C0_ij^2) / M_sims[(ij),(ij)]. The part that depends on the
+mask and on the noise stays that of the sims; only the missing cosmic
+variance is added (e.g. the tensor part with r != 0).
 
-Il best fit e' quello del modello finale del tree (conclusion.json): non usa
-gli r veri.
+The best fit is that of the final model of the tree (conclusion.json): it
+does not use the true r.
 
-Scrive in <out>:
-  cells_model_bf.fits  spettro del best fit (anche fiduciale per HL)
-  cells_cov_bf.fits    sacc dei dati con la covarianza nuova
+Writes in <out>:
+  cells_model_bf.fits  best-fit spectrum (also the fiducial for HL)
+  cells_cov_bf.fits    data sacc with the new covariance
 
-Uso: python make_bf_cov.py --tree <runs_dir del tree> --cells <dir spettri>
-         --fiducial <cls_fid_d1s1_hits.fits> --out <dir>
+Usage: python scripts/make_bf_cov.py --tree <runs_dir of the tree>
+           --cells <spectra dir> --fiducial <cls_fid_...fits> --out <dir>
 """
-import argparse
 import json
 import os
 import shutil
@@ -37,13 +36,11 @@ import numpy as np
 import sacc
 import yaml
 
-HERE = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, HERE)
-import decision_tree as dt  # noqa: E402
+from .config import free_param_names, iter_param_entries
 
 
 def best_fit(tree_dir):
-    """Modello finale e best fit (ML) dal decision log del tree."""
+    """Final model and best fit (ML) from the decision log of the tree."""
     concl = json.load(open(os.path.join(tree_dir, 'conclusion.json')))
     model = concl['model']
     ev = json.load(open(os.path.join(tree_dir, 'decision_log.json')))
@@ -55,17 +52,17 @@ def best_fit(tree_dir):
 
 
 def model_spectra(tree_dir, model, best, cells, fiducial, out):
-    """Spettro del modello al best fit (BBCompSep predicted_spectra)."""
+    """Spectrum of the model at the best fit (BBCompSep predicted_spectra)."""
     cfg = yaml.safe_load(open(os.path.join(tree_dir, f'{model}_PC',
                                            'config.yml')))
     cs = cfg['BBCompSep']
     cs['sampler'] = 'predicted_spectra'
     cs['predict_at_minimum'] = False
     cs['predict_to_sacc'] = True
-    entries = dt.iter_param_entries(cs)
+    entries = iter_param_entries(cs)
     for k, v in best.items():
         entries[k][1:] = ['fixed', [float(v)]]
-    assert dt.free_param_names(cs) == [], dt.free_param_names(cs)
+    assert free_param_names(cs) == [], free_param_names(cs)
     tmp = tempfile.mkdtemp()
     cfg_path = os.path.join(tmp, 'config.yml')
     yaml.safe_dump(cfg, open(cfg_path, 'w'), sort_keys=False)
@@ -84,7 +81,7 @@ def model_spectra(tree_dir, model, best, cells, fiducial, out):
 
 
 def bb_matrices(s, tracers, idx):
-    """Spettri BB del sacc s come matrici [nbpw, nfreq, nfreq]."""
+    """BB spectra of the sacc s as matrices [nbpw, nfreq, nfreq]."""
     nf = len(tracers)
     nb = len(s.mean[idx[(tracers[0], tracers[0])]])
     C = np.zeros([nb, nf, nf])
@@ -95,26 +92,21 @@ def bb_matrices(s, tracers, idx):
     return C
 
 
-def main():
-    ap = argparse.ArgumentParser()
-    ap.add_argument('--tree', required=True)
-    ap.add_argument('--cells', required=True)
-    ap.add_argument('--fiducial', required=True)
-    ap.add_argument('--out', required=True)
-    args = ap.parse_args()
-    os.makedirs(args.out, exist_ok=True)
+def bestfit_covariance(tree, cells, fiducial, out):
+    """Writes cells_model_bf.fits and cells_cov_bf.fits in `out` (see the
+    module docstring) and returns their paths."""
+    os.makedirs(out, exist_ok=True)
 
-    model, best = best_fit(args.tree)
+    model, best = best_fit(tree)
     print(f"best fit of {model}: r = {best.get('r_tensor', 0.):.4g}")
-    f_bf = model_spectra(args.tree, model, best, args.cells, args.fiducial,
-                         args.out)
+    f_bf = model_spectra(tree, model, best, cells, fiducial, out)
 
-    cs = yaml.safe_load(open(os.path.join(args.tree, f'{model}_PC',
+    cs = yaml.safe_load(open(os.path.join(tree, f'{model}_PC',
                                           'config.yml')))['BBCompSep']
     lmin, lmax = cs['l_min'], cs['l_max']
 
     def load(f):
-        """Solo BB, con gli stessi tagli in ell del fit."""
+        """BB only, with the same ell cuts as the fit."""
         s = sacc.Sacc.load_fits(f)
         for c in ('cl_ee', 'cl_eb', 'cl_be'):
             s.remove_selection(c)
@@ -122,12 +114,12 @@ def main():
         s.remove_selection(ell__lt=lmin)
         return s
 
-    s_noi = load(os.path.join(args.cells, 'cells_noise.fits'))
-    s_fid = load(args.fiducial)
+    s_noi = load(os.path.join(cells, 'cells_noise.fits'))
+    s_fid = load(fiducial)
     s_bf = load(f_bf)
-    # sacc completo dei dati: la covarianza nuova va scritta nella sua
-    # numerazione (BBCompSep controlla che coincida con quella dei dati)
-    s_out = sacc.Sacc.load_fits(os.path.join(args.cells, 'cells_coadded.fits'))
+    # full data sacc: the new covariance must be written in its numbering
+    # (BBCompSep checks that it matches the one of the data)
+    s_out = sacc.Sacc.load_fits(os.path.join(cells, 'cells_coadded.fits'))
     tracers = sorted(s_out.tracers.keys())
     pairs = s_out.get_tracer_combinations('cl_bb')
     rows = {}
@@ -176,10 +168,7 @@ def main():
         raise RuntimeError("best-fit covariance is not positive definite")
 
     s_out.add_covariance(Mnew_full, overwrite=True)
-    fcov = os.path.join(args.out, 'cells_cov_bf.fits')
+    fcov = os.path.join(out, 'cells_cov_bf.fits')
     s_out.save_fits(fcov, overwrite=True)
     print(f"written {fcov} and {f_bf}")
-
-
-if __name__ == '__main__':
-    main()
+    return f_bf, fcov
