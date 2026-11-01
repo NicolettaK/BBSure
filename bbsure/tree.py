@@ -32,12 +32,14 @@ Flowchart
         M_0,r -> 1.
       - none passes -> 3 sigma test if the model has no moments yet,
         otherwise -> 3.
- Immediate pruning: before every comparison with M_0,r the new spectra not
- detected (zero inside the HPD of their amplitude, screening with ML +
- emcee) are removed and the screening is redone; only the pruned model is
- fitted with PolyChord and compared (rejected if nothing new is left). The
- removed spectra do not come back as candidates in Res_r0
- (restore-<group> only with moments: res_r0_restore: true).
+ Pruning before every comparison with M_0,r: (a) screening (ML + emcee):
+ the new spectra not detected (zero inside the 68% HPD of their amplitude)
+ are removed and the screening is redone; (b) full fit (ML + PolyChord) of
+ the screened model and pruning of ALL its moment spectra, old and new
+ (point 4); only this pruned model is compared with M_0,r, and the
+ candidate is rejected if nothing new is left. The removed spectra do not
+ come back as candidates in Res_r0 (restore-<group> only with moments:
+ res_r0_restore: true).
  3. Res_r0: like Res_wr but on the residuals of M_0,0 (r = 0), candidates
     the res_r0 groups (d, s, dT, d2, s2, ds1, ds2). None detected -> 3 sigma
     test. The best one (evidence) -> M_1,r: preferred over M_0,r -> replaces
@@ -49,8 +51,9 @@ Flowchart
     Res_wr is repeated as long as the replacements come from Res_wr (e.g.
     after M + d, s is tested); after a replacement from Res_r0 the tree
     always goes directly to Res_r0.
- 4. Pruning (also of every new M_0,r just adopted): the spectra with zero
-    inside the HPD of their amplitude are removed and the model refitted;
+ 4. Pruning (of every candidate before its comparison with M_0,r, and of
+    the final model): the spectra with zero inside the HPD of their
+    amplitude are removed and the model refitted;
     the pruned model is kept if ln B(pruned vs full) > lnB_prune (-2.5).
     Repeated until only detected amplitudes are left.
  If after the pruning the new M_0,r is a model already used as M_0,r
@@ -151,9 +154,8 @@ class DecisionTree:
             if outcome == 'replace':
                 self.log.node('replace', f'M_0,r = M_1,r (from {branch})',
                               M1.label)
-                # the new M_0,r is pruned right away: the following
-                # comparisons are with the model without undetected amplitudes
-                M0, fit0 = self.prune(M1, self.F.full_fit(M1))
+                # the new M_0,r was already pruned before its comparison
+                M0, fit0 = M1, self.F.full_fit(M1)
                 use_wr = use_wr and branch == 'Res_wr'
                 # cycle: after the pruning the new M_0,r is a model already
                 # used (e.g. restore-s adopted and then pruned again) -> the
@@ -231,11 +233,13 @@ class DecisionTree:
     def compare_pruned(self, M1: Model, fit0: FitResult, name,
                        centers=None):
         """
-        Immediate pruning. Screening (ML + emcee, no evidence): the new
-        spectra (not in M_0,r) with zero inside the HPD of their amplitude
-        are removed and the screening is redone, until the remaining ones are
-        all detected; if none is left the candidate is rejected. Only the
-        pruned model is fitted with PolyChord and compared with M_0,r.
+        Pruning before the comparison. Screening (ML + emcee, no evidence):
+        the new spectra (not in M_0,r) with zero inside the HPD of their
+        amplitude are removed and the screening is redone, until the
+        remaining ones are all detected; if none is left the candidate is
+        rejected. Then the full fit (ML + PolyChord) and the pruning of all
+        the moment spectra of the model (prune); only the pruned model is
+        compared with M_0,r, rejected if no new spectrum is left.
         Returns (preferred, fit or None).
         """
         old = set(fit0.model.amplitudes())
@@ -264,6 +268,12 @@ class DecisionTree:
         fit1 = self.F.full_fit(M1, centers=fit1.best)
         self.log.node('fit', f'fit of {name} = {M1.label}', 'ok',
                       **fit1.summary())
+        M1, fit1 = self.prune(M1, fit1)
+        if not set(M1.amplitudes()) - old:
+            self.log.node('pruned_out', f'{name}: no new moment left after '
+                          'the pruning, candidate rejected', 'rejected',
+                          model=M1.label)
+            return False, None
         return self.compare(fit1, fit0, name), fit1
 
     # ── moment search ─────────────────────────────────────────────────────

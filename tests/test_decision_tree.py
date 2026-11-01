@@ -40,6 +40,8 @@ class MockFitter:
       prof_dchi2   difference between the minima of the profiles (M0 - M1)
       amps[label]  {amplitude: (mean, sigma)} of the posterior of the moment
                    amplitudes (default (1, 0.1): detected)
+      amps_full[label]  same, for the full fit (PolyChord) only (default:
+                   amps)
       logZerr[label]  PolyChord error (default 0.1)
       reruns[label]   logZ of the following runs with other seeds
                       (default: logZ)
@@ -49,7 +51,7 @@ class MockFitter:
         self.s = scen
         self.calls = []
 
-    def _fit(self, model):
+    def _fit(self, model, full=False):
         lab = model.label
         nfree = 8 + model.n_moment_params() + (1 if model.r_free else 0)
         chi2 = self.s.get('chi2', {}).get(lab, NDATA - nfree)
@@ -66,6 +68,8 @@ class MockFitter:
             f.r_samples = rng.normal(mu, sig, 20000)
         amps = model.amplitudes()
         spec = self.s.get('amps', {}).get(lab, {})
+        if full:
+            spec = self.s.get('amps_full', {}).get(lab, spec)
         f.sample_names = amps
         f.samples = np.array([rng.normal(*spec.get(a, (1., 0.1)), 20000)
                               for a in amps]).T.reshape(20000, len(amps))
@@ -88,7 +92,7 @@ class MockFitter:
 
     def full_fit(self, model, centers=None):
         self.calls.append(('full', model.label))
-        return self._fit(model)
+        return self._fit(model, full=True)
 
     def ml_fit(self, model, centers=None):
         self.calls.append(('ml', model.label))
@@ -354,6 +358,45 @@ def main():
     check("adopted model pruned right away, next iteration on the pruned one",
           resid_calls(F, 'M_d-d_w00w10_r') == ['s']
           and resid_calls(F, 'M_d-d_w00w10_0')[:1] == ['s'])
+
+    # 18b. pruning of the full fit BEFORE the comparison: the screening
+    #      detects both spectra of d, the posterior of the full fit not
+    #      A_d_w00w10 -> the pruned model is compared and adopted, and not
+    #      pruned again after the adoption (set 22 rand of the validation)
+    X = -0.5 * BAD
+    scen = {'chi2': {M0: BAD},
+            'resid': {(M0, 'd'): -100.},
+            'logZ': {M0: X, 'M_d_r': X + 6., 'M_d-d_w00w10_r': X + 5.},
+            'amps_full': {'M_d_r': {'A_d_w00w10': (0.1, 1.)}}}
+    res, path, F = run(scen)
+    i_rep = [n for n, _ in path].index('replace')
+    check("full-fit pruning before the comparison: pruned model compared "
+          "and adopted",
+          ('pref', 'Yes') in path and ('replace', 'M_d-d_w00w10_r') in path
+          and ('prune', 'Yes') in path[:i_rep]
+          and not any(n == 'prune' for n, _ in path[i_rep:]))
+
+    # 18c. the full fit wins over M_0,r (ln B = +1) but the pruned model,
+    #      kept by the pruning (ln B = -2 > -2.5), does not (ln B = -1) ->
+    #      not adopted (with the pruning after the adoption it was)
+    scen['logZ'] = {M0: X, 'M_d_r': X + 1., 'M_d-d_w00w10_r': X - 1.}
+    res, path, F = run(scen)
+    check("  the pruned model, not the full one, is compared with M_0,r",
+          not any(n == 'replace' for n, _ in path)
+          and res['model'] == 'M_none_r')
+
+    # 18d. the posterior of the full fit leaves no new spectrum -> candidate
+    #      rejected (sets 36 and 81 d9s4 of the validation)
+    scen = {'chi2': {M0: BAD},
+            'resid': {(M0, 's'): -100.},
+            'logZ': {M0: X, 'M_s_r': X + 0.5,
+                     'M_s-s_w00w10-s_w10w10_r': X + 0.1},
+            'amps_full': {'M_s_r': {'A_s_w00w10': (0.1, 1.),
+                                    'A_s_w10w10': (0.1, 1.)}}}
+    res, path, F = run(scen, lnB_preferred=0.)
+    check("  no new spectrum left after the pruning -> candidate rejected",
+          ('pruned_out', 'rejected') in path
+          and not any(n == 'replace' for n, _ in path))
 
     # 19. second round: s detected in Res_wr but not preferred; the model
     #     already has d -> to Res_r0 (not to the 3 sigma test)

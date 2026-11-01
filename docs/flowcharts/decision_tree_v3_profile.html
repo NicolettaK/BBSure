@@ -99,7 +99,7 @@
 
   // ── title ──────────────────────────────────────────────────────────────
   text(30, 40, ['SO cross-cl pipeline: decision tree v3 — Bayesian search + profile scheme'], 'title', { anchor: 'start' });
-  text(30, 74, ['left: search for moments with the evidence (as in v2) · right: new profile scheme, replacing the frequentist branch'], 'subtitle', { anchor: 'start' });
+  text(30, 74, ['left: search for moments with the evidence · right: frequentist branch, profile scheme'], 'subtitle', { anchor: 'start' });
 
   // ═════════════════════ LEFT: Bayesian search ════════════════════════════
   add(rc.rectangle(18, 100, 1262, 1320, { stroke: C.grey[0], strokeWidth: 1.2, roughness: 0.9, seed: seed++ }));
@@ -115,16 +115,16 @@
   star(165, 1310, 85, 'blue', ['upper limit', `on r (${M(0, 'r')})`]);
 
   // Res_wr
-  box(360, 470, 280, 120, 'purple', [`Res_wr: residuals of ${M(0, 'r')}`, 'all fixed at its best fit (r too);', 'test d and s, each with its', 'own β free']);
+  box(360, 465, 280, 130, 'purple', [`Res_wr: residuals of ${M(0, 'r')}`, 'all parameters fixed at their', 'best fit (r too); test the d and s', 'families of moments, each with', 'its own β free']);
   arrow([[280, 330], [500, 330], [500, 468]], 'No', 320, 316);
   arrow([[280, 520], [358, 520]], 'No', 316, 505);
   arrow([[640, 530], [690, 530]]);
-  diamond(800, 530, 220, 130, 'yellow', ['moment detected?', '(0 outside HPD 68%)']);
+  diamond(800, 530, 240, 140, 'yellow', ['moment detected? (**)', '0 outside the 68% HPD', 'of an amplitude']);
   arrow([[910, 530], [960, 530]], 'Yes', 935, 515);
-  box(960, 480, 280, 100, 'purple', [`${M(1, 'r')} = ${M(0, 'r')} + best moment`, '(residual evidence),', 'all parameters free']);
+  box(960, 470, 280, 120, 'purple', [`${M(1, 'r')} = ${M(0, 'r')} + a detected family,`, 'in order of residual evidence (***);', 'full fit (all parameters free),', 'pruned (****)']);
   arrow([[1100, 580], [1100, 620]]);
   diamond(1100, 690, 240, 130, 'red', [`is ${M(1, 'r')} preferred`, `over ${M(0, 'r')}? (ln B &gt; 0)`]);
-  box(950, 200, 300, 80, 'green', [`${M(0, 'r')} = ${M(1, 'r')} (pruned),`, 'start again']);
+  box(950, 200, 300, 80, 'green', [`${M(0, 'r')} = ${M(1, 'r')},`, 'start again']);
   arrow([[1220, 690], [1262, 690], [1262, 240], [1252, 240]], 'Yes', 1240, 660);
   arrow([[950, 240], [480, 240], [480, 290], [255, 290]]);
 
@@ -132,16 +132,19 @@
   arrow([[800, 595], [800, 760], [500, 760], [500, 818]], 'No', 825, 650);
   arrow([[1100, 755], [1100, 785], [560, 785], [560, 818]], 'No (*)', 1140, 772);
   text(270, 1372, [`(*) if ${M(0, 'r')} has no moments yet, the tree`, 'stops after Res_wr: → B with C = the moment', 'just tried (orange case)'], 'note', { anchor: 'start', fill: C.orange[0], lh: 21 });
-  box(360, 820, 280, 120, 'purple', [`Res_r0: residuals of ${M(0, 0)} (r = 0)`, 'all fixed, own β free;', 'test d, s, dT, d2, s2, ds1, ds2']);
+  text(270, 1185, ['(**) all the amplitudes of the family are fitted (emcee);', 'detected if 0 is outside the 68% HPD (highest posterior', 'density interval) of at least one of them; only the', 'amplitudes with 0 outside their HPD are kept',
+                    '(***) PolyChord evidence of the residual fit (only the', "family's moments and its β free): only ranks the families",
+                    '(****) amplitudes with 0 in their 68% HPD (posterior of', 'the full fit) removed, model refitted, until all are', 'detected; kept if ln B(pruned vs full) > -2.5; the pruned', 'model is the one compared with M_0,r'], 'note', { anchor: 'start', lh: 21 });
+  box(360, 820, 280, 120, 'purple', [`Res_r0: residuals of ${M(0, 0)} (r = 0)`, 'all parameters fixed, own β free;', 'test the families of moments', 'd, s, dT, d2, s2, ds1, ds2']);
   arrow([[640, 880], [690, 880]]);
-  diamond(800, 880, 220, 130, 'yellow', ['moment detected?', '(HPD 68%)']);
+  diamond(800, 880, 240, 140, 'yellow', ['moment detected? (**)', '0 outside the 68% HPD', 'of an amplitude']);
   arrow([[910, 880], [960, 880]], 'Yes', 935, 865);
-  box(960, 830, 280, 100, 'purple', [`best one (residual evidence):`, `${M(1, 'r')}, all parameters free`]);
+  box(960, 820, 280, 120, 'purple', [`${M(1, 'r')} = ${M(0, 'r')} + the detected family`, 'with the highest residual evidence (***);', 'full fit (all parameters free),', 'pruned (****)']);
   arrow([[1100, 930], [1100, 965]]);
   diamond(1100, 1035, 240, 130, 'red', [`is ${M(1, 'r')} preferred`, `over ${M(0, 'r')}? (ln B &gt; 0)`]);
   arrow([[1220, 1035], [1262, 1035], [1262, 700]], 'Yes', 1240, 1010);
   arrow([[1100, 1100], [1100, 1140]], 'No', 1125, 1118);
-  box(960, 1140, 280, 70, 'purple', [`${M(1, 0)}: same model, r = 0`]);
+  box(960, 1140, 280, 70, 'purple', [`${M(1, 0)}: same family, r = 0,`, 'pruned (****)']);
   arrow([[1100, 1210], [1100, 1240]]);
   diamond(1100, 1310, 260, 130, 'red', [`is ${M(1, 0)} preferred`, `over ${M(0, 'r')}? (ln B &gt; 0)`]);
 
