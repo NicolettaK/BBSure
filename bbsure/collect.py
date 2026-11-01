@@ -3,7 +3,9 @@ Collects the results of a validation run in csv tables.
 
 collect_tree    : conclusions of the trees, <root>/runs/set_<i>_<kind>/<tree>/
                   (blind, or with the true r and the statistics: unblind)
-collect_profile : result.json of the profile scheme, <root>/set_<i>_<kind>/
+collect_profile : result.json of the profile scheme,
+                  <root>/runs/set_<i>_<kind>/tree/profile/ (profile scheme
+                  run by run_tree.py) or <root>/set_<i>_<kind>/ (run alone)
 """
 import csv
 import glob
@@ -103,7 +105,7 @@ def collect_tree(root, unblind=False, tree='tree'):
 
 def collect_profile(root, out):
     """
-    One row per set of the profile scheme (<root>/set_<i>_<kind>/): model
+    One row per set of the profile scheme (see the module docstring): model
     of the tree and final model, Bayesian r of the tree, posterior of r from
     the profile (prior of the tree), r_95 with r >= 0, conclusion, chi2 of
     the final model at the best fit with r = r* (without Gaussian priors),
@@ -114,8 +116,14 @@ def collect_profile(root, out):
     with open(out, 'w', newline='') as fo:
         w = csv.writer(fo)
         w.writerow(PROFILE_COLS)
-        for d in sorted(glob.glob(os.path.join(root, 'set_*_*'))):
+        runs = os.path.join(root, 'runs')
+        dirs = (sorted(glob.glob(os.path.join(runs, 'set_*_*')))
+                if os.path.isdir(runs) else
+                sorted(glob.glob(os.path.join(root, 'set_*_*'))))
+        for d in dirs:
             _, i, kind = os.path.basename(d).split('_', 2)
+            if os.path.isdir(runs):
+                d = os.path.join(d, 'tree', 'profile')
             f = os.path.join(d, 'result.json')
             if not os.path.isfile(f):
                 w.writerow([int(i), kind, 'missing']

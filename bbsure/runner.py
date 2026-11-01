@@ -16,6 +16,7 @@ import numpy as np
 import yaml
 
 from .config import build_config, free_param_names, gaussian_prior_chi2
+from .paths import load_yaml
 from .stats import FitResult
 
 # ── BBCompSep in the same process (fast fits) ────────────────────────────
@@ -76,7 +77,7 @@ class BBCompSepRunner:
         self.tc = tc
         self.log = logger
         p = tc['paths']
-        self.base = yaml.safe_load(open(p['base_config']))
+        self.base = load_yaml(p['base_config'])
         self.runs_dir = p['runs_dir']
         self.reuse = tc['run'].get('reuse_runs', True)
         # fast fits in the same process (see _run_inproc)

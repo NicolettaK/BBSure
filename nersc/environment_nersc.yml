@@ -1,0 +1,31 @@
+# Conda environment of BBSure on Perlmutter.
+# mpi4py and pypolychord are NOT here: they must be compiled against Cray
+# MPICH (see install_nersc.sh).
+name: bbsure
+channels:
+  - conda-forge
+dependencies:
+  - python=3.10
+  - numpy=2.2
+  - scipy=1.15
+  - astropy=6.1
+  - healpy=1.20
+  - namaster=3.0
+  - pyshtools=4.14
+  - emcee=3.1
+  - fitsio=1.4
+  - h5py
+  - matplotlib
+  - pyyaml
+  - pip
+  - pip:
+      # bbpipe is not on PyPI: from GitHub, pinned commit
+      - git+https://github.com/simonsobs/BBPipe.git@4d7098a7897e86bb3db3a37c36cd27ae053bea9d
+      - parsl==0.5.2
+      - ipython_genutils==0.2.0
+      - git+https://github.com/fgbuster/fgbuster.git@40ef92cd913411222b90434b6d68e24a682f5ffe
+      - sacc==2.4
+      - dominate
+      - pysm3==3.4.6
+      - corner==2.3.0
+      - numdifftools==0.11.1

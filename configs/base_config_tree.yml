@@ -1,22 +1,22 @@
-# Configurazione BBPower base per il decision tree v2 (PySM_tests)
-# Autore: nkrach@sissa.it
+# BBPower base config of the decision tree (BBCompSep).
 #
-# Momenti nel formalismo di Vacher et al. (BBPower branch moments-free):
-# mappe w_nm = A dbeta^n dp^m (p = 1/T [1/K]) e per ogni coppia di mappe uno
-# spettro A_<c>_w<nm>w<nm> (ell/80)^alpha_<c>_w<nm>w<nm>, in D_ell a nu0
-# (stesse unita' di amp_d_bb / amp_s_bb). decision_tree.py ne fa una copia
-# per ogni nodo e spegne gli spettri dei gruppi non usati (A = 0, alpha al
-# valore centrale); T_d e' libera solo con il gruppo dT.
-# Prior STRETTI (variante tight): ampiezze da sigma_beta <~ 0.45 (dust), <~ 0.5
-# (synch) e Cauchy-Schwarz per gli incrociati; pendenze dei momenti in
-# [-2, 0.5] come alpha_d / alpha_s. Auto-spettri >= 0.
+# Moments in the formalism of Vacher et al. 2022 (BBPower fork, branch
+# Bsure): moment maps w_nm = A dbeta^n dp^m (p = 1/T [1/K]) and for each
+# pair of maps a spectrum A_<c>_w<nm>w<nm> (ell/80)^alpha_<c>_w<nm>w<nm>, in
+# D_ell at nu0 (same units as amp_d_bb / amp_s_bb). The tree makes a copy
+# for each fit and switches off the spectra of the groups not used (A = 0,
+# alpha at the central value); T_d is free only with the dT group.
+# Priors: amplitudes from sigma_beta <~ 0.45 (dust), <~ 0.5 (synch) and
+# Cauchy-Schwarz for the cross terms; moment slopes in [-2, 0.5] like
+# alpha_d / alpha_s. Auto-spectra >= 0.
+# @DATA@ is replaced with the data directory of BBSure when the config is read.
 
 global:
     nside: 128
     compute_dell: True
 
 BBPowerSpecter:
-    bpw_edges: "@ROOT@/data/bpw_edges_nside128.txt"
+    bpw_edges: "@DATA@/bpw_edges_nside128.txt"
     purify_B: True
     n_iter: 3
 
@@ -33,26 +33,26 @@ BBCompSep:
     pol_channels: ['B']
     l_min: 30
     l_max: 250
-    # emcee: sovrascritti da tree_config.yml (screening dei residui)
+    # emcee: overridden by the tree config (residual screening)
     nwalkers: 32
     n_iters: 3000
-    # PolyChord: sovrascritti da tree_config.yml
+    # PolyChord: overridden by the tree config
     nlive: 300
     nrepeat: 20
 
     cmb_model:
         cmb_templates:
-            - "@ROOT@/data/camb/camb_lens_nobb.dat"
-            - "@ROOT@/data/camb/camb_lens_r1.dat"
+            - "@DATA@/camb/camb_lens_nobb.dat"
+            - "@DATA@/camb/camb_lens_r1.dat"
         params:
             r_tensor: ['r_tensor', 'tophat', [-0.02, 0.00, 0.06]]
             A_lens:   ['A_lens',   'fixed',  [1.0]]
 
     fg_model:
         use_moments: False
-        # covarianza delle mappe dei momenti definita positiva a ogni ell (BBPower 09392fa)
+        # covariance of the moment maps positive semi-definite at every ell
         moments_positive: True
-        # second-order moment auto-spectra <= k (first order)^2 / (component), BBPower fca6e17
+        # second-order moment auto-spectra <= k (first order)^2 / (component)
         moments_hierarchy: 10.0
         component_1:
             name: Dust

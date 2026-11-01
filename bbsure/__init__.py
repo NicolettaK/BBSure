@@ -1,5 +1,5 @@
 """
-BBsure: decision tree for moment-expansion foreground modelling in BB
+BBSure: decision tree for moment-expansion foreground modelling in BB
 cross-spectra analyses (BBPower), with a profile-likelihood scheme on r.
 """
 from .config import build_config, free_param_names, iter_param_entries  # noqa: F401

@@ -1,82 +1,100 @@
-# Validation tree config (template: @ROOT@ and @RUN@ are filled in by run_one.sh). HL likelihood, hierarchical moment prior (k = 10), lnB_preferred = 0, immediate pruning, emcee screening.
-# Uso: python decision_tree.py --config config/tree_config.yml
+# Tree config of the validation (template: @REPO@, @DATA@ and @RUN@ are
+# filled in by nersc/run_one.sh). HL likelihood, hierarchical moment bound
+# (k = 10), lnB_preferred = 0, immediate pruning, emcee screening, profile
+# scheme after the tree.
+# Usage: python scripts/run_tree.py --config tree_config.yml
 
 paths:
-    # Config BBPower di partenza (tutti i fit ne sono varianti)
-    base_config:   "@ROOT@/code/config/base_config_tree.yml"
-    # Data vector: prodotto UNA volta da run_spectra.sh
+    # BBPower base config (all the fits are variants of it)
+    base_config:   "@REPO@/configs/base_config_tree.yml"
+    # Data vector: produced once by scripts/run_spectra.sh
     cells_coadded: "@RUN@/output/cells_coadded.fits"
     cells_noise:   "@RUN@/output/cells_noise.fits"
-    cells_fiducial: "@ROOT@/data/cls_fid_d1s1_hits_pg_n128.fits"
-    # Cartella dove finisce ogni fit (una sottocartella per nodo) + log
+    cells_fiducial: "@DATA@/cls_fid_d1s1_hits_pg_n128.fits"
+    # Directory of the fits (one subdirectory per run) and of the logs
     runs_dir:      "@RUN@/tree"
 
 thresholds:
     # "Is chi2 good?"  ->  PTE > pte_min
     pte_min: 0.01
     # "Is model X preferred over Y?"  ->  ln B = lnZ_X - lnZ_Y > lnB_preferred
-    # (scala di Jeffreys/Trotta: 1 debole, 2.5 moderata, 5 forte)
+    # (Jeffreys/Trotta scale: 1 weak, 2.5 moderate, 5 strong)
     lnB_preferred: 0.0
-    # Momento rivelato nei residui: lo zero e' fuori dall'intervallo HPD
-    # (frazione hpd_frac) di almeno una ampiezza degli spettri del gruppo
+    # Moment detected in the residuals: zero outside the HPD interval
+    # (fraction hpd_frac) of at least one amplitude of the group's spectra
     hpd_frac: 0.68
-    # Ramo frequentista (profile likelihood): M*_1 preferito su M*_0 se il
-    # likelihood-ratio test da' p-value < lrt_alpha
+    # Frequentist branch (profile likelihood, only without profile_scheme):
+    # M*_1 preferred over M*_0 if the likelihood-ratio test gives
+    # p-value < lrt_alpha
     lrt_alpha: 0.05
-    # Confronti in bilico: se |ln B - soglia| < seed_band * errore, PolyChord
-    # ripetuto con altri semi (media di ln Z), fino a seed_max_runs run per fit
+    # Borderline comparisons: if |ln B - threshold| < seed_band * error,
+    # PolyChord is repeated with other seeds (mean of ln Z), up to
+    # seed_max_runs runs per fit
     seed_band: 2.0
     seed_max_runs: 1
 
 moments:
-    # Gruppi di momenti testati nei residui (vedi MOMENT_GROUPS in
-    # decision_tree.py): Res_wr con tutto fissato al best fit di M_0,r,
-    # Res_r0 sui residui di M_0,0 (r = 0). d2 / s2 solo se d / s ci sono gia'; ds1 = incrociati dust-synch al 1o ordine, ds2 = w1^beta_d x w1^beta_s (solo con d e s).
+    # Moment groups tested in the residuals (see MOMENT_GROUPS in
+    # bbsure/models.py): Res_wr with everything fixed at the best fit of
+    # M_0,r, Res_r0 on the residuals of M_0,0 (r = 0). d2 / s2 only if d / s
+    # are already there; ds1 = dust-synch cross terms at first order,
+    # ds2 = w1^beta_d x w1^beta_s (only with d and s).
     res_wr: ['d', 's']
     res_r0: ['d', 's', 'dT', 'd2', 's2', 'ds1', 'ds2']
-    # con la positivita' un incrociato richiede gli auto-spettri: ds1 (w1^beta_d x A_s,
-    # A_d x w1^beta_s) richiede s
+    # with the positivity a cross term requires the auto-spectra: ds1
+    # (w1^beta_d x A_s, A_d x w1^beta_s) requires s
     requires: {ds1: ['s']}
 
 emcee:
-    # Screening della rivelazione nei test dei residui
+    # Detection screening in the residual tests
     nwalkers: 32
     n_iters: 2000
     burn_frac: 0.5
 
 profile:
-    # Griglia in r per la profile likelihood
+    # r grid of the profile likelihood of the frequentist branch
     r_min: -0.01
     r_max: 0.04
     n_r: 21
 
+profile_scheme:
+    # thresholds of Res_wr* and of the candidate comparison, points of the
+    # initial profile grid, maximum iterations (see bbsure/profile_scheme.py)
+    lnb_res: 0.0
+    lnb_full: 0.0
+    n: 37
+    max_it: 4
+
 polychord:
-    # nlive e nrepeat in proporzione ai parametri liberi di ogni run:
+    # nlive and nrepeat proportional to the free parameters of each run:
     #   nlive   = max(nlive_min,   nlive_per_dim   * ndim)
     #   nrepeat = max(nrepeat_min, nrepeat_per_dim * ndim)
-    # es. residui (2D): 100 / 10;  M_none_r (7D): 175 / 21;  M_d+s_r (11D): 275 / 33
-    # Senza le chiavi *_per_dim si usano i valori fissi nlive / nrepeat.
+    # e.g. residuals (2D): 100 / 10;  M_none_r (7D): 105 / 21
+    # Without the *_per_dim keys the fixed values nlive / nrepeat are used.
     nlive_per_dim: 15
     nlive_min: 100
     nrepeat_per_dim: 3
     nrepeat_min: 10
     nlive: 300
     nrepeat: 20
-    # Processi MPI per ogni run di PolyChord (mpirun -np): 1 master + il
-    # resto per la likelihood, quindi il guadagno massimo e' ~mpi_procs-1.
-    # 1 = seriale. Non entra nel config di BBCompSep (i run restano riusabili).
+    # MPI processes per PolyChord run (mpirun -np): 1 master + the rest for
+    # the likelihood, so the maximum gain is ~mpi_procs-1. 1 = serial. Not in
+    # the BBCompSep config (the runs stay reusable).
     mpi_procs: 8
-    # su Perlmutter: un passo srun dentro il job (16 tree per nodo)
+    # on Perlmutter: one srun step inside the job (16 trees per node)
     mpi_launcher: "srun -n {n} -c 2 --exact --cpu-bind=cores"
 
 run:
-    # Iterazioni massime del loop (ogni volta che un modello piu' complesso
-    # viene adottato si riparte da "is chi2 good?")
+    # Maximum iterations of the loop (every time a more complex model is
+    # adopted the tree restarts from "is chi2 good?")
     max_iterations: 5
-    # Nel ramo frequentista, se M*_1,r vince il flowchart torna in cima.
-    # true  -> si riparte usando M_1,r come modello di riferimento
-    # false -> M_0,r resta il riferimento (lettura stretta della nota) e si
-    #          va al test a 3 sigma
+    # Profile scheme after the tree (no frequentist branch: if M_1,0 is
+    # preferred the tree goes to the 3 sigma test and the scheme starts from
+    # M_1). With false, the frequentist branch of the original flowchart.
+    profile_scheme: true
+    # Frequentist branch only: if M*_1,r wins the flowchart goes back to the
+    # top.  true -> M_1,r becomes the reference model; false -> M_0,r stays
+    # the reference and the tree goes to the 3 sigma test
     frequentist_replaces_baseline: true
-    # Riusa i fit gia' fatti (stesso config) invece di rilanciarli
+    # Reuse the fits already done (same config) instead of rerunning them
     reuse_runs: true

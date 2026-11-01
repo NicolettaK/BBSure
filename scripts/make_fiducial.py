@@ -23,6 +23,7 @@ import yaml
 
 from bbsure.config import build_config, free_param_names, iter_param_entries
 from bbsure.models import Model
+from bbsure.paths import load_yaml
 
 ap = argparse.ArgumentParser()
 ap.add_argument('--fg-params', required=True)
@@ -36,7 +37,7 @@ ap.add_argument('--out', required=True)
 args = ap.parse_args()
 
 fg = yaml.safe_load(open(args.fg_params))
-base = yaml.safe_load(open(args.base_config))
+base = load_yaml(args.base_config)
 cfg = build_config(base, Model(frozenset(), r_free=False),
                    'predicted_spectra')
 cs = cfg['BBCompSep']

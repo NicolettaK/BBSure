@@ -40,8 +40,11 @@ from .config import free_param_names, iter_param_entries
 
 
 def best_fit(tree_dir):
-    """Final model and best fit (ML) from the decision log of the tree."""
-    concl = json.load(open(os.path.join(tree_dir, 'conclusion.json')))
+    """Final model and best fit (ML) from the decision log of the tree
+    (conclusion_tree.json if the profile scheme ran after the tree)."""
+    c = os.path.join(tree_dir, 'conclusion_tree.json')
+    concl = json.load(open(c if os.path.isfile(c) else
+                           os.path.join(tree_dir, 'conclusion.json')))
     model = concl['model']
     ev = json.load(open(os.path.join(tree_dir, 'decision_log.json')))
     fits = [e for e in ev if e['node'] == 'fit' and e.get('model') == model

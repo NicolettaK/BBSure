@@ -3,9 +3,8 @@ Sky model of the simulations: SEDs in K_RJ, SO SAT bandpasses, CMB and
 Gaussian foreground power spectra, SED derivatives for the moment maps and
 PySM foregrounds integrated over the bandpasses.
 
-Data files (bandpasses, CAMB spectra, PySM cache) are read from DATA_DIR:
-the environment variable BBSURE_DATA, or the data/ directory of the
-repository.
+Data files (bandpasses, CAMB spectra, PySM cache) are read from DATA_DIR
+(bbsure/paths.py).
 """
 import os
 import re
@@ -13,10 +12,7 @@ import re
 import healpy as hp
 import numpy as np
 
-DATA_DIR = os.environ.get(
-    'BBSURE_DATA',
-    os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(
-        os.path.abspath(__file__)))), 'data'))
+from ..paths import DATA_DIR
 CAMB_NOBB = os.path.join(DATA_DIR, 'camb', 'camb_lens_nobb.dat')
 CAMB_R1 = os.path.join(DATA_DIR, 'camb', 'camb_lens_r1.dat')
 BPASS_DIR = os.path.join(DATA_DIR, 'bandpasses')
