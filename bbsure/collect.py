@@ -1,84 +1,138 @@
 """
-Raccoglie le conclusioni della validazione.
+Collects the results of a validation run in csv tables.
 
-  python collect.py <root>             tabella alla cieca (senza gli r veri)
-  python collect.py <root> --unblind   aggiunge gli r veri e le statistiche
-
-Scrive <root>/results.csv (e results_unblinded.csv con --unblind).
+collect_tree    : conclusions of the trees, <root>/runs/set_<i>_<kind>/<tree>/
+                  (blind, or with the true r and the statistics: unblind)
+collect_profile : result.json of the profile scheme, <root>/set_<i>_<kind>/
 """
 import csv
 import glob
 import json
 import os
-import sys
 
 import numpy as np
+from scipy import stats
 
-root = sys.argv[1]
-unblind = '--unblind' in sys.argv
-# --tree tree_bfcov1: risultati del secondo passaggio (default: tree)
-tree = (sys.argv[sys.argv.index('--tree') + 1] if '--tree' in sys.argv
-        else 'tree')
-sky = {int(r['index']): r['sky_rand']
-       for r in csv.DictReader(open(os.path.join(root, 'plan', 'sets.csv')))}
+TREE_COLS = ['index', 'kind', 'sky', 'status', 'conclusion', 'model',
+             'r_med', 'r_std', 'r_lo1', 'r_hi1', 'r_95', 'lnB_rfree_vs_r0',
+             'chi2', 'pte']
+UNBLIND_COLS = ['r_true', 'pull', 'in_1sigma', 'in_95']
+PROFILE_COLS = ['index', 'kind', 'status', 'conclusion', 'model_tree',
+                'model_final', 'start', 'rejected', 'r_bayes_tree',
+                'sigma_bayes_tree', 'r_star_final', 'r_med_pl', 'r_lo1_pl',
+                'r_hi1_pl', 'r_std_pl', 'r_lo3_pl', 'r_hi3_pl', 'r_95_pl0',
+                'dchi2_r0', 'chi2_at_rstar', 'dof_rstar', 'pte_rstar']
 
-rows = []
-for d in sorted(glob.glob(os.path.join(root, 'runs', 'set_*'))):
-    _, i, kind = os.path.basename(d).split('_')
-    i = int(i)
-    row = dict(index=i, kind=kind, sky='d9s4' if kind == 'd9s4' else sky[i],
-               status='running/failed')
-    f = os.path.join(d, tree, 'conclusion.json')
-    if os.path.isfile(f):
-        c = json.load(open(f))
-        row.update(status='done', conclusion=c['conclusion'],
-                   model=c['model'], r_med=c.get('r_med'),
-                   r_lo1=c.get('r_lo1'), r_hi1=c.get('r_hi1'),
-                   r_95=c.get('r_95'),
-                   lnB_rfree_vs_r0=c.get('lnB_rfree_vs_r0'))
-        ev = json.load(open(os.path.join(d, tree, 'decision_log.json')))
-        fits = [e for e in ev if e['node'] == 'fit' and
-                e.get('model') == c['model'] and 'r_std' in e]
-        if fits:
-            row.update(r_std=fits[-1]['r_std'], chi2=fits[-1]['chi2'],
-                       pte=fits[-1]['pte'])
-    rows.append(row)
 
-keys = ['index', 'kind', 'sky', 'status', 'conclusion', 'model', 'r_med',
-        'r_std', 'r_lo1', 'r_hi1', 'r_95', 'lnB_rfree_vs_r0', 'chi2', 'pte']
-done = [r for r in rows if r['status'] == 'done']
-print(f"{len(done)}/{len(rows)} trees concluded; "
-      f"{sum(r['conclusion'] == 'r_detection' for r in done)} r detections, "
-      f"{sum(r['conclusion'] == 'upper_limit' for r in done)} upper limits")
+def collect_tree(root, unblind=False, tree='tree'):
+    """
+    One row per set: conclusion, final model, r of the tree (median, sigma,
+    68%, r_95), chi2 and PTE of the final model. With unblind, also the true
+    r (<root>/truth/r_true.csv), the pull and the coverage, and a summary
+    printed per sky type. tree: name of the tree directory (e.g.
+    tree_bfcov1 for the second pass with the best-fit covariance).
+    Writes <root>/results[_unblinded][_<tree>].csv and returns its path.
+    """
+    sky = {int(r['index']): r['sky_rand']
+           for r in csv.DictReader(open(os.path.join(root, 'plan',
+                                                     'sets.csv')))}
+    rows = []
+    for d in sorted(glob.glob(os.path.join(root, 'runs', 'set_*'))):
+        _, i, kind = os.path.basename(d).split('_')
+        i = int(i)
+        row = dict(index=i, kind=kind,
+                   sky='d9s4' if kind == 'd9s4' else sky[i],
+                   status='running/failed')
+        f = os.path.join(d, tree, 'conclusion.json')
+        if os.path.isfile(f):
+            c = json.load(open(f))
+            row.update(status='done', conclusion=c['conclusion'],
+                       model=c['model'], r_med=c.get('r_med'),
+                       r_lo1=c.get('r_lo1'), r_hi1=c.get('r_hi1'),
+                       r_95=c.get('r_95'),
+                       lnB_rfree_vs_r0=c.get('lnB_rfree_vs_r0'))
+            ev = json.load(open(os.path.join(d, tree, 'decision_log.json')))
+            fits = [e for e in ev if e['node'] == 'fit' and
+                    e.get('model') == c['model'] and 'r_std' in e]
+            if fits:
+                row.update(r_std=fits[-1]['r_std'], chi2=fits[-1]['chi2'],
+                           pte=fits[-1]['pte'])
+        rows.append(row)
 
-if unblind:
-    truth = {int(r['index']): float(r['r'])
-             for r in csv.DictReader(open(os.path.join(root, 'truth',
-                                                       'r_true.csv')))}
-    keys += ['r_true', 'pull', 'in_1sigma', 'in_95']
-    for r in done:
-        rt = truth[r['index']]
-        r['r_true'] = rt
-        if r.get('r_std'):
-            r['pull'] = (r['r_med'] - rt) / r['r_std']
-        if r.get('r_lo1') is not None:
-            r['in_1sigma'] = int(r['r_lo1'] <= rt <= r['r_hi1'])
-        if r.get('r_95') is not None:
-            r['in_95'] = int(rt <= r['r_95'])
-    for kind in ('d9s4', 'rand'):
-        sel = [r for r in done if r['kind'] == kind]
-        pulls = np.array([r['pull'] for r in sel if 'pull' in r])
-        det0 = [r for r in sel if r['r_true'] == 0.
-                and r['conclusion'] == 'r_detection']
-        print(f"  {kind}: {len(sel)} trees, pull mean {pulls.mean():+.2f} "
-              f"std {pulls.std():.2f}, false detections at r = 0: "
-              f"{len(det0)}/{sum(r['r_true'] == 0. for r in sel)}")
+    keys = list(TREE_COLS)
+    done = [r for r in rows if r['status'] == 'done']
+    print(f"{len(done)}/{len(rows)} trees concluded; "
+          f"{sum(r['conclusion'] == 'r_detection' for r in done)} r "
+          f"detections, "
+          f"{sum(r['conclusion'] == 'upper_limit' for r in done)} upper "
+          f"limits")
 
-suffix = '' if tree == 'tree' else '_' + tree
-out = os.path.join(root, ('results_unblinded' if unblind else 'results')
-                   + suffix + '.csv')
-with open(out, 'w', newline='') as f:
-    w = csv.DictWriter(f, fieldnames=keys, extrasaction='ignore')
-    w.writeheader()
-    w.writerows(sorted(rows, key=lambda r: (r['index'], r['kind'])))
-print('written', out)
+    if unblind:
+        truth = {int(r['index']): float(r['r'])
+                 for r in csv.DictReader(open(os.path.join(root, 'truth',
+                                                           'r_true.csv')))}
+        keys += UNBLIND_COLS
+        for r in done:
+            rt = truth[r['index']]
+            r['r_true'] = rt
+            if r.get('r_std'):
+                r['pull'] = (r['r_med'] - rt) / r['r_std']
+            if r.get('r_lo1') is not None:
+                r['in_1sigma'] = int(r['r_lo1'] <= rt <= r['r_hi1'])
+            if r.get('r_95') is not None:
+                r['in_95'] = int(rt <= r['r_95'])
+        for kind in ('d9s4', 'rand'):
+            sel = [r for r in done if r['kind'] == kind]
+            pulls = np.array([r['pull'] for r in sel if 'pull' in r])
+            det0 = [r for r in sel if r['r_true'] == 0.
+                    and r['conclusion'] == 'r_detection']
+            print(f"  {kind}: {len(sel)} trees, pull mean {pulls.mean():+.2f}"
+                  f" std {pulls.std():.2f}, false detections at r = 0: "
+                  f"{len(det0)}/{sum(r['r_true'] == 0. for r in sel)}")
+
+    suffix = '' if tree == 'tree' else '_' + tree
+    out = os.path.join(root, ('results_unblinded' if unblind else 'results')
+                       + suffix + '.csv')
+    with open(out, 'w', newline='') as f:
+        w = csv.DictWriter(f, fieldnames=keys, extrasaction='ignore')
+        w.writeheader()
+        w.writerows(sorted(rows, key=lambda r: (r['index'], r['kind'])))
+    print('written', out)
+    return out
+
+
+def collect_profile(root, out):
+    """
+    One row per set of the profile scheme (<root>/set_<i>_<kind>/): model
+    of the tree and final model, Bayesian r of the tree, posterior of r from
+    the profile (prior of the tree), r_95 with r >= 0, conclusion, chi2 of
+    the final model at the best fit with r = r* (without Gaussian priors),
+    degrees of freedom (data - free parameters, r excluded) and PTE. Sets
+    without result.json (not finished or failed) have status = missing.
+    Writes the csv `out`.
+    """
+    with open(out, 'w', newline='') as fo:
+        w = csv.writer(fo)
+        w.writerow(PROFILE_COLS)
+        for d in sorted(glob.glob(os.path.join(root, 'set_*_*'))):
+            _, i, kind = os.path.basename(d).split('_', 2)
+            f = os.path.join(d, 'result.json')
+            if not os.path.isfile(f):
+                w.writerow([int(i), kind, 'missing']
+                           + [''] * (len(PROFILE_COLS) - 3))
+                continue
+            r = json.load(open(f))
+            r.update(index=int(i), kind=kind, status='done',
+                     rejected='+'.join(r.get('rejected', [])))
+            # number of data points from the final ML fit; free parameters =
+            # best fit without r
+            z = os.path.join(d, f"ml_{r['model_final']}_final", 'chi2.npz')
+            if 'chi2_at_rstar' in r and os.path.isfile(z):
+                dof = (int(np.load(z)['ndof'])
+                       - (len(r['best_fit_at_rstar']) - 1))
+                r.update(dof_rstar=dof,
+                         pte_rstar=float(stats.chi2.sf(r['chi2_at_rstar'],
+                                                       dof)))
+            w.writerow(['' if r.get(c) is None else r.get(c)
+                        for c in PROFILE_COLS])
+    print('written', out)
