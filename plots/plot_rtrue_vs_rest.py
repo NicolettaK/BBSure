@@ -1,12 +1,13 @@
 """
-r stimato (mediana +- sigma) vs r vero, parte bayesiana del tree e schema
-profilo, per i due tipi di cielo (righe) e le due stime (colonne).
+Estimated r (median +- sigma) vs true r, Bayesian part of the tree and
+profile scheme, for the two sky types (rows) and the two estimates
+(columns).
 
-  python plot_rtrue_vs_rest.py plots/validation/profile_vs_tree.csv \
-      --out plots/validation/rtrue_vs_rest.pdf
+  python plots/plot_rtrue_vs_rest.py profile_vs_tree.csv --out rtrue_vs_rest.pdf
 
-Il csv e' quello scritto da make_profile_table.py. Colore = conclusione di quella
-stima (detection / upper limit); retta: fit pesato r_stimato = a + b r_vero.
+The csv is the one written by make_profile_table.py. Colour = conclusion of
+that estimate (detection / upper limit); line: weighted fit
+r_estimated = a + b r_true.
 """
 import argparse
 import csv
@@ -49,7 +50,7 @@ for i, kind in enumerate(kinds):
                         label=f'{name} ({mask.sum()})')
         ax.plot([-5, lim], [-5, lim], color='#1b1b1b', lw=1, zorder=0,
                 label='estimated = true')
-        # fit pesato m = a + b t
+        # weighted fit m = a + b t
         w = 1 / s ** 2
         A = np.vstack([np.ones_like(t), t]).T
         cov = np.linalg.inv(A.T @ (A * w[:, None]))

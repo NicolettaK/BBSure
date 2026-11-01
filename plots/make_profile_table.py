@@ -1,29 +1,29 @@
 """
-Tabella riassuntiva tree (parte bayesiana) vs schema profilo, set per set.
+Summary table of the tree (Bayesian part) vs the profile scheme, set by set.
 
-  python make_profile_table.py results_unblinded.csv profile_results.csv out.pdf \
+  python plots/make_profile_table.py results_unblinded.csv profile_results.csv out.pdf \
       [--title "..."] [--note "..."] [--kind rand]
 
-results_unblinded.csv: CSV svelato della validazione (collect.py: r vero,
-cielo, modello e r del tree); profile_results.csv: collect_profile.py su
-PySM_rnd3. Solo i set finiti in entrambi. Scrive anche <out>.csv e stampa un
-riepilogo (bias medio, detection, copertura).
+results_unblinded.csv: unblinded csv of the validation (scripts/collect.py
+tree --unblind: true r, sky, model and r of the tree); profile_results.csv:
+scripts/collect.py profile. Only the sets concluded in both. Also writes
+<out>.csv and prints a summary (mean bias, detections, coverage).
 
-Bayesiano: mediana e sigma del posterior PolyChord del modello scelto dal
-tree, e r_95 per gli upper limit. Profilo: mediana e sigma del posterior di
-r dal profilo (prior del tree), e r_95 con r >= 0 per gli upper limit.
-Righe a coppie: per ogni set i due cieli (d9s4 e random) uno sotto l'altro;
-grigio = schema profilo non ancora concluso.
-Colori: rosso = conclusione sbagliata dello schema profilo, verde = corretta
-dove il tree sbagliava, azzurro = conclusione diversa da quella del tree,
-giallo = |bias| > 2 nello schema profilo. Conclusione giusta: upper limit con
-r vero <= r_95, detection con r vero > 0.
+Bayesian: median and sigma of the PolyChord posterior of the model chosen by
+the tree, and r_95 for the upper limits. Profile: median and sigma of the
+posterior of r from the profile (prior of the tree), and r_95 with r >= 0
+for the upper limits.
+Rows in pairs: for each set the two skies (d9s4 and random) one below the
+other; grey = profile scheme not concluded yet.
+Colours: red = wrong conclusion of the profile scheme, green = right where
+the tree was wrong, blue = conclusion different from the tree's, yellow =
+|bias| > 2 in the profile scheme. Right conclusion: upper limit with
+true r <= r_95, detection with true r > 0.
 """
 import argparse
 import csv
 import os
 import re
-import sys
 
 import numpy as np
 from scipy import stats
@@ -32,19 +32,20 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt  # noqa: E402
 from matplotlib.backends.backend_pdf import PdfPages  # noqa: E402
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import decision_tree as dt  # noqa: E402
+from bbsure.models import amp_name, group_spectra  # noqa: E402
 
 ap = argparse.ArgumentParser()
 ap.add_argument('tree_csv')
 ap.add_argument('profile_csv')
 ap.add_argument('out')
-ap.add_argument('--title', default='Tree (bayesiano) vs schema profilo')
+ap.add_argument('--title', default='Tree (Bayesian) vs profile scheme')
 ap.add_argument('--note', default='')
 ap.add_argument('--kind', default=None, help='only this kind (rand, d9s4)')
 ap.add_argument('--png', default=None, help='also save the first page as png')
 ap.add_argument('--r95', default=None,
-                help='csv of recompute_r95.py: tree upper limits with r >= 0')
+                help='csv with the tree upper limits recomputed with r >= 0 '
+                     '(columns index, kind, r_95_pos; only for trees run '
+                     'before r_95 was computed with r >= 0)')
 a = ap.parse_args()
 plt.rcParams['font.family'] = 'DejaVu Sans'
 
@@ -60,16 +61,15 @@ SPEC = {'w00w10': r'\omega_0^{X}\!\times\omega_1^{\beta_X}',
 
 
 def model_label(m):
-    """M_d+s-d_w00w10-s_w00w10_r -> spettri dei momenti RIMASTI, in LaTeX
-    (come make_validation_table.py)."""
+    """M_d+s-d_w00w10-s_w00w10_r -> moment spectra LEFT, in LaTeX."""
     body = re.sub(r'^M_|_(r|0)$', '', m)
     parts = body.split('-')
     if parts[0] == 'none':
-        return 'nessun momento'
+        return 'no moments'
     off = {'A_' + p for p in parts[1:]}
     out = []
-    for _, pref, spec in dt.group_spectra(set(parts[0].split('+'))):
-        if dt.amp_name(pref, spec) in off:
+    for _, pref, spec in group_spectra(set(parts[0].split('+'))):
+        if amp_name(pref, spec) in off:
             continue
         comp = {'d': 'd', 's': 's', 'ds': 'd'}[pref]
         tex = SPEC[spec].replace('X', comp)
@@ -78,7 +78,7 @@ def model_label(m):
         elif pref == 'ds' and spec == 'w00w10':
             tex = r'\omega_0^{d}\!\times\omega_1^{\beta_s}'
         out.append('$' + tex + '$')
-    return ' + '.join(out) if out else 'nessun momento'
+    return ' + '.join(out) if out else 'no moments'
 
 
 def r_text(med, sd):
@@ -90,7 +90,7 @@ def ul_text(concl, r95):
 
 
 def chi2_text(chi2, dof, pte):
-    """chi2 ridotto (PTE); vuoto se manca (es. csv senza chi2 a r*)."""
+    """reduced chi2 (PTE); empty if missing (e.g. csv without chi2 at r*)."""
     try:
         return f'{float(chi2) / float(dof):.2f} ({float(pte):.2f})'
     except (TypeError, ValueError, ZeroDivisionError):
@@ -98,8 +98,8 @@ def chi2_text(chi2, dof, pte):
 
 
 def dof_tree(T, P):
-    """Gradi di liberta' del fit del tree (r libero): quelli a r* meno uno
-    se il modello e' lo stesso, altrimenti dalla PTE (inversione)."""
+    """Degrees of freedom of the fit of the tree (r free): those at r* minus
+    one if the model is the same, otherwise from the PTE (inversion)."""
     if P is not None and P.get('dof_rstar'):
         if P['model_final'] == T['model']:
             return int(P['dof_rstar']) - 1
@@ -121,15 +121,15 @@ def ok(concl, t, r95):
 tree = {(r['index'], r['kind']): r for r in csv.DictReader(open(a.tree_csv))
         if r['status'] == 'done'}
 if a.r95:
-    # upper limit del tree ricalcolato con r >= 0 (come lo schema profilo)
+    # upper limit of the tree recomputed with r >= 0 (as the profile scheme)
     for r in csv.DictReader(open(a.r95)):
         k = (r['index'], r['kind'])
         if k in tree and tree[k]['conclusion'] == 'upper_limit':
             tree[k]['r_95'] = r['r_95_pos']
 prof = {(r['index'], r['kind']): r for r in csv.DictReader(open(a.profile_csv))
         if r['status'] == 'done'}
-# a coppie (stesso set, i due cieli uno sotto l'altro): un set il cui schema
-# profilo non e' ancora concluso compare con la sola parte bayesiana
+# in pairs (same set, the two skies one below the other): a set whose
+# profile scheme is not concluded yet shows only the Bayesian part
 idx = sorted({int(k[0]) for k in prof if k in tree})
 keys = [(str(i), kd) for i in idx for kd in sorted({k[1] for k in tree})
         if (str(i), kd) in tree and (a.kind is None or kd == a.kind)]
@@ -147,7 +147,7 @@ for k in keys:
                      'UL' if ct == 'upper_limit' else 'det.', r_text(mt, st),
                      ul_text(ct, rt95), f'{bt:+.1f}',
                      chi2_text(T.get('chi2'), dof_tree(T, None), T.get('pte')),
-                     'non concluso',
+                     'not concluded',
                      '', '', '', '', '', ''])
         colors.append('#f2f2f2')
         continue
@@ -167,7 +167,7 @@ for k in keys:
                  r_text(mp, sp), ul_text(cp, rp95), f'{bp:+.1f}',
                  chi2_text(P.get('chi2_at_rstar'), P.get('dof_rstar'),
                            P.get('pte_rstar')),
-                 'sì' if okp else 'NO'])
+                 'yes' if okp else 'NO'])
     colors.append('#fde2e1' if not okp else '#dff3e2' if not okt else
                   '#e3ecfa' if cp != ct else
                   '#fff4d6' if abs(bp) > 2 else 'white')
@@ -189,7 +189,7 @@ with open(os.path.splitext(a.out)[0] + '.csv', 'w') as f:
     w.writeheader()
     w.writerows(recs)
 
-# riepilogo per tipo di cielo
+# summary per sky type
 summary = []
 for kind in sorted({r['kind'] for r in recs}):
     R = [r for r in recs if r['kind'] == kind]
@@ -197,40 +197,40 @@ for kind in sorted({r['kind'] for r in recs}):
     sem = (lambda x: x.std(ddof=1) / np.sqrt(n)) if n > 1 else (lambda x: 0.)
     bb = np.array([r['bias_bayes'] for r in R])
     bp = np.array([r['bias_profile'] for r in R])
-    s = (f"{kind}: N = {n}; bias bayesiano {bb.mean():+.2f} ± "
-         f"{sem(bb):.2f}, profilo {bp.mean():+.2f} ± "
-         f"{sem(bp):.2f} (a coppie "
-         f"{(bp - bb).mean():+.2f}); conclusioni sbagliate "
+    s = (f"{kind}: N = {n}; Bayesian bias {bb.mean():+.2f} ± "
+         f"{sem(bb):.2f}, profile {bp.mean():+.2f} ± "
+         f"{sem(bp):.2f} (paired "
+         f"{(bp - bb).mean():+.2f}); wrong conclusions "
          f"{sum(not r['ok_bayes'] for r in R)} -> "
-         f"{sum(not r['ok_profile'] for r in R)}; conclusione cambiata in "
+         f"{sum(not r['ok_profile'] for r in R)}; conclusion changed in "
          f"{sum(r['concl_bayes'] != r['concl_profile'] for r in R)}, "
-         f"modello in "
+         f"model in "
          f"{sum(r['model_bayes'] != r['model_profile'] for r in R)}")
     summary.append(s)
     print(s)
 
-head = ['set', 'cielo', 'r vero', 'modello (bayes.)', 'concl.', 'r bayes.',
-        'r < (95%)', 'bias', 'χ²_rid (PTE)', 'modello (profilo)', 'concl.',
-        'r profilo', 'r < (95%)', 'bias', 'χ²_rid (PTE)', 'ok?']
+head = ['set', 'sky', 'true r', 'model (Bayes.)', 'concl.', 'r Bayes.',
+        'r < (95%)', 'bias', 'χ²_red (PTE)', 'model (profile)', 'concl.',
+        'r profile', 'r < (95%)', 'bias', 'χ²_red (PTE)', 'ok?']
 per_page = 18
 with PdfPages(a.out) as pdf:
     for k0 in range(0, len(rows), per_page):
         fig = plt.figure(figsize=(11.69, 8.27))
         if k0 == 0:
             fig.text(0.03, 0.955, a.title, fontsize=13, weight='bold')
-            fig.text(0.03, 0.932, "r in unita' di 10$^{-3}$: mediana $\\pm\\sigma$ del posterior "
-                     "(anche per gli upper limit), r < (95%) solo per gli "
-                     "upper limit; bias = (mediana - r vero)/$\\sigma$. Modello (profilo) '=': "
-                     "uguale a quello del tree.", fontsize=8, color='#555')
-            fig.text(0.03, 0.915, "Rosso: conclusione sbagliata (profilo); "
-                     "verde: corretta dove il tree sbagliava; azzurro: "
-                     "conclusione diversa dal tree; giallo: |bias| > 2; grigio: non "
-                     "concluso. "
+            fig.text(0.03, 0.932, "r in units of 10$^{-3}$: median $\\pm\\sigma$ of the posterior "
+                     "(also for the upper limits), r < (95%) only for the "
+                     "upper limits; bias = (median - true r)/$\\sigma$. Model (profile) '=': "
+                     "same as the tree's.", fontsize=8, color='#555')
+            fig.text(0.03, 0.915, "Red: wrong conclusion (profile); "
+                     "green: right where the tree was wrong; blue: "
+                     "conclusion different from the tree; yellow: |bias| > 2; grey: not "
+                     "concluded. "
                      + a.note, fontsize=8, color='#555')
-            fig.text(0.03, 0.898, "$\\chi^2_{\\rm rid}$ (PTE): $\\chi^2$/gradi di "
-                     "liberta' al best fit ML del modello (bayesiano: r libero; "
-                     "profilo: r = r*), senza prior gaussiani; gradi di liberta' "
-                     "= dati - parametri liberi.", fontsize=8, color='#555')
+            fig.text(0.03, 0.898, "$\\chi^2_{\\rm red}$ (PTE): $\\chi^2$/degrees of "
+                     "freedom at the ML best fit of the model (Bayesian: r free; "
+                     "profile: r = r*), without Gaussian priors; degrees of freedom "
+                     "= data - free parameters.", fontsize=8, color='#555')
             for i, s in enumerate(summary):
                 fig.text(0.03, 0.878 - 0.017 * i, s, fontsize=8)
         ax = fig.add_axes([0.02, 0.03, 0.96, 0.82])

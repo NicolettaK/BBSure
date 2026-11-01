@@ -1,13 +1,12 @@
 """
-Istogramma della differenza accoppiata (r_rand - r_d9s4)/sigma_rand sugli stessi
-set (stessa CMB e stesso rumore, cambiano solo i foreground): schema profilo
-(barre) vs parte bayesiana del tree (contorno); tutti, upper limit e detection
-(conclusione dello schema profilo sul cielo random).
+Histogram of the paired difference (r_rand - r_d9s4)/sigma_rand on the same
+sets (same CMB and noise, only the foregrounds change): profile scheme
+(bars) vs Bayesian part of the tree (outline); all, upper limits and
+detections (conclusion of the profile scheme on the random sky).
 
-  python plot_paired_bias.py validation_results/v3_nside128_noee_lmax250/profile_results.csv \
-      --out plots/validation/paired_bias.pdf
+  python plots/plot_paired_bias.py profile_results.csv --out paired_bias.pdf
 
-Tree: r_bayes_tree, sigma_bayes_tree; profilo: r_med_pl, r_std_pl.
+Tree: r_bayes_tree, sigma_bayes_tree; profile: r_med_pl, r_std_pl.
 """
 import argparse
 import csv
@@ -72,7 +71,7 @@ for ax, (cc, lab, col, dark) in zip(axes, [
     ax.plot(x, norm * stats.norm.pdf(x, m0, sd0), color='#1b1b1b', lw=1.8,
             ls=':', label=rf'$\mathcal{{N}}({m0:+.2f}, {sd0:.2f})$ (Bayesian)')
     ax.axvline(0, color='#bbbbbb', lw=0.8, zorder=0)
-    # numero di coppie per barra (schema profilo)
+    # number of pairs per bar (profile scheme)
     cnt = np.histogram(b1, bins=bins)[0]
     top = np.maximum(cnt, np.histogram(b0, bins=bins)[0])
     for k in range(len(cnt)):

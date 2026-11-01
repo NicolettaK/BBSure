@@ -1,22 +1,21 @@
 """
-Corner plot di un set: posterior bayesiano del tree (PolyChord del modello
-finale, tutti i parametri, r compreso) e posterior dello schema profilo
-(emcee del modello finale con r fissato a r*), sovrapposti. Sulla colonna di
-r: per il profilo il posterior di r dal profilo (prior del tree) sulla
-diagonale e la linea r = r* nei pannelli 2D; r vero in nero.
+Corner plot of one set: Bayesian posterior of the tree (PolyChord of the
+final model, all the parameters, r included) and posterior of the profile
+scheme (emcee of the final model with r fixed at r*), overlaid. In the r
+column: for the profile, the posterior of r from the profile (prior of the
+tree) on the diagonal and the line r = r* in the 2D panels; true r in black.
 
-  python plot_corner.py <tree_dir> <profile_set_dir> --r-true 0.0111 \
+  python plots/plot_corner.py <tree_dir> <profile_dir> --r-true 0.0111 \
       --title "set 47 rand (d12s5)" --out corner_047_rand.pdf
 
-tree_dir: runs/set_<i>_<kind>/tree (PySM_rnd2); profile_set_dir:
-set_<i>_<kind> dello schema profilo (PySM_rnd3: result.json,
-profile_<modello>.npz, post_<modello>_rstar/emcee.npz).
+tree_dir: runs/set_<i>_<kind>/tree; profile_dir: the output directory of
+the profile scheme (tree/profile: result.json, profile_<model>.npz,
+post_<model>_rstar/emcee.npz).
 """
 import argparse
 import json
 import os
 import re
-import sys
 
 import numpy as np
 import yaml
@@ -25,8 +24,7 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt  # noqa: E402
 import corner  # noqa: E402
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import decision_tree as dt  # noqa: E402
+from bbsure.config import free_param_names  # noqa: E402
 
 ap = argparse.ArgumentParser()
 ap.add_argument('tree')
@@ -42,17 +40,17 @@ a = ap.parse_args()
 C_B, C_P, C_X = '#2a6fdb', '#e8590c', '#2f9e44'
 plt.rcParams.update({'font.family': 'DejaVu Sans', 'font.size': 9})
 
-# ── posterior bayesiano del tree ──────────────────────────────────────────
+# ── Bayesian posterior of the tree ────────────────────────────────────────
 _c = os.path.join(a.tree, 'conclusion_tree.json')
 concl = json.load(open(_c if os.path.isfile(_c) else
                        os.path.join(a.tree, 'conclusion.json')))
 M0 = concl['model']
 cfg = yaml.safe_load(open(os.path.join(a.tree, f'{M0}_PC', 'config.yml')))
-names_b = dt.free_param_names(cfg['BBCompSep'])
+names_b = free_param_names(cfg['BBCompSep'])
 samp_b = np.loadtxt(os.path.join(a.tree, f'{M0}_PC', 'polychord',
                                  'pch_equal_weights.txt'), ndmin=2)[:, 2:]
 
-# ── schema profilo: emcee a r = r*, profilo di r ──────────────────────────
+# ── profile scheme: emcee at r = r*, profile of r ─────────────────────────
 res = json.load(open(os.path.join(a.prof, 'result.json')))
 M1, r_star = res['model_final'], res['r_star_final']
 z = np.load(os.path.join(a.prof, f'post_{M1}_rstar', 'emcee.npz'))
@@ -66,18 +64,18 @@ d -= d.min()
 post_r = np.exp(-d / 2)
 
 
-# ── opzionale: un altro modello del tree (r libero) ────────────────────────
+# ── optional: another model of the tree (r free) ──────────────────────────
 names_x = samp_x = None
 if a.extra_pc:
     MX = os.path.basename(os.path.normpath(a.extra_pc))[:-3]
     cx = yaml.safe_load(open(os.path.join(a.extra_pc, 'config.yml')))
-    names_x = dt.free_param_names(cx['BBCompSep'])
+    names_x = free_param_names(cx['BBCompSep'])
     samp_x = np.loadtxt(os.path.join(a.extra_pc, 'polychord',
                                      'pch_equal_weights.txt'), ndmin=2)[:, 2:]
 
 
 def label(n):
-    """Nome del parametro in LaTeX."""
+    """Name of the parameter in LaTeX."""
     if n == 'r_tensor':
         return '$r$'
     m = re.match(r'(A|alpha)_(d|s|ds)_w(\d)(\d)w(\d)(\d)$', n)
@@ -92,7 +90,7 @@ def label(n):
     return fixed.get(n, n.replace('_', r'\_'))
 
 
-# insiemi di campioni: (nome, colore, nomi, campioni); il profilo ha r fisso
+# sample sets: (name, colour, names, samples); the profile has r fixed
 SETS = [('bayes', C_B, names_b, samp_b), ('prof', C_P, names_p, samp_p)]
 if samp_x is not None:
     SETS.append(('extra', C_X, names_x, samp_x))
@@ -102,7 +100,7 @@ def get(S, p):
     return S[3][:, S[2].index(p)] if p in S[2] else None
 
 
-# parametri: r, poi quelli del tree, poi quelli in piu' degli altri modelli
+# parameters: r, then those of the tree, then the extra ones of the other models
 params = ['r_tensor'] + [n for n in names_b if n != 'r_tensor']
 for S in SETS[1:]:
     params += [n for n in S[2] if n not in params]

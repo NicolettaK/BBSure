@@ -1,13 +1,13 @@
 """
-Istogrammi del bias (r_med - r_vero)/sigma(r): schema profilo (barre) vs parte
-bayesiana del tree (contorno), per un tipo di cielo; tutti i set, upper limit e
-detection (conclusione dello schema profilo).
+Histograms of the bias (r_med - r_true)/sigma(r): profile scheme (bars) vs
+Bayesian part of the tree (outline), for one sky type; all the sets, upper
+limits and detections (conclusion of the profile scheme).
 
-  python plot_bias_profile.py plots/validation/profile_vs_tree.csv --kind rand \
-      --out plots/validation/bias_profile_rand.pdf
+  python plots/plot_bias_profile.py profile_vs_tree.csv --kind rand \
+      --out bias_profile_rand.pdf
 
-Il csv e' quello scritto da make_profile_table.py (bias_bayes, bias_profile,
-concl_profile).
+The csv is the one written by make_profile_table.py (bias_bayes,
+bias_profile, concl_profile).
 """
 import argparse
 import csv
@@ -34,7 +34,7 @@ plt.rcParams.update({'font.family': 'DejaVu Sans', 'font.size': 10,
 fig, axes = plt.subplots(1, 3, figsize=(19, 4.8), sharey=True)
 bins = np.arange(-4, 4.01, 0.5)
 x = np.linspace(-4, 4, 400)
-# colore delle barre e versione piu' chiara per la gaussiana fittata
+# colour of the bars and lighter version for the fitted Gaussian
 for ax, (concl, lab, col, dark) in zip(axes, [
         (None, 'all', '#3a9e6f', '#86d9b0'),
         ('upper_limit', 'upper limits', '#d9822b', '#f5bd82'),
@@ -55,7 +55,7 @@ for ax, (concl, lab, col, dark) in zip(axes, [
     ax.plot(x, norm * stats.norm.pdf(x), color='#1b1b1b', lw=2,
             label=r'$\mathcal{N}(0, 1)$')
     m, sd = b1.mean(), b1.std(ddof=1)
-    # bordo scuro sottile: la linea chiara si vede anche sopra le barre
+    # thin dark edge: the light line shows also over the bars
     ax.plot(x, norm * stats.norm.pdf(x, m, sd), color=dark, lw=2.6,
             ls='--', label=rf'$\mathcal{{N}}({m:+.2f}, {sd:.2f})$ (profile)',
             path_effects=[pe.Stroke(linewidth=4, foreground='#1b1b1b'),
@@ -64,7 +64,7 @@ for ax, (concl, lab, col, dark) in zip(axes, [
     ax.plot(x, norm * stats.norm.pdf(x, m0, sd0), color='#1b1b1b', lw=1.8,
             ls=':', label=rf'$\mathcal{{N}}({m0:+.2f}, {sd0:.2f})$ (Bayesian)')
     ax.axvline(0, color='#bbbbbb', lw=0.8, zorder=0)
-    # numero di set per barra (schema profilo) e, tra parentesi, l'atteso
+    # number of sets per bar (profile scheme) and, in brackets, the expected
     cnt = np.histogram(b1, bins=bins)[0]
     top = np.maximum(cnt, np.histogram(b0, bins=bins)[0])
     exp = len(sel) * np.diff(stats.norm.cdf(bins))

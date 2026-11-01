@@ -1,12 +1,12 @@
 """
-Differenza accoppiata (r_rand - r_d9s4)/sigma_rand in funzione di r vero, per la
-parte bayesiana del tree e per lo schema profilo. Punti colorati per tipo di
-cielo random (dust e synch entrambi complessi o no); medie in bin di r vero.
+Paired difference (r_rand - r_d9s4)/sigma_rand as a function of the true r,
+for the Bayesian part of the tree and for the profile scheme. Points
+coloured by type of random sky (dust and synch both complex or not); means
+in bins of true r.
 
-  python plot_paired_vs_r.py plots/validation/profile_scheme_v3/profile_vs_tree.csv \
-      --out plots/validation/profile_scheme_v3/paired_vs_r.pdf
+  python plots/plot_paired_vs_r.py profile_vs_tree.csv --out paired_vs_r.pdf
 
-Il csv e' quello scritto da make_profile_table.py.
+The csv is the one written by make_profile_table.py.
 """
 import argparse
 import csv
@@ -25,7 +25,7 @@ rows = {(int(r['index']), r['kind']): r for r in csv.DictReader(open(a.csv))}
 idx = sorted(i for i, k in rows if k == 'rand' and (i, 'd9s4') in rows)
 rt = np.array([float(rows[i, 'rand']['r_true']) for i in idx])
 sky = [rows[i, 'rand']['sky'] for i in idx]
-# entrambi complessi: dust d10/d12 e synch s5/s7
+# both complex: dust d10/d12 and synch s5/s7
 both = np.array([s[:3] in ('d10', 'd12') and s[-2:] in ('s5', 's7')
                  for s in sky])
 
@@ -53,7 +53,7 @@ for ax, (lab, d) in zip(axes, [
                edgecolor='white', lw=0.6,
                label=f'dust d10/d12 and synch s5/s7 ({both.sum()}): mean '
                      f'{d[both].mean():+.2f}')
-    # media in bin di r vero, tutte le coppie
+    # mean in bins of true r, all the pairs
     for lo, hi in zip(edges[:-1], edges[1:]):
         s = (rt >= lo) & (rt < hi)
         m, e = d[s].mean(), d[s].std(ddof=1) / np.sqrt(s.sum())

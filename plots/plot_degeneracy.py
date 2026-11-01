@@ -1,9 +1,12 @@
 """
-Figura per le slide: degenerazione tra le ampiezze dei momenti e r, per
-qualche set. Per ogni set: posterior di r (tree, modello con il momento a r
-libero, schema profilo) e i piani r - A^d_{10,10}, r - A^s_{10,10}.
+Degeneracy between the moment amplitudes and r, for a few sets. For each
+set: posterior of r (tree, model with the moment at r free, profile scheme)
+and the planes r - A^d_{10,10}, r - A^s_{10,10}.
 
-  python plot_degeneracy.py <corner_src> <out.png> 76:rand:M_d+s-... 97:rand:M_d+d2+s-...
+  python plots/plot_degeneracy.py <src> <table.csv> <out.png> 76:rand:M_d+s-... 97:rand:M_d+d2+s-...
+
+src: root of the run (runs/set_<i>_<kind>/tree and tree/profile);
+table.csv: the csv written by make_profile_table.py (true r and sky).
 """
 import json
 import os
@@ -16,20 +19,18 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt  # noqa: E402
 import corner  # noqa: E402
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import decision_tree as dt  # noqa: E402
+from bbsure.config import free_param_names  # noqa: E402
 
-src, out, specs = sys.argv[1], sys.argv[2], sys.argv[3:]
+src, table, out, specs = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4:]
 C_B, C_P, C_X = '#2a6fdb', '#e8590c', '#2f9e44'
 plt.rcParams.update({'font.family': 'DejaVu Sans', 'font.size': 15})
 truth = {r['index'] + r['kind']: (float(r['r_true']), r['sky']) for r in
-         __import__('csv').DictReader(open(
-             'plots/validation/profile_scheme_v3/profile_vs_tree.csv'))}
+         __import__('csv').DictReader(open(table))}
 
 
 def pc(d):
     cfg = yaml.safe_load(open(os.path.join(d, 'config.yml')))
-    names = dt.free_param_names(cfg['BBCompSep'])
+    names = free_param_names(cfg['BBCompSep'])
     s = np.loadtxt(os.path.join(d, 'polychord', 'pch_equal_weights.txt'),
                    ndmin=2)[:, 2:]
     return names, s
@@ -42,8 +43,8 @@ kw = dict(bins=30, plot_datapoints=False, plot_density=False,
 for row, spec in enumerate(specs):
     i, kind, mx = spec.split(':')
     I = f'{int(i):03d}'
-    tree = os.path.join(src, 'PySM_rnd2', 'runs', f'set_{I}_{kind}', 'tree')
-    prof = os.path.join(src, 'PySM_rnd3', f'set_{I}_{kind}')
+    tree = os.path.join(src, 'runs', f'set_{I}_{kind}', 'tree')
+    prof = os.path.join(tree, 'profile')
     c = json.load(open(os.path.join(tree, 'conclusion.json')))
     nb, sb = pc(os.path.join(tree, f"{c['model']}_PC"))
     nx, sx = pc(os.path.join(tree, f'{mx}_PC'))
