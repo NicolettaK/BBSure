@@ -1,0 +1,129 @@
+# Configurazione BBPower base per il decision tree v2 (PySM_tests)
+# Autore: nkrach@sissa.it
+#
+# Momenti nel formalismo di Vacher et al. (BBPower branch moments-free):
+# mappe w_nm = A dbeta^n dp^m (p = 1/T [1/K]) e per ogni coppia di mappe uno
+# spettro A_<c>_w<nm>w<nm> (ell/80)^alpha_<c>_w<nm>w<nm>, in D_ell a nu0
+# (stesse unita' di amp_d_bb / amp_s_bb). decision_tree.py ne fa una copia
+# per ogni nodo e spegne gli spettri dei gruppi non usati (A = 0, alpha al
+# valore centrale); T_d e' libera solo con il gruppo dT.
+# Prior STRETTI (variante tight): ampiezze da sigma_beta <~ 0.45 (dust), <~ 0.5
+# (synch) e Cauchy-Schwarz per gli incrociati; pendenze dei momenti in
+# [-2, 0.5] come alpha_d / alpha_s. Auto-spettri >= 0.
+
+global:
+    nside: 128
+    compute_dell: True
+
+BBPowerSpecter:
+    bpw_edges: "@ROOT@/data/bpw_edges_nside128.txt"
+    purify_B: True
+    n_iter: 3
+
+BBPowerSummarizer:
+    nulls_covar_type: "diagonal"
+    nulls_covar_diag_order: 0
+    data_covar_type: "block_diagonal"
+    data_covar_diag_order: 0
+
+BBCompSep:
+    sampler: 'maximum_likelihood'
+    likelihood_type: 'h&l'  # Hamimeche-Lewis, fiducial = mean of the covariance sims
+    r_init: 1.e-3
+    pol_channels: ['B']
+    l_min: 30
+    l_max: 250
+    # emcee: sovrascritti da tree_config.yml (screening dei residui)
+    nwalkers: 32
+    n_iters: 3000
+    # PolyChord: sovrascritti da tree_config.yml
+    nlive: 300
+    nrepeat: 20
+
+    cmb_model:
+        cmb_templates:
+            - "@ROOT@/data/camb/camb_lens_nobb.dat"
+            - "@ROOT@/data/camb/camb_lens_r1.dat"
+        params:
+            r_tensor: ['r_tensor', 'tophat', [-0.02, 0.00, 0.06]]
+            A_lens:   ['A_lens',   'fixed',  [1.0]]
+
+    fg_model:
+        use_moments: False
+        # covarianza delle mappe dei momenti definita positiva a ogni ell (BBPower 09392fa)
+        moments_positive: True
+        # second-order moment auto-spectra <= k (first order)^2 / (component), BBPower fca6e17
+        moments_hierarchy: 10.0
+        component_1:
+            name: Dust
+            sed: Dust
+            cl:
+                BB: ClPowerLaw
+            sed_parameters:
+                beta_d:  ['beta_d', 'Gaussian', [1.54, 0.11]]
+                temp_d:  ['temp',   'tophat',   [10., 20., 40.]]  # fixed at 20 K unless dT
+                nu0_d:   ['nu0',    'fixed',    [353.]]
+            cl_parameters:
+                BB:
+                    amp_d_bb:   ['amp',   'tophat', [0., 24., 100.]]  # PySM d1 in the SO patch: A_d_BB ~ 24
+                    alpha_d_bb: ['alpha', 'tophat', [-2., -0.53, 0.5]]
+                    l0_d_bb:    ['ell0',  'fixed',  [80.]]
+            cross:
+                # dust-synchrotron amplitude correlation (PySM templates are correlated)
+                epsilon_ds: ['component_2', 'tophat', [-1., 0., 1.]]
+            moments:
+                # 1st order in beta_d (group d)
+                A_d_w00w10:     ['A_w00w10',     'tophat', [-5., 0., 5.]]
+                alpha_d_w00w10: ['alpha_w00w10', 'tophat', [-2., -0.6, 0.5]]
+                A_d_w10w10:     ['A_w10w10',     'tophat', [0., 0.01, 5.]]
+                alpha_d_w10w10: ['alpha_w10w10', 'tophat', [-2., -0.6, 0.5]]
+                # 1st order in p = 1/T_d (group dT), dp in 1/K
+                A_d_w00w01:     ['A_w00w01',     'tophat', [-0.5, 0., 0.5]]
+                alpha_d_w00w01: ['alpha_w00w01', 'tophat', [-2., -0.6, 0.5]]
+                A_d_w01w01:     ['A_w01w01',     'tophat', [0., 1.e-5, 0.025]]
+                alpha_d_w01w01: ['alpha_w01w01', 'tophat', [-2., -0.6, 0.5]]
+                # beta_d x p cross (with both d and dT)
+                A_d_w10w01:     ['A_w10w01',     'tophat', [-0.25, 0., 0.25]]
+                alpha_d_w10w01: ['alpha_w10w01', 'tophat', [-2., -0.6, 0.5]]
+                # 2nd order in beta_d (group d2)
+                A_d_w00w20:     ['A_w00w20',     'tophat', [-5., 0., 5.]]
+                alpha_d_w00w20: ['alpha_w00w20', 'tophat', [-2., -0.6, 0.5]]
+                A_d_w10w20:     ['A_w10w20',     'tophat', [-2.5, 0., 2.5]]
+                alpha_d_w10w20: ['alpha_w10w20', 'tophat', [-2., -0.6, 0.5]]
+                A_d_w20w20:     ['A_w20w20',     'tophat', [0., 0.01, 2.5]]
+                alpha_d_w20w20: ['alpha_w20w20', 'tophat', [-2., -0.6, 0.5]]
+                # dust-synchrotron cross moments (groups ds1, ds2): map of the
+                # dust x map of the synchrotron, units sqrt(A_d A_s)
+                A_ds_w00w10:     ['A_w00w10_x_component_2',     'tophat', [-2., 0., 2.]]
+                alpha_ds_w00w10: ['alpha_w00w10_x_component_2', 'tophat', [-2., -0.75, 0.5]]
+                A_ds_w10w00:     ['A_w10w00_x_component_2',     'tophat', [-2., 0., 2.]]
+                alpha_ds_w10w00: ['alpha_w10w00_x_component_2', 'tophat', [-2., -0.75, 0.5]]
+                A_ds_w10w10:     ['A_w10w10_x_component_2',     'tophat', [-1., 0., 1.]]
+                alpha_ds_w10w10: ['alpha_w10w10_x_component_2', 'tophat', [-2., -0.75, 0.5]]
+
+        component_2:
+            name: Synchrotron
+            sed: Synchrotron
+            cl:
+                BB: ClPowerLaw
+            sed_parameters:
+                beta_s: ['beta_pl', 'Gaussian', [-3.0, 0.3]]
+                nu0_s:  ['nu0',     'fixed',    [23.]]
+            cl_parameters:
+                BB:
+                    amp_s_bb:   ['amp',   'tophat', [0., 2., 8.]]
+                    alpha_s_bb: ['alpha', 'tophat', [-2., -0.9, 0.5]]  # PySM s1: alpha_s ~ -0.9, the data push below -1
+                    l0_s_bb:    ['ell0',  'fixed',  [80.]]
+            moments:
+                # 1st order in beta_s (group s)
+                A_s_w00w10:     ['A_w00w10',     'tophat', [-2., 0., 2.]]
+                alpha_s_w00w10: ['alpha_w00w10', 'tophat', [-2., -0.9, 0.5]]
+                A_s_w10w10:     ['A_w10w10',     'tophat', [0., 0.01, 1.]]
+                alpha_s_w10w10: ['alpha_w10w10', 'tophat', [-2., -0.9, 0.5]]
+                # 2nd order in beta_s (group s2)
+                A_s_w00w20:     ['A_w00w20',     'tophat', [-1., 0., 1.]]
+                alpha_s_w00w20: ['alpha_w00w20', 'tophat', [-2., -0.9, 0.5]]
+                A_s_w10w20:     ['A_w10w20',     'tophat', [-0.5, 0., 0.5]]
+                alpha_s_w10w20: ['alpha_w10w20', 'tophat', [-2., -0.9, 0.5]]
+                A_s_w20w20:     ['A_w20w20',     'tophat', [0., 0.01, 0.5]]
+                alpha_s_w20w20: ['alpha_w20w20', 'tophat', [-2., -0.9, 0.5]]

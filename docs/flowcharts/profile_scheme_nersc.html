@@ -1,0 +1,184 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Profile Scheme NERSC</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Kalam:wght@400;700&family=Patrick+Hand&display=swap">
+<style>
+  /* Profile scheme (Res_wr*) as run at NERSC (PySM_rnd3), steps numbered as in the handwritten note */
+  :root { --paper: #fdfdfb; --grid: #eceef1; --ink: #1e1e1e; }
+  @page { size: 1920px 1880px; margin: 0; }
+  html, body { margin: 0; background: var(--paper); color: var(--ink); }
+  .canvas {
+    width: 1920px; height: 1880px; position: relative;
+    background-color: var(--paper);
+    background-image: linear-gradient(var(--grid) 1px, transparent 1px),
+                      linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+    background-size: 24px 24px;
+  }
+  svg { display: block; }
+  .t  { font-family: "Patrick Hand", "Kalam", cursive; font-size: 20px; fill: var(--ink); }
+  .ts { font-family: "Patrick Hand", "Kalam", cursive; font-size: 19px; fill: var(--ink); }
+  .yn { font-family: "Kalam", cursive; font-size: 20px; fill: var(--ink); }
+  .title { font-family: "Kalam", cursive; font-size: 36px; font-weight: 700; fill: var(--ink); }
+  .subtitle { font-family: "Kalam", cursive; font-size: 21px; fill: var(--ink); }
+  .star { font-family: "Kalam", cursive; font-weight: 700; font-size: 20px; fill: var(--ink); }
+  .note { font-family: "Patrick Hand", cursive; font-size: 18px; fill: var(--ink); }
+  .badge { font-family: "Kalam", cursive; font-weight: 700; font-size: 19px; fill: #fff; }
+</style>
+
+<div class="canvas">
+  <svg id="tree" width="1920" height="1880" viewBox="0 0 1920 1880" role="img"
+       aria-label="Profile scheme as run at NERSC, steps 1 to 9: start from the concluded tree, candidate moment from the tree, profile of r of the model plus the candidate, comparison, Res_wr* search for further moments with detection and evidence tests, result on r from the profile likelihood."></svg>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/roughjs@4.6.6/bundled/rough.js"></script>
+<script>
+(function () {
+  const svg = document.getElementById('tree');
+  const NS = 'http://www.w3.org/2000/svg';
+  const rc = rough.svg(svg);
+  let seed = 11;
+  const C = {
+    green:  ['#2f9e44', '#b2f2bb'], yellow: ['#d9a400', '#ffec99'],
+    purple: ['#9c36b5', '#eebefa'], red:    ['#e03131', '#ffc9c9'],
+    blue:   ['#1971c2', '#a5d8ff'], teal:   ['#0c8599', '#99e9f2'],
+    orange: ['#e8590c', '#ffd8a8'], grey:   ['#868e96', '#f1f3f5'],
+    ink:    ['#1e1e1e', '#1e1e1e'],
+  };
+  const add = el => { svg.appendChild(el); return el; };
+  const style = (col, extra) => Object.assign({
+    stroke: C[col][0], fill: C[col][1], fillStyle: 'hachure', hachureGap: 7,
+    fillWeight: 0.6, strokeWidth: 1.4, roughness: 1.1, seed: seed++ }, extra || {});
+  function text(x, y, lines, cls, opts) {
+    opts = opts || {};
+    const t = document.createElementNS(NS, 'text');
+    t.setAttribute('class', cls || 't');
+    t.setAttribute('x', x); t.setAttribute('y', y);
+    t.setAttribute('text-anchor', opts.anchor || 'middle');
+    if (opts.fill) t.setAttribute('fill', opts.fill);
+    const lh = opts.lh || 22, y0 = y - (lines.length - 1) * lh / 2;
+    lines.forEach((ln, i) => {
+      const s = document.createElementNS(NS, 'tspan');
+      s.setAttribute('x', x); s.setAttribute('y', y0 + i * lh);
+      s.setAttribute('dominant-baseline', 'middle');
+      s.innerHTML = ln; t.appendChild(s);
+    });
+    return add(t);
+  }
+  const box = (x, y, w, h, col, lines, cls) => {
+    add(rc.rectangle(x, y, w, h, style(col))); text(x + w / 2, y + h / 2, lines, cls || 'ts', { lh: 23 }); };
+  const diamond = (cx, cy, w, h, col, lines) => {
+    add(rc.polygon([[cx, cy - h / 2], [cx + w / 2, cy], [cx, cy + h / 2], [cx - w / 2, cy]], style(col)));
+    text(cx, cy, lines, 'ts', { lh: 22 }); };
+  function star(cx, cy, r, col, lines) {
+    const pts = [];
+    for (let i = 0; i < 12; i++) {
+      const a = -Math.PI / 2 + i * Math.PI / 6, rr = i % 2 ? r * 0.72 : r;
+      pts.push([cx + rr * Math.cos(a), cy + rr * Math.sin(a)]);
+    }
+    add(rc.polygon(pts, style(col, { hachureGap: 5 })));
+    text(cx, cy, lines, 'star', { lh: 22 });
+  }
+  function arrow(pts, label, lx, ly, col, anchor) {
+    const ink = col ? C[col][0] : C.ink[0];
+    add(rc.linearPath(pts, { stroke: ink, strokeWidth: 1.6, roughness: 0.8, seed: seed++ }));
+    const [x1, y1] = pts[pts.length - 2], [x2, y2] = pts[pts.length - 1];
+    const a = Math.atan2(y2 - y1, x2 - x1), L = 13, s = 0.45;
+    [a + Math.PI - s, a + Math.PI + s].forEach(b =>
+      add(rc.line(x2, y2, x2 + L * Math.cos(b), y2 + L * Math.sin(b),
+                  { stroke: ink, strokeWidth: 1.6, roughness: 0.6, seed: seed++ })));
+    if (label) text(lx, ly, [label], 'yn', { fill: ink, anchor: anchor || 'middle' });
+  }
+  const U = {'0': '₀', '1': '₁', 'r': 'ᵣ', '': ''};
+  const M = (a, b) => 'M' + U[a] + (b === '' ? '' : ',' + U[b]);
+  const B = n => `<tspan font-weight="700">${n}</tspan>`;
+  function badge(x, y, n, col) {
+    add(rc.circle(x, y, 34, { stroke: C[col][0], fill: C[col][0], fillStyle: 'solid', strokeWidth: 1.2, roughness: 0.6, seed: seed++ }));
+    text(x, y + 1, [String(n)], 'badge');
+  }
+
+  // ── title ──────────────────────────────────────────────────────────────
+  text(40, 42, ['Profile scheme (Res_wr*) — as run at NERSC (PySM_rnd3)'], 'title', { anchor: 'start' });
+  text(40, 76, ['M = current model · C = candidate moment(s) · g = a moment group · ⑨ = result from the profile of the current M'], 'subtitle', { anchor: 'start' });
+
+  const X = 760;          // main column
+  const XR = 1150;        // side boxes
+
+  // ① start
+  box(X - 330, 105, 660, 70, 'green', ['end of the Bayesian part (tree v3):  M = ' + M(0, 'r') + ' = the final model of the tree']);
+  badge(X - 330, 105, '1', 'green');
+  arrow([[X, 175], [X, 210]]);
+
+  // ② M_1,0 preferred?
+  diamond(X, 270, 400, 120, 'yellow', ['was ' + M(1, 0) + ' preferred over ' + M(0, 'r'), 'in the tree?']);
+  badge(X - 200, 270, '2', 'yellow');
+  arrow([[X + 200, 270], [XR, 270]], 'Yes', X + 240, 252, 'teal');
+  box(XR, 222, 560, 96, 'teal', ['M = ' + M(1, '') + ' (the moments of ' + M(1, 0) + '), no candidate:',
+      'the tree already preferred it, so no comparison ' + B('⑤'),
+      '→ go to ' + B('⑥')]);
+  arrow([[XR + 500, 318], [XR + 500, 1045], [X + 342, 1045]], 'go to ⑥', XR + 510, 690, 'teal', 'start');
+  arrow([[X, 330], [X, 375]], 'No', X + 22, 352);
+
+  // ③ candidate from the tree
+  diamond(X, 445, 470, 140, 'yellow', ['did the tree fit an ' + M(1, 'r') + ' with moments', 'not in M? (the last one: from', 'Res_r0 or Res_wr)']);
+  badge(X - 235, 445, '3', 'yellow');
+  arrow([[X + 235, 445], [XR, 445]], 'No', X + 270, 428, 'grey');
+  box(XR, 410, 410, 70, 'grey', ['no candidate', '→ go to ' + B('⑨') + ' (profile of ' + M(0, 'r') + ')']);
+  arrow([[X, 515], [X, 560]], 'Yes:  C = those moments', X + 16, 537, null, 'start');
+
+  // ④ profile of M + C
+  box(X - 300, 560, 600, 80, 'blue', ['profile of r of M + C (ML at fixed r on a grid)', '→ r_C = minimum']);
+  badge(X - 300, 560, '4', 'blue');
+  arrow([[X, 640], [X, 670]]);
+
+  // ⑤ comparison
+  diamond(X, 765, 540, 190, 'red', ['is M + C preferred over M?', 'each at its own profile minimum;', 'local evidence (PolyChord),', 'same β free in both;  ln B &gt; 0']);
+  badge(X - 270, 765, '5', 'red');
+  arrow([[X + 270, 765], [XR, 765]], 'No', X + 305, 748, 'grey');
+  box(XR, 730, 410, 70, 'grey', ['C rejected', '→ go to ' + B('⑨') + ' (profile of M)']);
+  arrow([[X, 860], [X, 895]], 'Yes', X + 26, 877);
+  box(X - 170, 895, 340, 50, 'green', ['M = M + C']);
+  arrow([[X, 945], [X, 975]]);
+
+  // ⑥ Res_wr*
+  box(X - 340, 975, 680, 140, 'purple', ['Res_wr*:  for each group g not in M (and not rejected)',
+      'r_g = minimum of the profile of M + g  (each g at its own r)',
+      'null:  M at r = r_g, with the β of g free',
+      'alternative:  M + g at r = r_g, with β and g free']);
+  badge(X - 340, 975, '6', 'purple');
+  arrow([[X, 1115], [X, 1145]]);
+
+  // ⑦ detection
+  diamond(X, 1210, 420, 130, 'yellow', ['any g detected?', '(emcee: 0 outside its HPD 68%)']);
+  badge(X - 210, 1210, '7', 'yellow');
+  arrow([[X + 210, 1210], [XR, 1210]], 'No', X + 245, 1193, 'grey');
+  box(XR, 1175, 410, 70, 'grey', ['no new moment', '→ go to ' + B('⑨') + ' (profile of M)']);
+  arrow([[X, 1275], [X, 1310]], 'Yes', X + 26, 1292);
+
+  // ⑧ evidence
+  diamond(X, 1380, 480, 140, 'yellow', ['evidence against the null:', 'is the alternative preferred?', '(ln B &gt; 0)']);
+  badge(X - 240, 1380, '8', 'yellow');
+  arrow([[X + 240, 1380], [XR, 1380]], 'No', X + 275, 1363, 'grey');
+  box(XR, 1345, 410, 70, 'grey', ['no new moment', '→ go to ' + B('⑨') + ' (profile of M)']);
+  arrow([[X, 1450], [X, 1490]], 'Yes', X + 26, 1470);
+  box(X - 220, 1490, 440, 60, 'purple', ['C = the g with the largest ln B']);
+  arrow([[X - 220, 1520], [200, 1520], [200, 600], [X - 302, 600]], 'back to ④ (max 4 iterations)', 215, 1545, 'purple', 'start');
+
+  // ⑨ result
+  box(XR, 1500, 600, 150, 'blue', ['result, from the profile of the final M:', 'r* = minimum; posterior of r = profile × prior of the tree', '→ median, 68%, σ;  upper limit: 95% with r ≥ 0', 'best fit at r*;  other parameters: emcee with r = r*']);
+  badge(XR, 1500, '9', 'blue');
+  arrow([[XR + 300, 1650], [XR + 300, 1688]]);
+  diamond(XR + 300, 1745, 250, 110, 'yellow', ['0 within 3σ', 'of r?']);
+  arrow([[XR + 175, 1745], [XR + 105, 1745]], 'Yes', XR + 142, 1726);
+  star(XR + 30, 1745, 72, 'blue', ['upper', 'limit']);
+  arrow([[XR + 425, 1745], [XR + 495, 1745]], 'No', XR + 458, 1726);
+  star(XR + 570, 1745, 72, 'orange', ['r', 'detection']);
+
+  // notes
+  text(40, 1640, ['<tspan font-weight="700">output</tspan> (result.json): Bayesian part — tree model, best fit, posterior;',
+                  'profiled part — final model, r*, posterior of r, best fit at r*,',
+                  'posteriors of the other parameters at r = r*'], 'note', { anchor: 'start', lh: 24 });
+  text(40, 1745, ['profiles: non-converged fits are re-fitted (from the global minimum;',
+                  'with the new amplitudes at 0 if χ² = ∞);',
+                  'a candidate that cannot be fitted is rejected (→ ⑨)'], 'note', { anchor: 'start', lh: 24, fill: C.grey[0] });
+})();
+</script>

@@ -1,0 +1,16 @@
+# Gaussian foreground parameters fitted on PySM d1s1, mask mask_hits_C2_7deg_nside128,
+# nside 128 (PySM at 512, harmonic downgrade),
+# ell in [30, 250], made by fit_fg_spectra.py.
+# alpha from BB; EE slopes: dust -0.314, synch -0.538.
+# beta_d, T_d, beta_s: P^2-weighted means inside the mask.
+beta_d: 1.538413
+T_d: 21.380087
+nu0_d: 353.0
+A_d_EE: 58.138633
+A_d_BB: 28.906751
+alpha_d: -0.177624
+beta_s: -2.997568
+nu0_s: 23.0
+A_s_EE: 8.199931
+A_s_BB: 1.442426
+alpha_s: -0.856935
