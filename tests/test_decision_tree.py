@@ -225,13 +225,18 @@ def main():
     check("Res_wr: first not preferred, second one tried and adopted",
           fulls[1:3] == ['M_d_r', 'M_s_r'] and ('replace', 'M_s_r') in path)
 
-    # 6. Res_wr: detected but none preferred -> 3 sigma, no Res_r0
+    # 6. Res_wr: detected but none preferred -> Res_r0, also when M_0,r has
+    #    no moments yet: with r = 0, s (not detected with r free) is
+    #    detected and M_s_r preferred
     scen = {'chi2': {M0: BAD},
-            'resid': {(M0, 'd'): -100.},
-            'logZ': {M0: -0.5 * BAD, 'M_d_r': -0.5 * BAD - 5.}}
+            'resid': {(M0, 'd'): -100., ('M_none_0', 's'): -90.},
+            'logZ': {M0: -0.5 * BAD, 'M_d_r': -0.5 * BAD - 5.,
+                     'M_s_r': -0.5 * BAD + 5.}}
     res, path, F = run(scen)
-    check("Res_wr: detected but none preferred -> 3 sigma (no Res_r0)",
-          path[-2][0] == 'r3sigma' and resid_calls(F, 'M_none_0') == [])
+    check("Res_wr: detected but none preferred -> Res_r0 (also without "
+          "moments in M_0,r), where s is found",
+          resid_calls(F, 'M_none_0')[:2] == ['d', 's']
+          and ('replace', 'M_s_r') in path)
 
     # 7. Res_wr empty, Res_r0: dT detected, M_dT_r preferred -> loop;
     #    after a replacement from Res_r0 Res_wr is skipped

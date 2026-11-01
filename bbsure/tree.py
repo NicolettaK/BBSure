@@ -30,8 +30,8 @@ Flowchart
       - in order of evidence: full fit of M_0,r + group and comparison with
         M_0,r (ln B > lnB_preferred). The first one that passes becomes
         M_0,r -> 1.
-      - none passes -> 3 sigma test if the model has no moments yet,
-        otherwise -> 3.
+      - none passes -> 3 (with r = 0, families not detected or not
+        preferred with r free can be).
  Pruning before every comparison with M_0,r: (a) screening (ML + emcee):
  the new spectra not detected (zero inside the 68% HPD of their amplitude)
  are removed and the screening is redone; (b) full fit (ML + PolyChord) of
@@ -305,14 +305,10 @@ class DecisionTree:
                     continue
                 if pref:
                     return 'replace', fit1.model, 'Res_wr'
-            # no candidate passes: 3 sigma test only if the model has no
-            # moments yet (without the first order there are none of the
-            # others either); otherwise the other terms are searched with
-            # r = 0
-            if not M0.moments:
-                return 'to_3sigma', None, 'Res_wr'
-            self.log.info("    (Res_wr candidates not preferred and the model "
-                          "already has moments: going to Res_r0)")
+            # no candidate passes: Res_r0, where with r = 0 the families
+            # can be detected or preferred (and the higher orders tested)
+            self.log.info("    (Res_wr candidates not preferred: going to "
+                          "Res_r0)")
 
         # ── Res_r0: residuals of M_0,0 (r = 0) ────────────────────────────
         M00 = M0.with_r(False)

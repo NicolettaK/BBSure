@@ -130,8 +130,7 @@
 
   // Res_r0
   arrow([[800, 595], [800, 760], [500, 760], [500, 818]], 'No', 825, 650);
-  arrow([[1100, 755], [1100, 785], [560, 785], [560, 818]], 'No (*)', 1140, 772);
-  text(270, 1372, [`(*) if ${M(0, 'r')} has no moments yet, the tree`, 'stops after Res_wr: → B with C = the moment', 'just tried (orange case)'], 'note', { anchor: 'start', fill: C.orange[0], lh: 21 });
+  arrow([[1100, 755], [1100, 785], [560, 785], [560, 818]], 'No', 1125, 772);
   text(270, 1185, ['(**) all the amplitudes of the family are fitted (emcee);', 'detected if 0 is outside the 68% HPD (highest posterior', 'density interval) of at least one of them; only the', 'amplitudes with 0 outside their HPD are kept',
                     '(***) PolyChord evidence of the residual fit (only the', "family's moments and its β free): only ranks the families",
                     '(****) amplitudes with 0 in their 68% HPD (posterior of', 'the full fit) removed, model refitted, until all are', 'detected; kept if ln B(pruned vs full) > -2.5; the pruned', 'model is the one compared with M_0,r'], 'note', { anchor: 'start', lh: 21 });
@@ -163,7 +162,7 @@
   text(1720, 190, ['<tspan font-weight="700">starting point</tspan>'], 't');
   const S0 = [
     ['teal',   262, [`${M(1, 0)} preferred → M = ${M(1, 'r')}, the best model found:`, 'no candidate, go straight to step 3']],
-    ['orange', 340, [`a moment was tried as ${M(1, 'r')} and lost (${M(1, 0)} not`, `preferred) → M = ${M(0, 'r')}, candidate C = that moment`]],
+    ['orange', 340, [`a family was tried as ${M(1, 'r')} and lost (${M(1, 0)} not`, `preferred) → M = ${M(0, 'r')}, candidate C = that family`]],
     ['grey',   412, [`nothing new detected in Res_r0 → M = ${M(0, 'r')}, no`, 'candidate: go straight to step 4 (r from its profile)']],
   ];
   S0.forEach(([col, y, lines]) => text(1462, y, lines, 'ts', { anchor: 'start', lh: 20, fill: C[col][0] }));
