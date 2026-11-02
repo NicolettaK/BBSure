@@ -1,7 +1,7 @@
 """
 High-level fit operations used by the tree and by the profile scheme: full
 fit (ML + PolyChord), screening fit (ML + emcee), residual test of a moment
-group, profile likelihood in r.
+group.
 """
 import copy
 import re
@@ -165,14 +165,3 @@ class Fitter:
         best = dict(zip(names, map(float, samp[i])))
         return ResidualResult(group, det, hpd, logZ, logZerr, best,
                               stage='polychord', off=weak)
-
-    def profile(self, model: Model, r_grid, centers=None):
-        """Profile likelihood: chi2_min(r) minimizing over the other
-        parameters."""
-        m = model.with_r(False)
-        chi2 = []
-        for i, r in enumerate(r_grid):
-            res = self.R.ml(m, f"prof_{model.label}_{i:02d}",
-                            fixed={'r_tensor': float(r)}, centers=centers)
-            chi2.append(res.chi2)
-        return np.array(chi2)

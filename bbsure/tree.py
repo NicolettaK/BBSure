@@ -43,18 +43,16 @@ Flowchart
  3. Res_r0: like Res_wr but on the residuals of M_0,0 (r = 0), candidates
     the res_r0 groups (d, s, dT, d2, s2, ds1, ds2). None detected -> 3 sigma
     test. The best one (evidence) -> M_1,r: preferred over M_0,r -> replaces
-    M_0,r, back to 1. Otherwise M_1,0: preferred over M_0,r -> frequentist
-    branch (profile likelihood), otherwise 3 sigma test. With
-    run: profile_scheme: true there is no frequentist branch: the tree goes
-    to the 3 sigma test and then the profile scheme starts
-    (profile_scheme.py) from M_1.
+    M_0,r, back to 1; otherwise 3 sigma test. The families detected in the
+    last Res_r0 are the candidates of the profile scheme (profile_scheme.py),
+    which compares them at their own r.
     Res_wr is repeated as long as the replacements come from Res_wr (e.g.
     after M + d, s is tested); after a replacement from Res_r0 the tree
     always goes directly to Res_r0.
  4. Pruning (of every candidate before its comparison with M_0,r, and of
     the final model): the spectra with zero inside the HPD of their
     amplitude are removed and the model refitted;
-    the pruned model is kept if ln B(pruned vs full) > lnB_prune (-2.5).
+    the pruned model is kept if ln B(pruned vs full) > lnB_prune (0).
     Repeated until only detected amplitudes are left.
  If after the pruning the new M_0,r is a model already used as M_0,r
  (cycle, e.g. restore-s adopted and then pruned again) -> 3 sigma test.
@@ -71,15 +69,10 @@ Output (in runs_dir)
   decision_log.txt    the same in readable form
   <tag>/              one directory per BBCompSep run (config + output)
 """
-import os
-
-import numpy as np
-from scipy import stats
-
 from .fitter import NoValidStart
 from .log import DecisionLog
 from .models import Model, candidate_groups, model_from_label
-from .stats import FitResult, detection, lnB, profile_interval
+from .stats import FitResult, detection, lnB
 
 
 class DecisionTree:
@@ -93,13 +86,12 @@ class DecisionTree:
         self.lnB_pref = th['lnB_preferred']
         # pruning: the model without the undetected spectra is kept if
         # ln B(pruned vs full) > lnB_prune
-        self.lnB_prune = th.get('lnB_prune', -2.5)
+        self.lnB_prune = th.get('lnB_prune', 0.)
         self.hpd_frac = th.get('hpd_frac', 0.68)
         # borderline comparisons: |ln B - threshold| < seed_band * error ->
         # more PolyChord runs (different seeds), up to seed_max_runs per fit
         self.seed_band = th.get('seed_band', 2.0)
         self.seed_max_runs = th.get('seed_max_runs', 1)
-        self.alpha = th['lrt_alpha']
         mc = tc['moments']
         self.res_wr = mc.get('res_wr', ['d', 's'])
         self.res_r0 = mc.get('res_r0', ['d', 's', 'dT', 'd2', 's2', 'ds1',
@@ -109,14 +101,7 @@ class DecisionTree:
         # already been judged with r free; with r = 0 they look detected but
         # refitted with r free they are undetected again (d10s5 seed 6002)
         self.restore = mc.get('res_r0_restore', False)
-        pr = tc['profile']
-        self.r_grid = np.linspace(pr['r_min'], pr['r_max'], pr['n_r'])
         self.max_it = tc['run']['max_iterations']
-        self.freq_replaces = tc['run'].get('frequentist_replaces_baseline',
-                                           True)
-        # profile scheme (profile_scheme.py) instead of the frequentist branch:
-        # the tree ends with the 3 sigma test, then the scheme is launched
-        self.profile_scheme = tc['run'].get('profile_scheme', False)
 
     # ── entry point ───────────────────────────────────────────────────────
     def run(self):
@@ -196,7 +181,9 @@ class DecisionTree:
         found.sort(key=lambda rr: -rr.logZ)
         self.log.node('resid', f'{name}: is there any moment in the '
                       'residuals?', 'Yes' if found else 'No',
+                      base=base.model.label,
                       detected=[rr.group for rr in found],
+                      pruned=[list(rr.off) for rr in found],
                       logZ=[rr.logZ for rr in found])
         return found
 
@@ -340,55 +327,7 @@ class DecisionTree:
             return 'to_3sigma', None, 'Res_r0'
         if pref:
             return 'replace', fit1r.model, 'Res_r0'
-
-        M10 = M1r.with_r(False)
-        pref, fit10 = self.compare_pruned(
-            M10, fit0, 'M_1,0', centers={**fit00.best, **rr.best})
-        if not pref:
-            return 'to_3sigma', None, 'Res_r0'
-        if self.profile_scheme:
-            # the profile scheme restarts from M_1 (same model, r free)
-            self.log.node('to_profile', 'M_1,0 preferred: the profile scheme '
-                          'will start from M_1 (no frequentist branch here)',
-                          fit10.model.with_r(True).label)
-            return 'to_3sigma', None, 'Res_r0'
-        # profile: the same model (pruned as M_1,0) with r free
-        M1r = fit10.model.with_r(True)
-        fit1r = self.F.full_fit(M1r, centers=fit10.best)
-
-        # ── frequentist branch: profile likelihood ────────────────────────
-        out, M1 = self.profile_branch(M0, fit0, M1r, fit1r)
-        return out, M1, 'Res_r0'
-
-    def profile_branch(self, M0, fit0, M1r, fit1r):
-        self.log.info("    (frequentist branch: profile likelihood in r; "
-                      "see the note in the flowchart)")
-        p0 = self.F.profile(M0, self.r_grid, centers=fit0.best)
-        p1 = self.F.profile(M1r, self.r_grid, centers=fit1r.best)
-        np.savez(os.path.join(self.tc['paths']['runs_dir'],
-                              f'profile_{M0.label}_vs_{M1r.label}.npz'),
-                 r=self.r_grid, chi2_M0=p0, chi2_M1=p1)
-        dchi2 = float(np.min(p0) - np.min(p1))
-        ddof = M1r.n_moment_params() - M0.n_moment_params()
-        pval = float(stats.chi2.sf(max(dchi2, 0.), ddof))
-        r0 = profile_interval(self.r_grid, p0)
-        r1 = profile_interval(self.r_grid, p1)
-        pref = pval < self.alpha
-        self.log.node('pref_profile', f'Is M*_1,r ({M1r.label}) preferred '
-                      f'over M*_0,r ({M0.label})?', 'Yes' if pref else 'No',
-                      dchi2=dchi2, ddof=ddof, p_value=pval,
-                      lrt_alpha=self.alpha,
-                      r_best_M0=r0[0], r_lo_M0=r0[1], r_hi_M0=r0[2],
-                      r_best_M1=r1[0], r_lo_M1=r1[1], r_hi_M1=r1[2])
-        if pref:
-            self.log.node('mstar', 'M* = M*_1,r', M1r.label)
-            if self.freq_replaces:
-                return 'replace', M1r
-            self.log.info("    frequentist_replaces_baseline=false: "
-                          "M_0,r stays the baseline")
-            return 'to_3sigma', None
-        self.log.node('mstar', 'M* = M*_0,r', M0.label)
-        return 'to_3sigma', None
+        return 'to_3sigma', None, 'Res_r0'
 
     # ── pruning ───────────────────────────────────────────────────────────
     def prune(self, M0, fit0):

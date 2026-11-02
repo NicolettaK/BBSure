@@ -115,36 +115,24 @@ class MockFitter:
         return dt.ResidualResult(group, True, {'A': (0.5, 1.)}, lz, 0.1,
                                  {}, stage='polychord', off=off)
 
-    def profile(self, model, r_grid, centers=None):
-        self.calls.append(('profile', model.label))
-        base = 100. if not model.moments else 100. - self.s.get(
-            'prof_dchi2', 0.)
-        return base + ((r_grid - 0.01) / 0.005) ** 2
 
 
-def tree_cfg(runs_dir, freq_replaces=True, seed_max_runs=1,
-             lnB_preferred=2.5, profile_scheme=False):
+def tree_cfg(runs_dir, seed_max_runs=1, lnB_preferred=2.5):
     return dict(paths=dict(runs_dir=runs_dir),
                 thresholds=dict(pte_min=0.01, lnB_preferred=lnB_preferred,
-                                lrt_alpha=0.05, seed_band=2.0,
-                                seed_max_runs=seed_max_runs),
+                                seed_band=2.0, seed_max_runs=seed_max_runs),
                 moments=dict(res_wr=['d', 's'],
                              res_r0=['d', 's', 'dT', 'd2', 's2', 'ds1',
                                      'ds2']),
-                profile=dict(r_min=-0.01, r_max=0.04, n_r=21),
-                run=dict(max_iterations=6,
-                         frequentist_replaces_baseline=freq_replaces,
-                         profile_scheme=profile_scheme))
+                run=dict(max_iterations=6))
 
 
-def run(scen, freq_replaces=True, seed_max_runs=1, lnB_preferred=2.5,
-        profile_scheme=False):
+def run(scen, seed_max_runs=1, lnB_preferred=2.5):
     d = tempfile.mkdtemp()
     log = dt.DecisionLog(d, verbose=False)
     F = MockFitter(scen)
-    res = dt.DecisionTree(tree_cfg(d, freq_replaces, seed_max_runs,
-                                   lnB_preferred, profile_scheme), F,
-                                   log).run()
+    res = dt.DecisionTree(tree_cfg(d, seed_max_runs, lnB_preferred), F,
+                          log).run()
     path = [(e['node'], e['answer']) for e in log.events]
     return res, path, F
 
@@ -152,6 +140,13 @@ def run(scen, freq_replaces=True, seed_max_runs=1, lnB_preferred=2.5,
 M0 = 'M_none_r'
 BAD = NDATA - 9 + 120          # chi2 with PTE ~ 0
 GOOD = -0.5 * (NDATA - 11) + 20.  # high evidence for the models with moments
+
+
+def log_events(scen, **kw):
+    d = tempfile.mkdtemp()
+    log = dt.DecisionLog(d, verbose=False)
+    dt.DecisionTree(tree_cfg(d, **kw), MockFitter(scen), log).run()
+    return log.events
 
 
 def check(name, cond):
@@ -262,43 +257,21 @@ def main():
           and resid_calls(F, 'M_d_0') == ['s', 'dT', 'd2', 'ds1']
           and ('replace', 'M_d+d2_r') in path)
 
-    # 9. Res_r0: M_1,r not preferred, M_1,0 yes, the profile prefers M1
-    base_scen = {'r': {M0: (0.012, 0.003)},
-                 'resid': {('M_none_0', 'd'): -100.},
-                 'logZ': {M0: -150., 'M_d_r': -149.5, 'M_d_0': -140.}}
-    scen = dict(base_scen, prof_dchi2=20.)
+    # 9. Res_r0: d and s detected, M_1,r (d) not preferred -> 3 sigma, no
+    #    M_1,0; the detected families are logged for the profile scheme
+    scen = {'r': {M0: (0.012, 0.003)},
+            'resid': {('M_none_0', 'd'): -100., ('M_none_0', 's'): -110.},
+            'resid_off': {('M_none_0', 's'): ['A_s_w00w10']},
+            'logZ': {M0: -150., 'M_d_r': -149.5, 'M_d_0': -140.}}
     res, path, F = run(scen)
-    check("frequentist branch: M*_1,r wins -> loop on M_d_r",
-          ('pref_profile', 'Yes') in path and ('mstar', 'M_d_r') in path
-          and ('replace', 'M_d_r') in path and ('profile', M0) in F.calls)
-
-    # 10. same with frequentist_replaces_baseline = false -> 3 sigma
-    res, path, _ = run(scen, freq_replaces=False)
-    check("frequentist branch with replaces=false -> 3 sigma on M_0,r",
-          ('mstar', 'M_d_r') in path and path[-2][0] == 'r3sigma'
-          and res['model'] == M0)
-
-    # 11. the profile does not prefer M1 -> 3 sigma -> detection
-    scen = dict(base_scen, prof_dchi2=0.5)
-    res, path, _ = run(scen)
-    check("frequentist branch: M*_0,r -> 3 sigma -> r detection",
-          ('mstar', M0) in path and res['conclusion'] == 'r_detection')
-
-    # 12. M_1,0 not preferred -> 3 sigma without profile
-    scen = dict(base_scen)
-    scen['logZ'] = {M0: -150., 'M_d_r': -149.5, 'M_d_0': -149.}
-    res, path, F = run(scen)
-    check("M_1,0 not preferred -> 3 sigma (no profile)",
-          not any(c[0] == 'profile' for c in F.calls)
-          and path[-2][0] == 'r3sigma')
-
-    # 12b. with the profile scheme: M_1,0 preferred -> no frequentist
-    #      branch, 3 sigma test (the scheme then starts from M_1)
-    res, path, F = run(dict(base_scen, prof_dchi2=20.), profile_scheme=True)
-    check("profile scheme: M_1,0 preferred -> to_profile, 3 sigma, no "
-          "profile likelihood in the tree",
-          ('to_profile', 'M_d_r') in path and path[-2][0] == 'r3sigma'
-          and not any(c[0] == 'profile' for c in F.calls))
+    r0 = [e for e in log_events(scen) if e['node'] == 'resid'
+          and e['question'].startswith('Res_r0')][-1]
+    check("Res_r0: M_1,r not preferred -> 3 sigma, M_1,0 never fitted",
+          path[-2][0] == 'r3sigma' and res['conclusion'] == 'r_detection'
+          and not any('M_d_0' == c[1] for c in F.calls if c[0] != 'ml'))
+    check("  detected families and their pruned spectra in the log",
+          r0['base'] == 'M_none_0' and r0['detected'] == ['d', 's']
+          and r0['pruned'] == [[], ['A_s_w00w10']])
 
     # 13. immediate pruning: A_d_w00w10 not detected in the full fit of
     #     M_d_r -> the pruned model is compared directly, and adopted
@@ -371,7 +344,7 @@ def main():
     X = -0.5 * BAD
     scen = {'chi2': {M0: BAD},
             'resid': {(M0, 'd'): -100.},
-            'logZ': {M0: X, 'M_d_r': X + 6., 'M_d-d_w00w10_r': X + 5.},
+            'logZ': {M0: X, 'M_d_r': X + 6., 'M_d-d_w00w10_r': X + 7.},
             'amps_full': {'M_d_r': {'A_d_w00w10': (0.1, 1.)}}}
     res, path, F = run(scen)
     i_rep = [n for n, _ in path].index('replace')
@@ -381,21 +354,27 @@ def main():
           and ('prune', 'Yes') in path[:i_rep]
           and not any(n == 'prune' for n, _ in path[i_rep:]))
 
-    # 18c. the full fit wins over M_0,r (ln B = +1) but the pruned model,
-    #      kept by the pruning (ln B = -2 > -2.5), does not (ln B = -1) ->
-    #      not adopted (with the pruning after the adoption it was)
-    scen['logZ'] = {M0: X, 'M_d_r': X + 1., 'M_d-d_w00w10_r': X - 1.}
-    res, path, F = run(scen)
+    # 18c. the full fit loses against M_0,r (ln B = -0.5) but the pruned
+    #      model wins (ln B = +0.5) -> adopted (with the pruning after the
+    #      adoption it was never compared)
+    scen['logZ'] = {M0: X, 'M_d_r': X - 0.5, 'M_d-d_w00w10_r': X + 0.5}
+    res, path, F = run(scen, lnB_preferred=0.)
     check("  the pruned model, not the full one, is compared with M_0,r",
-          not any(n == 'replace' for n, _ in path)
-          and res['model'] == 'M_none_r')
+          ('replace', 'M_d-d_w00w10_r') in path)
+
+    # 18c'. the pruned model is worse than the full one (ln B < 0): the
+    #       pruning is undone and the full model is compared
+    scen['logZ'] = {M0: X, 'M_d_r': X + 3., 'M_d-d_w00w10_r': X + 2.}
+    res, path, F = run(scen)
+    check("  pruned model worse than the full one -> pruning undone",
+          ('prune', 'No') in path and ('replace', 'M_d_r') in path)
 
     # 18d. the posterior of the full fit leaves no new spectrum -> candidate
     #      rejected (sets 36 and 81 d9s4 of the validation)
     scen = {'chi2': {M0: BAD},
             'resid': {(M0, 's'): -100.},
             'logZ': {M0: X, 'M_s_r': X + 0.5,
-                     'M_s-s_w00w10-s_w10w10_r': X + 0.1},
+                     'M_s-s_w00w10-s_w10w10_r': X + 0.8},
             'amps_full': {'M_s_r': {'A_s_w00w10': (0.1, 1.),
                                     'A_s_w10w10': (0.1, 1.)}}}
     res, path, F = run(scen, lnB_preferred=0.)

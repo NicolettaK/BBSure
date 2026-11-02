@@ -1,7 +1,7 @@
 """
 Fit results and the statistics used by the tree: chi2 and PTE, summary of
 the posterior of r, Bayes factors, HPD intervals and detection of moment
-amplitudes, interval from a chi2 profile.
+amplitudes.
 """
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional
@@ -131,13 +131,3 @@ def detection(names, samples, amps, frac=0.68, bounds=None):
            for a in amps}
     det = any(not (lo <= 0.0 <= hi) for lo, hi in hpd.values())
     return det, hpd
-
-
-def profile_interval(r, chi2):
-    """Best fit and Delta chi2 = 1 interval (interpolated) from a profile."""
-    i = int(np.argmin(chi2))
-    d = chi2 - chi2[i]
-    fine = np.linspace(r[0], r[-1], 2001)
-    df = np.interp(fine, r, d)
-    inside = fine[df <= 1.0]
-    return float(r[i]), float(inside.min()), float(inside.max())
