@@ -55,7 +55,7 @@ def main():
                         'run_profile.py'),
            '--config', os.path.abspath(args.config), '--tree-dir', runs_dir,
            '--out', pdir]
-    for k in ('n', 'nproc', 'max_comb'):
+    for k in ('n', 'nproc'):
         if k in ps:
             cmd += ['--' + k.replace('_', '-'), str(ps[k])]
     log.info("\n==> Profile scheme: " + ' '.join(cmd[1:]))

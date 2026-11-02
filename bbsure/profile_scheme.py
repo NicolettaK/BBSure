@@ -11,8 +11,7 @@ instead of with r marginalised.
    M_1 = M_0,r + all the families of Res_r0 because M_1,0 was preferred
    over M_0,r, every model in between, down to that M_0,r: families
    removed, each model checked at its own r.
-   Additions: every combination of the detected families (up to max_comb
-   at a time, profile_scheme: max_comb in the tree config; default all).
+   In both cases every combination of the families is tried.
 2. Profiles in r: M* -> r* = its minimum; M* + g -> r*_g for every candidate.
    A profile: r fixed on a grid, all the other parameters re-fitted (ML).
 3. Comparison of all the models, each at its own r (M* at r*, M* + g at
@@ -87,16 +86,14 @@ def last_res_r0(ev):
     return last
 
 
-def add_combinations(M0, fams, max_comb=None):
+def add_combinations(M0, fams):
     """
     M0 + every combination of the families fams = [(group, off)] (each with
-    the spectra of `off` removed), up to max_comb families at a time (None:
-    all): [(label, model)], label e.g. 'd2+s'.
+    the spectra of `off` removed): [(label, model)], label e.g. 'd2+s'.
     """
     fams = [(g, off) for g, off in fams if g not in M0.moments]
     out = []
-    kmax = len(fams) if max_comb is None else min(len(fams), max_comb)
-    for k in range(1, kmax + 1):
+    for k in range(1, len(fams) + 1):
         for combo in itertools.combinations(fams, k):
             M = M0
             for g, off in combo:
@@ -129,8 +126,7 @@ class ProfileScheme:
     name     : name of the data set in the log (default: basename of out)
     """
 
-    def __init__(self, tc, tree_dir, out, n=37, nproc=8, name=None,
-                 max_comb=None):
+    def __init__(self, tc, tree_dir, out, n=37, nproc=8, name=None):
         os.makedirs(out, exist_ok=True)
         tc['paths']['runs_dir'] = out
         self.out = out
@@ -168,13 +164,12 @@ class ProfileScheme:
             new = sorted(M0.moments - M0r.moments)
             fams = [(g, sorted(set(group_amplitudes(g)) & set(M0.off)))
                     for g in new]
-            inner = [M for lab, M in add_combinations(M0r, fams, max_comb)
+            inner = [M for lab, M in add_combinations(M0r, fams)
                      if M.moments != M0.moments]
             self.cands = [('-' + '+'.join(sorted(M0.moments - M.moments)), M)
                           for M in [M0r] + inner]
         else:
-            self.cands = add_combinations(M0, res_r0_candidates(ev),
-                                          max_comb)
+            self.cands = add_combinations(M0, res_r0_candidates(ev))
         cfg = yaml.safe_load(open(os.path.join(tree_dir, f'{M0.label}_PC',
                                                'config.yml')))
         names = free_param_names(cfg['BBCompSep'])

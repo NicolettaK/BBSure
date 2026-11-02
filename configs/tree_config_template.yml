@@ -54,9 +54,6 @@ profile_scheme:
     # points of the initial grid of the profiles in r (see
     # bbsure/profile_scheme.py)
     n: 37
-    # families of the last Res_r0 added together at most (all the
-    # combinations up to max_comb; remove the key for all of them)
-    # max_comb: 3
 
 polychord:
     # nlive and nrepeat proportional to the free parameters of each run:

@@ -105,7 +105,7 @@ def fake_tree(d, model, res_r0=None, replace_after=False, m10=False,
 
 
 def run(scen, model, res_r0=None, replace_after=False, seed_max_runs=1,
-        m10=False, base=None, max_comb=None):
+        m10=False, base=None):
     tree = tempfile.mkdtemp()
     fake_tree(tree, model, res_r0, replace_after, m10, base)
     tc = dict(paths=dict(runs_dir=tree, base_config='unused'),
@@ -115,7 +115,7 @@ def run(scen, model, res_r0=None, replace_after=False, seed_max_runs=1,
     psm.BBCompSepRunner = lambda tc, log: MockRunner(scen)
     try:
         ps = psm.ProfileScheme(tc, tree, os.path.join(tree, 'profile'),
-                               n=21, nproc=1, max_comb=max_comb)
+                               n=21, nproc=1)
     finally:
         psm.BBCompSepRunner = orig
     res = ps.run()
@@ -233,9 +233,6 @@ def main():
     check("additions: d, s and d+s tried; d+s wins",
           res['candidates'] == ['d', 's', 'd+s']
           and res['model_final'] == 'M_d+s_r')
-    res, R = run(scen, 'M_none_r', [('d', []), ('s', [])], max_comb=1)
-    check("  max_comb = 1: one family at a time",
-          res['candidates'] == ['d', 's'])
     print("\nAll tests passed.")
 
 
