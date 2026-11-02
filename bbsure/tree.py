@@ -42,8 +42,14 @@ Flowchart
  res_r0_restore: true).
  3. Res_r0: like Res_wr but on the residuals of M_0,0 (r = 0), candidates
     the res_r0 groups (d, s, dT, d2, s2, ds1, ds2). None detected -> 3 sigma
-    test. The best one (evidence) -> M_1,r: preferred over M_0,r -> replaces
-    M_0,r, back to 1; otherwise 3 sigma test. The families detected in the
+    test. Every detected family, in order of residual evidence -> M_1,r:
+    the first one preferred over M_0,r replaces M_0,r, back to 1. None
+    preferred -> M_1,0 (r = 0) of M_0,r + the combinations of the families
+    tried, from the simplest (one family) up: M_1 = the simplest whose
+    M_1,0 is preferred over M_0,r (the moments can replace r) -> upper limit
+    from the posterior of r of M_1,r (the final model; the profile scheme
+    tries the models between M_1 and M_0,r); none -> 3 sigma test on
+    M_0,r. The families detected in the
     last Res_r0 are the candidates of the profile scheme (profile_scheme.py),
     which compares them at their own r.
     Res_wr is repeated as long as the replacements come from Res_wr (e.g.
@@ -69,10 +75,25 @@ Output (in runs_dir)
   decision_log.txt    the same in readable form
   <tag>/              one directory per BBCompSep run (config + output)
 """
+import itertools
+
 from .fitter import NoValidStart
 from .log import DecisionLog
-from .models import Model, candidate_groups, model_from_label
+from .models import (Model, candidate_groups, group_amplitudes,
+                     model_from_label)
 from .stats import FitResult, detection, lnB
+
+
+def upper_model(M0, models):
+    """M0 + all the moment groups that the models add to it, each with the
+    spectra pruned in its own model (r free)."""
+    groups, off = set(M0.moments), set(M0.off)
+    for M in models:
+        new = M.moments - M0.moments
+        groups |= new
+        for g in new:
+            off |= set(group_amplitudes(g)) & set(M.off)
+    return Model(frozenset(groups), True, frozenset(off))
 
 
 class DecisionTree:
@@ -136,6 +157,12 @@ class DecisionTree:
                     return self.conclude_upper_limit(M0, fit0)
 
             outcome, M1, branch = self.search_moments(M0, fit0, use_wr)
+            if outcome == 'upper_limit':
+                # M_1,0 preferred over M_0,r: upper limit with M_1,r (the
+                # profile scheme then tries to remove its families)
+                self.log.node('m10', 'M_1,0 preferred over M_0,r: upper '
+                              'limit with M_1,r', M1.label)
+                return self.conclude_upper_limit(M1, self.F.full_fit(M1))
             if outcome == 'replace':
                 self.log.node('replace', f'M_0,r = M_1,r (from {branch})',
                               M1.label)
@@ -309,9 +336,11 @@ class DecisionTree:
         if not found:
             return 'to_3sigma', None, 'Res_r0'
 
-        # candidates in order of evidence; one that cannot be fitted (no
-        # starting point allowed by the moment constraints) is skipped and
-        # the next one is tried
+        # every detected family, in order of residual evidence: M_1,r
+        # (pruned) against M_0,r; the first one preferred is adopted. A
+        # family that cannot be fitted (no starting point allowed by the
+        # moment constraints) is skipped
+        tried = []
         for rr in found:
             M1r = M0.apply(rr.group).without(rr.off)
             try:
@@ -322,11 +351,31 @@ class DecisionTree:
                               'fitted with the moment constraints, next '
                               'candidate', 'skipped', reason=str(err))
                 continue
-            break
-        else:
-            return 'to_3sigma', None, 'Res_r0'
-        if pref:
-            return 'replace', fit1r.model, 'Res_r0'
+            if pref:
+                return 'replace', fit1r.model, 'Res_r0'
+            if fit1r is not None:
+                tried.append(fit1r)
+
+        # none preferred: M_1,0 (r = 0) of M_0,r + the combinations of the
+        # families tried (each pruned as in its M_1,r), from the simplest
+        # (one family) to all of them; M_1 = the simplest whose M_1,0 is
+        # preferred over M_0,r (at the same number of families, the highest
+        # ln Z) -> the moments can replace r: upper limit with M_1,r (the
+        # profile scheme then tries the models between M_1 and M_0,r)
+        for k in range(1, len(tried) + 1):
+            best = None
+            for combo in itertools.combinations(tried, k):
+                M1 = upper_model(M0, [f.model for f in combo])
+                centers = {n: v for f in combo for n, v in f.best.items()}
+                fit10 = self.F.full_fit(M1.with_r(False), centers=centers)
+                self.log.node('fit', f'fit of M_1,0 = '
+                              f'{M1.with_r(False).label}', 'ok',
+                              **fit10.summary())
+                if self.compare(fit10, fit0, 'M_1,0') and (
+                        best is None or fit10.logZ > best[1].logZ):
+                    best = (M1, fit10)
+            if best is not None:
+                return 'upper_limit', best[0], 'Res_r0'
         return 'to_3sigma', None, 'Res_r0'
 
     # ── pruning ───────────────────────────────────────────────────────────

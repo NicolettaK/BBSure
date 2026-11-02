@@ -4,9 +4,15 @@ Profile scheme: run on a concluded tree. The moments are searched with r = 0
 judged with every model at its own r, the minimum of its profile likelihood,
 instead of with r marginalised.
 
-1. M* = final model of the tree; candidates g = the families detected (among
-   all those tested) in the last Res_r0 of the tree on M* (none if the tree
-   concluded before Res_r0 or nothing was detected).
+1. M* = final model of the tree. Candidates, in the opposite direction of
+   the choice of the tree: if M* is M_0,r, M* + g for the families g
+   detected (among all those tested) in the last Res_r0 of the tree (none
+   if the tree concluded before Res_r0 or nothing was detected); if M* is
+   M_1 = M_0,r + all the families of Res_r0 because M_1,0 was preferred
+   over M_0,r, every model in between, down to that M_0,r: families
+   removed, each model checked at its own r.
+   Additions: every combination of the detected families (up to max_comb
+   at a time, profile_scheme: max_comb in the tree config; default all).
 2. Profiles in r: M* -> r* = its minimum; M* + g -> r*_g for every candidate.
    A profile: r fixed on a grid, all the other parameters re-fitted (ML).
 3. Comparison of all the models, each at its own r (M* at r*, M* + g at
@@ -29,6 +35,7 @@ instead of with r marginalised.
 Output in `out`: the fits, decision_log.{txt,json}, profile_<model>.npz,
 result.json.
 """
+import itertools
 import json
 import os
 import re
@@ -41,7 +48,8 @@ from scipy.interpolate import interp1d
 from .config import build_config, free_param_names, iter_param_entries
 from .fitter import Fitter, NoValidStart
 from .log import DecisionLog
-from .models import MOMENT_GROUPS, amp_name, model_from_label, slope_name
+from .models import (MOMENT_GROUPS, amp_name, group_amplitudes,
+                     model_from_label, slope_name)
 from .runner import BBCompSepRunner
 
 # at the edges the profile must rise at least this much (4 sigma): needed
@@ -69,16 +77,41 @@ def moment_spectra(M):
 BETAS = {'beta_d', 'beta_s'}
 
 
+def last_res_r0(ev):
+    """Index of the 'resid' node of the last Res_r0 of the tree (None if
+    there is none)."""
+    last = None
+    for i, e in enumerate(ev):
+        if e['node'] == 'resid' and e['question'].startswith('Res_r0'):
+            last = i
+    return last
+
+
+def add_combinations(M0, fams, max_comb=None):
+    """
+    M0 + every combination of the families fams = [(group, off)] (each with
+    the spectra of `off` removed), up to max_comb families at a time (None:
+    all): [(label, model)], label e.g. 'd2+s'.
+    """
+    fams = [(g, off) for g, off in fams if g not in M0.moments]
+    out = []
+    kmax = len(fams) if max_comb is None else min(len(fams), max_comb)
+    for k in range(1, kmax + 1):
+        for combo in itertools.combinations(fams, k):
+            M = M0
+            for g, off in combo:
+                M = M.apply(g).without(off)
+            out.append(('+'.join(g for g, _ in combo), M))
+    return out
+
+
 def res_r0_candidates(ev):
     """
     Families detected in the last Res_r0 of the tree, with the spectra the
     residual screening removed: [(group, off)]. Empty if there is no Res_r0
     or if the tree adopted a new model after it.
     """
-    last = None
-    for i, e in enumerate(ev):
-        if e['node'] == 'resid' and e['question'].startswith('Res_r0'):
-            last = i
+    last = last_res_r0(ev)
     if last is None or any(e['node'] == 'replace' for e in ev[last:]):
         return []
     e = ev[last]
@@ -96,7 +129,8 @@ class ProfileScheme:
     name     : name of the data set in the log (default: basename of out)
     """
 
-    def __init__(self, tc, tree_dir, out, n=37, nproc=8, name=None):
+    def __init__(self, tc, tree_dir, out, n=37, nproc=8, name=None,
+                 max_comb=None):
         os.makedirs(out, exist_ok=True)
         tc['paths']['runs_dir'] = out
         self.out = out
@@ -122,9 +156,25 @@ class ProfileScheme:
         ev = json.load(open(os.path.join(tree_dir, 'decision_log.json')))
         M0 = model_from_label(concl['model'])
         self.M0 = M0
-        self.cands = [(g, M0.apply(g).without(off))
-                      for g, off in res_r0_candidates(ev)
-                      if g not in M0.moments]
+        # the opposite direction of the tree: if it chose M_0,r, the families
+        # of the last Res_r0 are added (all their combinations); if it chose
+        # M_1 because M_1,0 was preferred (node 'm10'), the family added by
+        # M_1,0 is removed: the only candidate is the M_0,r of that Res_r0
+        self.removal = any(e['node'] == 'm10' for e in ev)
+        if self.removal:
+            # every model between M_0,r (included) and M_1 = M*: M_0,r + each
+            # proper subset of the families of M_1, label '-<removed>'
+            M0r = model_from_label(ev[last_res_r0(ev)]['base']).with_r(True)
+            new = sorted(M0.moments - M0r.moments)
+            fams = [(g, sorted(set(group_amplitudes(g)) & set(M0.off)))
+                    for g in new]
+            inner = [M for lab, M in add_combinations(M0r, fams, max_comb)
+                     if M.moments != M0.moments]
+            self.cands = [('-' + '+'.join(sorted(M0.moments - M.moments)), M)
+                          for M in [M0r] + inner]
+        else:
+            self.cands = add_combinations(M0, res_r0_candidates(ev),
+                                          max_comb)
         cfg = yaml.safe_load(open(os.path.join(tree_dir, f'{M0.label}_PC',
                                                'config.yml')))
         names = free_param_names(cfg['BBCompSep'])
@@ -431,8 +481,9 @@ class ProfileScheme:
                    model_tree=M0.label, model_final=final.label,
                    candidates=[g for g, _ in self.cands],
                    comparison=comparison,
-                   start='candidates from Res_r0' if self.cands
-                   else 'no candidates',
+                   start=('families removed (M_1,0 preferred in the tree)'
+                          if self.removal else 'candidates from Res_r0')
+                   if self.cands else 'no candidates',
                    rejected=sorted(g for g, M in self.cands
                                    if M.label != final.label),
                    r_bayes_tree=med, sigma_bayes_tree=sig,

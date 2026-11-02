@@ -3,7 +3,7 @@
 Profile scheme on a concluded tree (see bbsure/profile_scheme.py).
 
   python scripts/run_profile.py --config tree_config.yml --tree-dir <runs_dir>
-         --out <dir> [--n 37]
+         --out <dir> [--n 37] [--max-comb K]
 
 or, on the layout of the validation (nersc/):
 
@@ -33,6 +33,9 @@ def main():
     ap.add_argument('--out', dest='out_dir', help='output directory')
     ap.add_argument('--n', type=int, default=37,
                     help='points of the initial profile grid')
+    ap.add_argument('--max-comb', type=int, default=None,
+                    help='families added together at most (default: all '
+                         'the combinations)')
     ap.add_argument('--nproc', type=int,
                     default=int(os.environ.get('PROFILE_NPROC', 8)),
                     help='profile points fitted in parallel (one ML each)')
@@ -49,7 +52,8 @@ def main():
         cfg_path = os.path.join(src, 'tree_config.yml')
 
     tc = yaml.safe_load(open(cfg_path))
-    ProfileScheme(tc, tree, out, n=a.n, nproc=a.nproc, name=name).run()
+    ProfileScheme(tc, tree, out, n=a.n, nproc=a.nproc, name=name,
+                  max_comb=a.max_comb).run()
 
 
 if __name__ == '__main__':

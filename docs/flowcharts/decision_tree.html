@@ -113,7 +113,6 @@
   diamond(165, 330, 230, 130, 'yellow', ['is χ² good?', '(PTE &gt; 0.01)']);
   arrow([[165, 395], [165, 450]], 'Yes', 190, 422);
   diamond(165, 520, 230, 140, 'yellow', ['is r compatible', 'with zero at 1σ?']);
-  arrow([[165, 590], [165, 1345], [948, 1345]], 'Yes', 190, 640);
 
   // Res_wr
   box(360, 465, 280, 130, 'purple', [`Res_wr: residuals of ${M(0, 'r')}`, 'all parameters fixed at their', 'best fit (r too); test the d and s', 'families of moments, each with', 'its own β free']);
@@ -131,56 +130,64 @@
   arrow([[950, 240], [480, 240], [480, 290], [255, 290]]);
 
   // Res_r0
-  arrow([[800, 595], [800, 760], [500, 760], [500, 818]], 'No', 825, 650);
-  arrow([[1100, 755], [1100, 785], [560, 785], [560, 818]], 'No', 1125, 772);
-  text(270, 1122, ['(*) all the amplitudes of the family are fitted (emcee);', 'detected if 0 is outside the 68% HPD (highest posterior', 'density interval) of at least one of them; only the', 'amplitudes with 0 outside their HPD are kept',
+  arrow([[800, 595], [800, 740], [500, 740], [500, 788]], 'No', 825, 650);
+  arrow([[1100, 755], [1100, 765], [560, 765], [560, 788]], 'No', 1125, 762);
+  text(232, 1095, ['(*) all the amplitudes of the family are fitted (emcee);', 'detected if 0 is outside the 68% HPD (highest posterior', 'density interval) of at least one of them; only the', 'amplitudes with 0 outside their HPD are kept',
                     '(**) residual evidence: ln Z of the residual fit of each', 'detected family; it only sets the order in which the', 'families are tried',
                     '(***) amplitudes with 0 in their 68% HPD (posterior of', 'the full fit) removed and the model refitted, until all are', 'detected; the pruned model is kept if ln B(pruned vs full) > 0', `and is the one compared with ${M(0, 'r')}`, '(****) ln B within 2σ of the threshold (A) or between the', 'two best models (B): PolyChord repeated with other seeds,', 'mean of ln Z, up to 3 runs per fit'], 'note', { anchor: 'start', lh: 21 });
-  box(360, 820, 280, 120, 'purple', [`Res_r0: residuals of ${M(0, 0)} (r = 0)`, 'all parameters fixed, own β free;', 'test the families of moments', 'd, s, dT, d2, s2, ds1, ds2']);
-  arrow([[640, 880], [690, 880]]);
-  diamond(800, 880, 240, 140, 'yellow', ['moment detected? (*)', '0 outside the 68% HPD', 'of an amplitude']);
-  arrow([[910, 880], [960, 880]], 'Yes', 935, 865);
-  box(960, 820, 280, 120, 'purple', [`${M(0, 'r')} + the detected family`, 'with the highest residual evidence (**);', 'full fit (all parameters free),', 'pruned (***)']);
-  text(965, 797, [M(1, 'r')], 'tag', { anchor: 'start', fill: C.purple[0] });
-  arrow([[1100, 930], [1100, 965]]);
-  diamond(1100, 1035, 240, 130, 'red', [`is ${M(1, 'r')} preferred (****)`, `over ${M(0, 'r')}? (ln B &gt; 0)`]);
-  arrow([[1220, 1035], [1262, 1035], [1262, 700]], 'Yes', 1240, 1010);
-  // Bayesian conclusion on M_0,r
-  arrow([[1100, 1100], [1100, 1150]], 'No', 1125, 1125);
-  arrow([[800, 945], [800, 1215], [945, 1215]], 'No', 825, 1000);
-  diamond(1100, 1215, 310, 130, 'yellow', [`is r of ${M(0, 'r')} compatible`, 'with zero at 3σ?']);
-  arrow([[1100, 1280], [1100, 1300], [1000, 1300], [1000, 1293]], 'Yes', 1040, 1292);
+  box(360, 790, 280, 120, 'purple', [`Res_r0: residuals of ${M(0, 0)} (r = 0)`, 'all parameters fixed, own β free;', 'test the families of moments', 'd, s, dT, d2, s2, ds1, ds2']);
+  arrow([[640, 850], [690, 850]]);
+  diamond(800, 850, 240, 140, 'yellow', ['moment detected? (*)', '0 outside the 68% HPD', 'of an amplitude']);
+  arrow([[910, 850], [960, 850]], 'Yes', 935, 835);
+  box(960, 790, 280, 120, 'purple', [`${M(0, 'r')} + each detected family,`, 'in order of residual evidence (**);', 'full fit (all parameters free),', 'pruned (***)']);
+  text(965, 767, [M(1, 'r')], 'tag', { anchor: 'start', fill: C.purple[0] });
+  arrow([[1100, 910], [1100, 922]]);
+  diamond(1100, 975, 250, 106, 'red', [`is one ${M(1, 'r')} preferred (****)`, `over ${M(0, 'r')}? (ln B &gt; 0)`]);
+  arrow([[1225, 975], [1262, 975], [1262, 700]], 'Yes', 1244, 950);
+  // none preferred: M_1 = M_0,r + all the families, M_1,0 with r = 0
+  arrow([[1100, 1028], [1100, 1046]], 'No', 1125, 1036);
+  box(960, 1046, 280, 56, 'purple', [`${M(0, 'r')} + combinations of the families tried,`, 'from the simplest: the first preferred']);
+  text(922, 1074, ['M<tspan baseline-shift="sub" font-size="13">1</tspan>'], 'tag', { anchor: 'start', fill: C.purple[0] });
+  arrow([[1100, 1102], [1100, 1112]]);
+  diamond(1100, 1162, 270, 100, 'red', [`is one ${M(1, 0)} (r = 0) preferred`, `over ${M(0, 'r')}? (ln B &gt; 0) (****)`]);
+  arrow([[965, 1162], [806, 1162]], 'No', 885, 1147);
+  // 3 sigma test on M_0,r
+  arrow([[800, 920], [800, 1190]], 'No', 825, 980);
+  diamond(800, 1255, 300, 130, 'yellow', [`is r of ${M(0, 'r')} compatible`, 'with zero at 3σ?']);
+  arrow([[1100, 1212], [1100, 1255], [1004, 1255]], 'Yes', 1125, 1232);
+  arrow([[950, 1255], [1000, 1255], [1000, 1293]], 'Yes', 975, 1240);
   star(1000, 1345, 52, 'blue', ['upper', 'limit']);
-  arrow([[1100, 1300], [1190, 1300], [1190, 1293]], 'No', 1150, 1292);
-  star(1190, 1345, 52, 'orange', ['r', 'detection']);
-  text(560, 1380, ['Bayesian conclusion', `(posterior of ${M(0, 'r')}, r marginalised)`], 'ts', { anchor: 'start', fill: C.grey[0], lh: 20 });
+  arrow([[800, 1320], [800, 1326]], 'No', 765, 1318);
+  star(800, 1366, 46, 'orange', ['r', 'detection']);
+  arrow([[165, 590], [165, 1412], [1000, 1412], [1000, 1397]], 'Yes', 190, 640);
+  text(1062, 1300, ['Bayesian conclusion:', `posterior of ${M(0, 'r')}, or of ${M(1, 'r')}`, `if ${M(1, 0)} is preferred`], 'ts', { anchor: 'start', fill: C.grey[0], lh: 19 });
 
   // in all cases the profile scheme follows
-  add(rc.linearPath([[1000, 1397], [1000, 1412], [1325, 1412]], { stroke: C.teal[0], strokeWidth: 1.6, roughness: 0.8, seed: seed++ }));
-  add(rc.linearPath([[1190, 1397], [1190, 1412]], { stroke: C.teal[0], strokeWidth: 1.6, roughness: 0.8, seed: seed++ }));
-  arrow([[1325, 1412], [1325, 232], [1438, 232]], null, 0, 0, 'teal');
+  arrow([[1052, 1360], [1325, 1360], [1325, 232], [1438, 232]], null, 0, 0, 'teal');
   text(1340, 700, ['then', 'profile', 'scheme'], 'yn', { anchor: 'start', fill: C.teal[0], lh: 22 });
 
   // ═════════════════════ RIGHT: profile scheme ═══════════════════════════
   text(1460, 128, ['B · Profile scheme: every model at its own r'], 'ptitle', { anchor: 'start', fill: C.teal[0] });
-  const rg = 'r*<tspan baseline-shift="sub" font-size="13">g</tspan>';
   const note = (x, y, lines, col) => text(x, y, lines, 'ts', { anchor: 'start', fill: C[col][0], lh: 20 });
 
   // start
-  box(1440, 175, 600, 110, 'green', [`<tspan font-weight="700">M* = final model of the tree (${M(0, 'r')})</tspan>`,
-       'candidates g: the families detected (among all tested)', 'in its last Res_r0 (none if not reached or nothing detected)'], 't', 26);
-  arrow([[1740, 285], [1740, 330]]);
+  const rc_ = 'r*<tspan baseline-shift="sub" font-size="13">c</tspan>';
+  box(1440, 165, 600, 150, 'green', [`<tspan font-weight="700">M* = final model of the tree</tspan>`,
+       `tree chose ${M(0, 'r')}: candidates c = M* + every combination`, 'of the families detected in its last Res_r0 (moments added)',
+       `tree chose ${M(1, 'r')} (${M(1, 0)} preferred): c = every model`, `between ${M(1, 'r')} and ${M(0, 'r')} (moments removed)`], 't', 25);
+  note(2060, 240, ['the opposite direction of the tree:', `${M(0, 'r')} and ${M(1, 'r')} are the lower and the`, 'upper end of the moments'], 'green');
+  arrow([[1740, 315], [1740, 345]]);
 
   // profiles
-  box(1440, 330, 600, 105, 'purple', ['<tspan font-weight="700">profiles in r</tspan>',
+  box(1440, 345, 600, 95, 'purple', ['<tspan font-weight="700">profiles in r</tspan>',
        'M* → r* = its minimum',
-       `M* + g for each candidate g → ${rg} = its minimum`], 't', 26);
-  note(2060, 382, ['profile: r fixed on a grid, all the other', 'parameters re-fitted (max likelihood)'], 'purple');
-  arrow([[1740, 435], [1740, 480]]);
+       `every candidate c → ${rc_} = its minimum`], 't', 25);
+  note(2060, 392, ['profile: r fixed on a grid, all the other', 'parameters re-fitted (max likelihood)'], 'purple');
+  arrow([[1740, 440], [1740, 480]]);
 
   // comparison
   box(1440, 480, 600, 135, 'purple', ['<tspan font-weight="700">compare all the models, each at its own r</tspan>',
-       `M* at r*, M* + g at ${rg} for every candidate g:`,
+       `M* at r*, every candidate c at ${rc_}:`,
        'local evidence (****) of each (its moment spectra free;',
        'β_d and β_s free in all, T_d only with dT)'], 't', 26);
   arrow([[1740, 615], [1740, 682]]);
@@ -192,7 +199,7 @@
 
   // result
   box(1440, 808, 600, 110, 'purple', ['<tspan font-weight="700">profile of the final model in r</tspan>',
-       `r_min = its minimum (r* or ${rg});`,
+       `r_min = its minimum (r* or ${rc_});`,
        'posterior of r = exp(-Δχ²/2) × prior of the tree'], 't', 26);
   box(2100, 808, 400, 110, 'purple', ['<tspan font-weight="700">other parameters</tspan>',
        'posterior conditional on r = r_min:', 'emcee with r fixed, the rest free'], 't', 26);
