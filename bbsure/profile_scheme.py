@@ -38,7 +38,9 @@ import itertools
 import json
 import os
 import re
-from concurrent.futures import ThreadPoolExecutor
+import multiprocessing
+import sys
+from concurrent.futures import ProcessPoolExecutor
 
 import numpy as np
 import yaml
@@ -74,6 +76,13 @@ def moment_spectra(M):
 # and synchrotron are in all the models), plus those of the model's own
 # moment families (T_d only with dT)
 BETAS = {'beta_d', 'beta_s'}
+
+
+def _ml_job(job):
+    """One ML fit of a profile point (in a worker process): job = (runner,
+    model, tag, fixed, centers)."""
+    R, m, tag, fixed, centers = job
+    return R.ml(m, tag, fixed=fixed, centers=centers)
 
 
 def last_res_r0(ev):
@@ -217,15 +226,27 @@ class ProfileScheme:
         grid = list(GRID)
         fits = {}
 
-        def fit(r, centers=None, sfx=''):
+        def args(r, centers=None, sfx=''):
             k = int(round((r - GRID[0]) / STEP))
-            return R.ml(m, f'prof_{tag}_{k:+03d}{sfx}',
-                        fixed={'r_tensor': float(r)}, centers=centers)
+            return (R, m, f'prof_{tag}_{k:+03d}{sfx}',
+                    {'r_tensor': float(r)}, centers)
 
         def batch(jobs):
-            """Independent ML fits in parallel: [(r, centers, sfx)] -> fits."""
-            with ThreadPoolExecutor(max_workers=self.nproc) as ex:
-                return list(ex.map(lambda j: fit(*j), jobs))
+            """Independent ML fits in parallel: [(r, centers, sfx)] -> fits.
+            In separate processes (the in-process BBCompSep fits are
+            serialized by a lock within one process); fits already done are
+            read from their run directory."""
+            todo = [args(*j) for j in jobs]
+            # macOS: fork after the Objective-C runtime is initialised
+            # crashes, unless OBJC_DISABLE_INITIALIZE_FORK_SAFETY=YES
+            mac_unsafe = (sys.platform == 'darwin' and os.environ.get(
+                'OBJC_DISABLE_INITIALIZE_FORK_SAFETY') != 'YES')
+            if self.nproc <= 1 or len(todo) <= 1 or mac_unsafe:
+                return [_ml_job(t) for t in todo]
+            ctx = multiprocessing.get_context('fork')
+            with ProcessPoolExecutor(max_workers=min(self.nproc, len(todo)),
+                                     mp_context=ctx) as ex:
+                return list(ex.map(_ml_job, todo))
 
         for r, f in zip(grid, batch([(r, None, '') for r in grid])):
             fits[r] = f
