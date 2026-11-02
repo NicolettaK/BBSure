@@ -196,7 +196,13 @@ class DecisionTree:
         """
         found = []
         for g in groups:
-            rr = self.F.residual_test(base, g)
+            try:
+                rr = self.F.residual_test(base, g)
+            except NoValidStart as err:
+                self.log.node('unfittable', f'{name}: {g} cannot be fitted '
+                              'with the moment constraints, skipped',
+                              'skipped', reason=str(err))
+                continue
             hpd = {a: list(v) for a, v in rr.hpd.items()}
             self.log.node('resid_fit', f'{name}: moment {g} on the residuals '
                           f'of {base.model.label} ({which})',
@@ -367,7 +373,15 @@ class DecisionTree:
             for combo in itertools.combinations(tried, k):
                 M1 = upper_model(M0, [f.model for f in combo])
                 centers = {n: v for f in combo for n, v in f.best.items()}
-                fit10 = self.F.full_fit(M1.with_r(False), centers=centers)
+                try:
+                    fit10 = self.F.full_fit(M1.with_r(False),
+                                            centers=centers)
+                except NoValidStart as err:
+                    self.log.node('unfittable', f'M_1,0 = '
+                                  f'{M1.with_r(False).label} cannot be '
+                                  'fitted with the moment constraints',
+                                  'skipped', reason=str(err))
+                    continue
                 self.log.node('fit', f'fit of M_1,0 = '
                               f'{M1.with_r(False).label}', 'ok',
                               **fit10.summary())

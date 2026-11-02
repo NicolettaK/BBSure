@@ -10,12 +10,8 @@ import numpy as np
 
 from .config import iter_param_entries
 from .models import MOMENT_GROUPS, Model, cand_group
-from .runner import BBCompSepRunner
+from .runner import BBCompSepRunner, NoValidStart  # noqa: F401
 from .stats import FitResult, ResidualResult, detection
-
-
-class NoValidStart(RuntimeError):
-    """No point with finite likelihood (constraints on the moments)."""
 
 
 class Fitter:

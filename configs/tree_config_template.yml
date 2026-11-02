@@ -71,6 +71,10 @@ polychord:
     # the likelihood, so the maximum gain is ~mpi_procs-1. 1 = serial. Not in
     # the BBCompSep config (the runs stay reusable).
     mpi_procs: 8
+    # PolyChord is stopped if its live points are not all generated within
+    # start_timeout seconds (moment constraints leaving almost no valid
+    # prior volume): the family is skipped as unfittable
+    start_timeout: 1800
     # on Perlmutter: one srun step inside the job (16 trees per node)
     mpi_launcher: "srun -n {n} -c 2 --exact --cpu-bind=cores"
 
