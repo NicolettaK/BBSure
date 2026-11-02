@@ -1,5 +1,6 @@
 """
-Plan of the validation: 100 realizations of CMB + noise (seeds 7000-7099).
+Plan of the validation: 100 realizations of CMB + noise (seeds seed0 ...
+seed0 + 99; default 7000-7099, the 200 sets of the first validation).
 
 Each realization has its own r:
   - 10 realizations (at random) with r = 0;
@@ -11,21 +12,30 @@ Writes:
   plan/sets.csv     index, seed, sky_rand        (can be looked at)
   truth/r_true.csv  index, r                     (do NOT open until the end)
 
-Usage: python scripts/make_plan.py <root>
+Usage: python scripts/make_plan.py <root> [--seed0 7000] [--rng-seed 20261024]
+  --seed0     seed of the first CMB + noise realization (the covariance sims
+              use 5002-5501: do not overlap them)
+  --rng-seed  seed of the draws of r, of the sets with r = 0 and of the
+              random skies
 """
+import argparse
 import csv
 import os
-import sys
 
 import numpy as np
 
-N, SEED0, N_R0 = 100, 7000, 10
+N, N_R0 = 100, 10
 R_MIN, R_MAX = 1e-3, 0.03
 SKIES = [f'{d}{s}' for d in ('d9', 'd10', 'd12') for s in ('s4', 's5', 's7')
          if f'{d}{s}' != 'd9s4']
 
-root = sys.argv[1]
-rng = np.random.default_rng(20261024)
+ap = argparse.ArgumentParser()
+ap.add_argument('root')
+ap.add_argument('--seed0', type=int, default=7000)
+ap.add_argument('--rng-seed', type=int, default=20261024)
+a = ap.parse_args()
+root, SEED0 = a.root, a.seed0
+rng = np.random.default_rng(a.rng_seed)
 r = 10 ** rng.uniform(np.log10(R_MIN), np.log10(R_MAX), N)
 r[rng.choice(N, N_R0, replace=False)] = 0.
 sky = rng.choice(SKIES, N)
@@ -42,6 +52,7 @@ with open(os.path.join(root, 'truth', 'r_true.csv'), 'w', newline='') as f:
     w.writerow(['index', 'r'])
     for i in range(N):
         w.writerow([i, f'{r[i]:.6e}'])
-print(f"written plan/sets.csv and truth/r_true.csv ({N} sets, "
+print(f"written plan/sets.csv and truth/r_true.csv ({N} sets, seeds "
+      f"{SEED0}-{SEED0 + N - 1}, "
       f"{N_R0} with r = 0); random skies: "
       + ', '.join(f'{s} x{int((sky == s).sum())}' for s in SKIES))

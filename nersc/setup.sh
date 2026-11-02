@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # setup.sh — prepares the directory of a validation run (ONCE, login node).
-#   bash nersc/setup.sh <root> <covariance tarball>
+#   bash nersc/setup.sh <root> <covariance tarball> [make_plan options]
+# e.g. new data: ... --seed0 8000 --rng-seed 20261103 (see make_plan.py)
 #
 # 1. extracts the spectra of the covariance sims in <root>/cov
 #    (cells_all_splits_sim*.fits, from run_spectra.sh --cov-maps)
@@ -10,7 +11,7 @@
 # The environment (conda, BBPower and BBSure importable) must be active.
 set -euo pipefail
 
-ROOT="$1"; COV_TAR="$2"
+ROOT="$1"; COV_TAR="$2"; shift 2
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
 DATA="${BBSURE_DATA:-${REPO}/data}"
 mkdir -p "$ROOT"
@@ -31,6 +32,6 @@ done
 echo "    ok"
 
 echo "==> [3/3] plan"
-python "${REPO}/scripts/make_plan.py" "$ROOT"
+python "${REPO}/scripts/make_plan.py" "$ROOT" "$@"
 echo
 echo "Ready. Do NOT open ${ROOT}/truth until the end."
