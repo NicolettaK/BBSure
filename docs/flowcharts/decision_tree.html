@@ -99,10 +99,12 @@
 
   // ── title ──────────────────────────────────────────────────────────────
   text(30, 40, ['SO cross-cl pipeline: decision tree v3 — Bayesian search + profile scheme'], 'title', { anchor: 'start' });
-  text(30, 74, ['left: search for moments with the evidence · right: frequentist branch, profile scheme'], 'subtitle', { anchor: 'start' });
+  text(30, 74, ['left: search for moments with the evidence · right: profile scheme, every model at its own r'], 'subtitle', { anchor: 'start' });
 
   // ═════════════════════ LEFT: Bayesian search ════════════════════════════
-  add(rc.rectangle(18, 100, 1262, 1320, { stroke: C.grey[0], strokeWidth: 1.2, roughness: 0.9, seed: seed++ }));
+  // panel backgrounds (drawn first, under everything)
+  add(rc.rectangle(18, 100, 1262, 1320, { stroke: 'none', fill: '#f0f0f0', fillStyle: 'solid', roughness: 0, seed: seed++ }));
+  add(rc.rectangle(1300, 100, 1242, 1320, { stroke: 'none', fill: '#f0f0f0', fillStyle: 'solid', roughness: 0, seed: seed++ }));
   text(36, 128, ['A · Bayesian search for moments (evidence, r free)'], 'ptitle', { anchor: 'start', fill: C.grey[0] });
 
   box(40, 160, 250, 70, 'green', ['run BBPower without moments'], 't');
@@ -111,19 +113,19 @@
   diamond(165, 330, 230, 130, 'yellow', ['is χ² good?', '(PTE &gt; 0.01)']);
   arrow([[165, 395], [165, 450]], 'Yes', 190, 422);
   diamond(165, 520, 230, 140, 'yellow', ['is r compatible', 'with zero at 1σ?']);
-  arrow([[165, 590], [165, 1240]], 'Yes', 190, 640);
-  star(165, 1310, 85, 'blue', ['upper limit', `on r (${M(0, 'r')})`]);
+  arrow([[165, 590], [165, 1345], [948, 1345]], 'Yes', 190, 640);
 
   // Res_wr
   box(360, 465, 280, 130, 'purple', [`Res_wr: residuals of ${M(0, 'r')}`, 'all parameters fixed at their', 'best fit (r too); test the d and s', 'families of moments, each with', 'its own β free']);
   arrow([[280, 330], [500, 330], [500, 468]], 'No', 320, 316);
   arrow([[280, 520], [358, 520]], 'No', 316, 505);
   arrow([[640, 530], [690, 530]]);
-  diamond(800, 530, 240, 140, 'yellow', ['moment detected? (**)', '0 outside the 68% HPD', 'of an amplitude']);
+  diamond(800, 530, 240, 140, 'yellow', ['moment detected? (*)', '0 outside the 68% HPD', 'of an amplitude']);
   arrow([[910, 530], [960, 530]], 'Yes', 935, 515);
-  box(960, 470, 280, 120, 'purple', [`${M(1, 'r')} = ${M(0, 'r')} + a detected family,`, 'in order of residual evidence (***);', 'full fit (all parameters free),', 'pruned (****)']);
+  box(960, 470, 280, 120, 'purple', [`${M(0, 'r')} + a detected family,`, 'in order of residual evidence (**);', 'full fit (all parameters free),', 'pruned (***)']);
+  text(965, 447, [M(1, 'r')], 'tag', { anchor: 'start', fill: C.purple[0] });
   arrow([[1100, 580], [1100, 620]]);
-  diamond(1100, 690, 240, 130, 'red', [`is ${M(1, 'r')} preferred`, `over ${M(0, 'r')}? (ln B &gt; 0)`]);
+  diamond(1100, 690, 240, 130, 'red', [`is ${M(1, 'r')} preferred (****)`, `over ${M(0, 'r')}? (ln B &gt; 0)`]);
   box(950, 200, 300, 80, 'green', [`${M(0, 'r')} = ${M(1, 'r')},`, 'start again']);
   arrow([[1220, 690], [1262, 690], [1262, 240], [1252, 240]], 'Yes', 1240, 660);
   arrow([[950, 240], [480, 240], [480, 290], [255, 290]]);
@@ -131,86 +133,77 @@
   // Res_r0
   arrow([[800, 595], [800, 760], [500, 760], [500, 818]], 'No', 825, 650);
   arrow([[1100, 755], [1100, 785], [560, 785], [560, 818]], 'No', 1125, 772);
-  text(270, 1185, ['(**) all the amplitudes of the family are fitted (emcee);', 'detected if 0 is outside the 68% HPD (highest posterior', 'density interval) of at least one of them; only the', 'amplitudes with 0 outside their HPD are kept',
-                    '(***) PolyChord evidence of the residual fit (only the', "family's moments and its β free): only ranks the families",
-                    '(****) amplitudes with 0 in their 68% HPD (posterior of', 'the full fit) removed, model refitted, until all are', 'detected; kept if ln B(pruned vs full) > -2.5; the pruned', 'model is the one compared with M_0,r'], 'note', { anchor: 'start', lh: 21 });
+  text(270, 1122, ['(*) all the amplitudes of the family are fitted (emcee);', 'detected if 0 is outside the 68% HPD (highest posterior', 'density interval) of at least one of them; only the', 'amplitudes with 0 outside their HPD are kept',
+                    '(**) residual evidence: ln Z of the residual fit of each', 'detected family; it only sets the order in which the', 'families are tried',
+                    '(***) amplitudes with 0 in their 68% HPD (posterior of', 'the full fit) removed and the model refitted, until all are', 'detected; the pruned model is kept if ln B(pruned vs full) > 0', `and is the one compared with ${M(0, 'r')}`, '(****) ln B within 2σ of the threshold (A) or between the', 'two best models (B): PolyChord repeated with other seeds,', 'mean of ln Z, up to 3 runs per fit'], 'note', { anchor: 'start', lh: 21 });
   box(360, 820, 280, 120, 'purple', [`Res_r0: residuals of ${M(0, 0)} (r = 0)`, 'all parameters fixed, own β free;', 'test the families of moments', 'd, s, dT, d2, s2, ds1, ds2']);
   arrow([[640, 880], [690, 880]]);
-  diamond(800, 880, 240, 140, 'yellow', ['moment detected? (**)', '0 outside the 68% HPD', 'of an amplitude']);
+  diamond(800, 880, 240, 140, 'yellow', ['moment detected? (*)', '0 outside the 68% HPD', 'of an amplitude']);
   arrow([[910, 880], [960, 880]], 'Yes', 935, 865);
-  box(960, 820, 280, 120, 'purple', [`${M(1, 'r')} = ${M(0, 'r')} + the detected family`, 'with the highest residual evidence (***);', 'full fit (all parameters free),', 'pruned (****)']);
+  box(960, 820, 280, 120, 'purple', [`${M(0, 'r')} + the detected family`, 'with the highest residual evidence (**);', 'full fit (all parameters free),', 'pruned (***)']);
+  text(965, 797, [M(1, 'r')], 'tag', { anchor: 'start', fill: C.purple[0] });
   arrow([[1100, 930], [1100, 965]]);
-  diamond(1100, 1035, 240, 130, 'red', [`is ${M(1, 'r')} preferred`, `over ${M(0, 'r')}? (ln B &gt; 0)`]);
+  diamond(1100, 1035, 240, 130, 'red', [`is ${M(1, 'r')} preferred (****)`, `over ${M(0, 'r')}? (ln B &gt; 0)`]);
   arrow([[1220, 1035], [1262, 1035], [1262, 700]], 'Yes', 1240, 1010);
-  arrow([[1100, 1100], [1100, 1140]], 'No', 1125, 1118);
-  box(960, 1140, 280, 70, 'purple', [`${M(1, 0)}: same family, r = 0,`, 'pruned (****)']);
-  arrow([[1100, 1210], [1100, 1240]]);
-  diamond(1100, 1310, 260, 130, 'red', [`is ${M(1, 0)} preferred`, `over ${M(0, 'r')}? (ln B &gt; 0)`]);
+  // Bayesian conclusion on M_0,r
+  arrow([[1100, 1100], [1100, 1150]], 'No', 1125, 1125);
+  arrow([[800, 945], [800, 1215], [945, 1215]], 'No', 825, 1000);
+  diamond(1100, 1215, 310, 130, 'yellow', [`is r of ${M(0, 'r')} compatible`, 'with zero at 3σ?']);
+  arrow([[1100, 1280], [1100, 1300], [1000, 1300], [1000, 1293]], 'Yes', 1040, 1292);
+  star(1000, 1345, 52, 'blue', ['upper', 'limit']);
+  arrow([[1100, 1300], [1190, 1300], [1190, 1293]], 'No', 1150, 1292);
+  star(1190, 1345, 52, 'orange', ['r', 'detection']);
+  text(560, 1380, ['Bayesian conclusion', `(posterior of ${M(0, 'r')}, r marginalised)`], 'ts', { anchor: 'start', fill: C.grey[0], lh: 20 });
 
-  // exits to the profile scheme
-  // three exits, one colour each (same colours in box 0); no crossings
-  arrow([[1230, 1310], [1330, 1310], [1330, 262], [1438, 262]], 'Yes', 1255, 1292, 'teal');
-  arrow([[1100, 1375], [1100, 1395], [1350, 1395], [1350, 340], [1438, 340]], 'No', 1125, 1388, 'orange');
-  arrow([[800, 945], [800, 1415], [1370, 1415], [1370, 412], [1438, 412]], 'No', 825, 1000, 'grey');
+  // in all cases the profile scheme follows
+  add(rc.linearPath([[1000, 1397], [1000, 1412], [1325, 1412]], { stroke: C.teal[0], strokeWidth: 1.6, roughness: 0.8, seed: seed++ }));
+  add(rc.linearPath([[1190, 1397], [1190, 1412]], { stroke: C.teal[0], strokeWidth: 1.6, roughness: 0.8, seed: seed++ }));
+  arrow([[1325, 1412], [1325, 232], [1438, 232]], null, 0, 0, 'teal');
+  text(1340, 700, ['then', 'profile', 'scheme'], 'yn', { anchor: 'start', fill: C.teal[0], lh: 22 });
 
   // ═════════════════════ RIGHT: profile scheme ═══════════════════════════
-  add(rc.rectangle(1300, 100, 1242, 1320, { stroke: C.teal[0], strokeWidth: 2, roughness: 0.9, seed: seed++ }));
-  text(1460, 128, ['B · Profile scheme (new): uses r as a profile, not marginalised'], 'ptitle', { anchor: 'start', fill: C.teal[0] });
+  text(1460, 128, ['B · Profile scheme: every model at its own r'], 'ptitle', { anchor: 'start', fill: C.teal[0] });
+  const rg = 'r*<tspan baseline-shift="sub" font-size="13">g</tspan>';
+  const note = (x, y, lines, col) => text(x, y, lines, 'ts', { anchor: 'start', fill: C[col][0], lh: 20 });
 
-  // step 0: starting point
-  add(rc.rectangle(1440, 165, 560, 290, style('teal', { fillStyle: 'solid', fill: '#f3fcfd' })));
-  text(1720, 190, ['<tspan font-weight="700">starting point</tspan>'], 't');
-  const S0 = [
-    ['teal',   262, [`${M(1, 0)} preferred → M = ${M(1, 'r')}, the best model found:`, 'no candidate, go straight to step 3']],
-    ['orange', 340, [`a family was tried as ${M(1, 'r')} and lost (${M(1, 0)} not`, `preferred) → M = ${M(0, 'r')}, candidate C = that family`]],
-    ['grey',   412, [`nothing new detected in Res_r0 → M = ${M(0, 'r')}, no`, 'candidate: go straight to step 4 (r from its profile)']],
-  ];
-  S0.forEach(([col, y, lines]) => text(1462, y, lines, 'ts', { anchor: 'start', lh: 20, fill: C[col][0] }));
-  badge(1440, 165, 0, 'teal');
+  // start
+  box(1440, 175, 600, 110, 'green', [`<tspan font-weight="700">M* = final model of the tree (${M(0, 'r')})</tspan>`,
+       'candidates g: the families detected (among all tested)', 'in its last Res_r0 (none if not reached or nothing detected)'], 't', 26);
+  arrow([[1740, 285], [1740, 330]]);
 
-  // step 1: profile
-  arrow([[1700, 455], [1700, 495]]);
-  box(1520, 495, 360, 110, 'blue', ['<tspan font-weight="700">profile of r of M + C</tspan>',
-       'r fixed on a grid, all other parameters', 're-fitted (max likelihood) → r* = minimum'], 'ts', 21);
-  badge(1520, 495, 1, 'blue');
+  // profiles
+  box(1440, 330, 600, 105, 'purple', ['<tspan font-weight="700">profiles in r</tspan>',
+       'M* → r* = its minimum',
+       `M* + g for each candidate g → ${rg} = its minimum`], 't', 26);
+  note(2060, 382, ['profile: r fixed on a grid, all the other', 'parameters re-fitted (max likelihood)'], 'purple');
+  arrow([[1740, 435], [1740, 480]]);
 
-  // step 2: comparison
-  arrow([[1700, 605], [1700, 640]]);
-  diamond(1700, 735, 430, 190, 'red', ['<tspan font-weight="700">is M + C preferred over M?</tspan>',
-          'each model at its own best fit (M + C at r*,', 'M at the minimum of its profile);',
-          'free only the moment spectra + the same β', 'in both models; ln B &gt; 0']);
-  badge(1485, 640, 2, 'red');
-  box(2000, 690, 230, 80, 'green', ['M = M + C', '(C enters the model)'], 't');
-  arrow([[1915, 735], [1998, 735]], 'Yes', 1950, 718);
-  box(2000, 800, 230, 70, 'grey', ['C rejected', '(not proposed again)'], 't');
-  arrow([[1700, 830], [1700, 835], [1998, 835]], 'No', 1755, 850);
+  // comparison
+  box(1440, 480, 600, 135, 'purple', ['<tspan font-weight="700">compare all the models, each at its own r</tspan>',
+       `M* at r*, M* + g at ${rg} for every candidate g:`,
+       'local evidence (****) of each (its moment spectra free;',
+       'β_d and β_s free in all, T_d only with dT)'], 't', 26);
+  arrow([[1740, 615], [1740, 682]]);
 
-  // step 3: Res_wr*
-  arrow([[2115, 770], [2115, 785], [2290, 785], [2290, 905], [1910, 905], [1910, 930]]);
-  arrow([[2115, 870], [2115, 905]]);
-  box(1500, 930, 620, 130, 'purple', ['<tspan font-weight="700">Res_wr*: residuals of M re-fitted at r = r*</tspan>',
-       'all groups not yet in the model and not rejected (also dT, d2, s2, ds1, ds2):',
-       'screening with emcee (0 outside HPD 68%), then evidence against the null',
-       '(same point, moment amplitudes = 0, only β free): passes if ln B &gt; 0'], 'ts', 21);
-  badge(1500, 930, 3, 'purple');
-  arrow([[1810, 1060], [1810, 1090]]);
-  diamond(1810, 1150, 260, 120, 'yellow', ['does a new', 'moment pass?']);
-  arrow([[1940, 1150], [2380, 1150], [2380, 550], [1882, 550]], 'Yes: C = the best one, back to 1', 2140, 1132, 'blue');
+  // final model
+  box(1440, 682, 600, 80, 'red', ['<tspan font-weight="700">final model = the one with the highest evidence</tspan>',
+       '(M* itself if no candidate beats it)'], 't', 26);
+  arrow([[1740, 762], [1740, 808]]);
 
-  // step 4: result
-  arrow([[1810, 1210], [1810, 1240]], 'No', 1835, 1225);
-  box(1470, 1240, 680, 100, 'blue', ['<tspan font-weight="700">result</tspan>: r from the profile of M used as a likelihood × prior of the tree',
-       '→ median, 68%, σ, r_95 (also with r ≥ 0);',
-       'other parameters: emcee of M with r = r* fixed'], 'ts', 21);
-  badge(1470, 1240, 4, 'blue');
-  arrow([[2150, 1290], [2200, 1290]]);
-  diamond(2300, 1290, 200, 120, 'yellow', ['0 within 3σ', 'of r?']);
-  star(2470, 1210, 62, 'blue', ['upper', 'limit']);
-  star(2470, 1360, 62, 'orange', ['r', 'detection']);
-  arrow([[2365, 1255], [2412, 1228]], 'Yes', 2385, 1226);
-  arrow([[2365, 1325], [2412, 1345]], 'No', 2380, 1360);
-
-  // note
-  text(1460, 152, ['M = current model, C = candidate moment · PolyChord only where an evidence is needed (steps 2, 3) · profiles: max likelihood · parameters: emcee'], 'note', { anchor: 'start', fill: C.teal[0] });
+  // result
+  box(1440, 808, 600, 110, 'purple', ['<tspan font-weight="700">profile of the final model in r</tspan>',
+       `r_min = its minimum (r* or ${rg});`,
+       'posterior of r = exp(-Δχ²/2) × prior of the tree'], 't', 26);
+  box(2100, 808, 400, 110, 'purple', ['<tspan font-weight="700">other parameters</tspan>',
+       'posterior conditional on r = r_min:', 'emcee with r fixed, the rest free'], 't', 26);
+  add(rc.linearPath([[2040, 863], [2100, 863]], { stroke: C.purple[0], strokeWidth: 1.4, roughness: 0.8, seed: seed++ }));
+  arrow([[1740, 918], [1740, 975]]);
+  diamond(1740, 1060, 360, 170, 'yellow', ['0 within the central 3σ', 'interval of the posterior of r?']);
+  arrow([[1920, 1060], [2060, 1060], [2060, 1010], [2128, 1010]], 'Yes', 1990, 1045);
+  star(2200, 1010, 68, 'blue', ['upper', 'limit']);
+  note(2285, 1010, ['r_95 of the posterior', 'with r ≥ 0'], 'blue');
+  arrow([[1740, 1145], [1740, 1200], [2128, 1200]], 'No', 1765, 1175);
+  star(2200, 1200, 68, 'orange', ['r', 'detection']);
+  note(2285, 1200, ['median and 68%', 'of the posterior of r'], 'orange');
 })();
 </script>

@@ -15,9 +15,8 @@ model at its own value of r (the minimum of its profile likelihood), to
 reduce the degeneracy between moments and r, and gives the final posterior
 of r from the profile likelihood.
 
-The flowcharts are in `docs/flowcharts/`:
-`decision_tree_v3_profile` (Bayesian tree) and `profile_scheme_nersc`
-(profile scheme).
+The flowchart is `docs/flowcharts/decision_tree` (tree and profile scheme);
+`profile_scheme_nersc` is the profile scheme of the 200-set validation run.
 
 ## Installation
 
