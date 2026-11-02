@@ -52,10 +52,10 @@ def main():
                         'run_profile.py'),
            '--config', os.path.abspath(args.config), '--tree-dir', runs_dir,
            '--out', pdir]
-    for k in ('lnb_res', 'lnb_full', 'n', 'max_it', 'nproc'):
+    for k in ('n', 'nproc'):
         if k in ps:
             cmd += ['--' + k.replace('_', '-'), str(ps[k])]
-    log.info("\n==> Profile scheme (Res_wr*): " + ' '.join(cmd[1:]))
+    log.info("\n==> Profile scheme: " + ' '.join(cmd[1:]))
     subprocess.run(cmd, check=True)
     prof = json.load(open(os.path.join(pdir, 'result.json')))
     ul = prof['conclusion'] == 'upper_limit'

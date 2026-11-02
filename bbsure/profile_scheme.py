@@ -1,42 +1,30 @@
 """
-Profile scheme: run on a concluded tree, in place of the frequentist branch
-(designed for the detections: large r and no M_1,r preferred).
+Profile scheme: run on a concluded tree. The moments are searched with r = 0
+(Res_r0 of the tree, where they have the most room); here the candidates are
+judged with every model at its own r, the minimum of its profile likelihood,
+instead of with r marginalised.
 
-1. M_0 = final model of the tree; first candidate C = last M_1,r tried by
-   the tree (only its new groups, added to M_0). If the tree found no new
-   moment (nothing detected in Res_r0): no candidate, no Res_wr*, straight
-   to point 5 with the profile of M_0,r.
-2. Profile of r of M_0 + C -> r_k (minimum; ML points that did not converge
-   are refitted from the neighbour).
-3. Each model around its own ML best fit, each with its own r (M_0 + C at
-   r = r_k, M_0 at the minimum of its profile), free only the spectra of its
-   moments (amplitudes, slopes) and the SAME betas in the two models (those
-   of the groups of M_0 + C: e.g. dust vs dust + synch -> beta_d and beta_s
-   free in both); ln B > lnb_full -> C enters the model.
-   If C is rejected the scheme stops (no Res_wr*) -> point 5.
-4. Res_wr* (only if C entered, or when starting from M_1): each group g is
-   tested at its own r, r_g = minimum of the profile of (current model + g):
-   residuals of the current model refitted at r = r_g, groups not yet in the
-   model and not already rejected as candidates (higher orders too). HPD 68%
-   screening, then evidence against the null (same point, amplitudes of the
-   group at zero, free only the betas of the group): passes if
-   ln B > lnb_res. The best one becomes the new candidate -> point 2 (r**,
-   ...). None -> stop.
-5. Result from the profile of the last model (if nothing entered, the one of
-   the old M_0,r): best fit, 68%, 95% UL and posterior of r with the profile
-   as the likelihood: prior of the tree on r (_pl, for the bias) and with
-   r >= 0 (_pl0).
-6. Other parameters: Bayesian posterior (emcee) of the final model with r
-   fixed at the minimum of its profile (conditioned on r = r*), everything
+1. M* = final model of the tree; candidates g = the families detected (among
+   all those tested) in the last Res_r0 of the tree on M* (none if the tree
+   concluded before Res_r0 or nothing was detected).
+2. Profiles in r: M* -> r* = its minimum; M* + g -> r*_g for every candidate.
+   A profile: r fixed on a grid, all the other parameters re-fitted (ML).
+3. Comparison of all the models, each at its own r (M* at r*, M* + g at
+   r*_g): local evidence of each, around its own ML best fit at that r, with
+   its moment spectra and its spectral parameters free (beta_d and beta_s in
+   all the models, T_d only in those with the dT moments). The model with
+   the highest evidence is the final one (M* if no candidate beats it). If
+   the two best are within seed_band errors, their local evidences are
+   repeated with other seeds (mean), up to seed_max_runs runs each.
+4. Result from the profile of the final model: best fit, 68%, 95% UL and
+   posterior of r with the profile as the likelihood: prior of the tree on r
+   (_pl, for the bias) and with r >= 0 (_pl0).
+5. Other parameters: Bayesian posterior (emcee) of the final model with r
+   fixed at the minimum of its profile (conditioned on r = r_min), everything
    else free -> median, 16-84%, sigma in result.json (params_at_rstar).
-7. Decision: 0 inside the central 3 sigma interval of the posterior from the
+6. Decision: 0 inside the central 3 sigma interval of the posterior from the
    profile (prior of the tree) -> upper limit (r_95 with r >= 0), otherwise
-   r detection (median and 68%), like the 3 sigma test of the tree.
-
-If M_1,0 was preferred over M_0,r in the tree, the scheme starts from M_1
-(r free), the best model found: no comparison of the candidate, Res_wr* at
-the minimum of the profile of M_1, and if nothing else enters the result is
-the profile of M_1.
+   r detection (median and 68%).
 
 Output in `out`: the fits, decision_log.{txt,json}, profile_<model>.npz,
 result.json.
@@ -53,9 +41,7 @@ from scipy.interpolate import interp1d
 from .config import build_config, free_param_names, iter_param_entries
 from .fitter import Fitter, NoValidStart
 from .log import DecisionLog
-from .models import (MOMENT_GROUPS, Model, amp_name, cand_group,
-                     candidate_groups, group_spectra, model_from_label,
-                     slope_name)
+from .models import MOMENT_GROUPS, amp_name, model_from_label, slope_name
 from .runner import BBCompSepRunner
 
 # at the edges the profile must rise at least this much (4 sigma): needed
@@ -71,15 +57,33 @@ def post_summary(names, samples):
             for k, n in enumerate(names)}
 
 
-def new_group(M1, M):
-    """Moment group(s) of M1 not in M (for the label)."""
-    return '+'.join(sorted(M1.moments - M.moments)) or 'restore'
-
-
 def moment_spectra(M):
     """Amplitudes and slopes of the moment spectra of M."""
     return {f(p, sp) for _, p, sp in M.spectra()
             for f in (amp_name, slope_name)}
+
+
+# spectral parameters free in every local evidence: beta_d and beta_s (dust
+# and synchrotron are in all the models), plus those of the model's own
+# moment families (T_d only with dT)
+BETAS = {'beta_d', 'beta_s'}
+
+
+def res_r0_candidates(ev):
+    """
+    Families detected in the last Res_r0 of the tree, with the spectra the
+    residual screening removed: [(group, off)]. Empty if there is no Res_r0
+    or if the tree adopted a new model after it.
+    """
+    last = None
+    for i, e in enumerate(ev):
+        if e['node'] == 'resid' and e['question'].startswith('Res_r0'):
+            last = i
+    if last is None or any(e['node'] == 'replace' for e in ev[last:]):
+        return []
+    e = ev[last]
+    pruned = e.get('pruned') or [[] for _ in e.get('detected', [])]
+    return list(zip(e.get('detected', []), pruned))
 
 
 class ProfileScheme:
@@ -89,60 +93,38 @@ class ProfileScheme:
     out      : output directory
     n        : points of the initial profile grid
     nproc    : profile points fitted in parallel (one ML each)
-    lnb_res, lnb_full : thresholds of Res_wr* and of the candidate comparison
-    max_it   : maximum number of iterations
-    no_stop  : diagnostic: after a rejected candidate still run Res_wr* on
-               all the other groups
-    ignore_m10 : test: ignore M_1,0 preferred in the tree (detection path)
     name     : name of the data set in the log (default: basename of out)
     """
 
-    def __init__(self, tc, tree_dir, out, n=37, nproc=8, lnb_res=0.,
-                 lnb_full=0., max_it=4, no_stop=False, ignore_m10=False,
-                 name=None):
+    def __init__(self, tc, tree_dir, out, n=37, nproc=8, name=None):
         os.makedirs(out, exist_ok=True)
         tc['paths']['runs_dir'] = out
         self.out = out
         self.nproc = nproc
-        self.lnb_res, self.lnb_full = lnb_res, lnb_full
-        self.max_it = max_it
-        self.no_stop, self.ignore_m10 = no_stop, ignore_m10
         self.log = DecisionLog(out)
         self.F = Fitter(BBCompSepRunner(tc, self.log),
                         hpd_frac=tc['thresholds'].get('hpd_frac', 0.68))
         self.R = self.F.R
-        mc = tc['moments']
-        self.groups = mc.get('res_r0', ['d', 's', 'dT', 'd2', 's2', 'ds1',
-                                        'ds2'])
-        self.req = mc.get('requires', {})
+        th = tc['thresholds']
+        # close comparisons: |ln B| < seed_band * error between the two best
+        # models -> more PolyChord runs (other seeds), up to seed_max_runs
+        self.seed_band = th.get('seed_band', 2.0)
+        self.seed_max_runs = th.get('seed_max_runs', 1)
         self.PROF = {}          # label -> (fine grid, interpolated chi2)
         self.PROF_FITS = {}     # label -> {r of the grid: ML fit}
 
-        # ── final model and candidate from the tree ───────────────────────
+        # ── final model and candidates from the tree ──────────────────────
         # conclusion_tree.json: written by run_tree.py (conclusion.json then
         # becomes the final one of the scheme)
         c = os.path.join(tree_dir, 'conclusion_tree.json')
         concl = json.load(open(c if os.path.isfile(c) else
                                os.path.join(tree_dir, 'conclusion.json')))
-        self.ev = json.load(open(os.path.join(tree_dir, 'decision_log.json')))
+        ev = json.load(open(os.path.join(tree_dir, 'decision_log.json')))
         M0 = model_from_label(concl['model'])
-        cands = [e['model'] for e in self.ev if e['node'] == 'fit' and
-                 'M_1,r' in e.get('question', '') and
-                 e.get('model', '').endswith('_r')]
-        M1c = model_from_label(cands[-1]) if cands else None
-        if M1c is None or M1c.moments <= M0.moments:
-            # the tree found no new moment to try (nothing detected in
-            # Res_r0): no candidate, the result is the profile of M_0,r
-            M1c = None
-        else:
-            # the candidate may have been tried on an earlier model: only its
-            # new groups are added to the final model (with the same pruning),
-            # so that M_0 is nested in M_0 + C
-            newg = M1c.moments - M0.moments
-            amps_new = {amp_name(p, sp) for _, p, sp in group_spectra(newg)}
-            M1c = Model(M0.moments | newg, True,
-                        M0.off | (M1c.off & amps_new))
-        self.M0, self.M1c = M0, M1c
+        self.M0 = M0
+        self.cands = [(g, M0.apply(g).without(off))
+                      for g, off in res_r0_candidates(ev)
+                      if g not in M0.moments]
         cfg = yaml.safe_load(open(os.path.join(tree_dir, f'{M0.label}_PC',
                                                'config.yml')))
         names = free_param_names(cfg['BBCompSep'])
@@ -154,6 +136,7 @@ class ProfileScheme:
         # Bayesian part (tree): ML best fit and posterior (PolyChord) of M_0,r
         z = np.load(os.path.join(tree_dir, f'{M0.label}_ML', 'chi2.npz'))
         self.bayes = dict(model=M0.label,
+                          conclusion=concl.get('conclusion'),
                           best_fit={str(n): float(v) for n, v in
                                     zip(z['names'], np.atleast_1d(z['params']))},
                           chi2_ml=float(z['chi2']),
@@ -163,9 +146,9 @@ class ProfileScheme:
                                 self.med + 3 * self.sig, n)
         self.step = self.grid[1] - self.grid[0]
         name = name or os.path.basename(os.path.normpath(out))
-        self.log.info(f"==> {name}: final model {M0.label}, Bayesian r = "
-                      f"{self.med:.4f} +- {self.sig:.4f}; candidate: "
-                      f"{M1c.label if M1c else 'none'}")
+        self.log.info(f"==> {name}: final model of the tree {M0.label}, "
+                      f"Bayesian r = {self.med:.4f} +- {self.sig:.4f}; "
+                      f"candidates: {[g for g, _ in self.cands] or 'none'}")
 
         # prior of the tree on r (tophat) for the posterior with the profile
         # as the likelihood
@@ -346,228 +329,120 @@ class ProfileScheme:
 
     def local_logz(self, M, base, free, tag):
         """Evidence of M around the best fit `base` (r fixed): free only the
-        parameters in `free`; if none is free, -chi2/2."""
+        parameters in `free` (T_d too if it is in `free`, also without the
+        dT moments); if none is free, -chi2/2 (error 0).
+        Returns (ln Z, error)."""
         fixed = {k: v for k, v in base.best.items() if k not in free}
+        free_temp = 'temp_d' in free
         cs = build_config(self.R.base, M.with_r(False), 'polychord',
-                          fixed)['BBCompSep']
+                          fixed, free_temp=free_temp)['BBCompSep']
         if not free_param_names(cs):
-            return -0.5 * base.chi2
-        return self.R.polychord(M.with_r(False), tag, fixed=fixed,
-                                centers=base.best)[0]
+            return -0.5 * base.chi2, 0.
+        lz, lzerr = self.R.polychord(M.with_r(False), tag, fixed=fixed,
+                                     centers=base.best,
+                                     free_temp=free_temp)[:2]
+        return lz, lzerr
 
-    def null_logz(self, base, group, tag):
-        """Evidence of the null: base, amplitudes of the group at zero, free
-        only the spectral parameters of the group present in the model."""
-        free = set(MOMENT_GROUPS[cand_group(group)]['free'])
-        fixed = {k: v for k, v in base.best.items() if k not in free}
-        cs = build_config(self.R.base, base.model, 'polychord',
-                          fixed)['BBCompSep']
-        if not free_param_names(cs):
-            return -0.5 * base.chi2
-        logZ, _, _, _, _ = self.R.polychord(base.model, tag, fixed=fixed,
-                                            centers=base.best)
-        return logZ
+    def settle_close(self, comparison, runs):
+        """
+        If the two best models are within seed_band errors of each other,
+        their local evidences are repeated with other seeds (first the one
+        with fewer runs; ln Z = mean of the runs, error = sqrt(sum err^2) /
+        N) until they separate or seed_max_runs is reached. Only reduces the
+        numerical error of PolyChord.
+        """
+        while len(comparison) > 1:
+            top = sorted(comparison, key=lambda k: -comparison[k]['logZ'])[:2]
+            a, b = comparison[top[0]], comparison[top[1]]
+            err = float(np.hypot(a['logZerr'], b['logZerr']))
+            if err == 0 or a['logZ'] - b['logZ'] >= self.seed_band * err:
+                return
+            n = {k: len(runs[k][3]) for k in top}
+            k = min(top, key=lambda k: n[k])
+            if n[k] >= self.seed_max_runs:
+                return
+            M, base, free, lzs, errs = runs[k]
+            self.log.info(f"    ln B = {a['logZ'] - b['logZ']:.2f} +- "
+                          f"{err:.2f} between {top[0]} and {top[1]}: "
+                          f"PolyChord rerun {n[k] + 1}/{self.seed_max_runs}"
+                          f" of {k}")
+            lz, lzerr = self.local_logz(M, base, free,
+                                        f'loc_{M.label}_rep{n[k] + 1}')
+            lzs.append(lz)
+            errs.append(lzerr)
+            comparison[k].update(
+                logZ=float(np.mean(lzs)),
+                logZerr=float(np.sqrt(np.sum(np.square(errs))) / len(lzs)),
+                logZ_runs=list(lzs))
 
     # ── the scheme ────────────────────────────────────────────────────────
     def run(self):
         """Runs the scheme, writes result.json in `out` and returns it."""
-        log, F, R = self.log, self.F, self.R
-        M0, M1c, med, sig = self.M0, self.M1c, self.med, self.sig
-        prof, summary, base_at = self.prof, self.summary, self.base_at
-        # if M_1,0 was preferred over M_0,r in the tree, the best model found
-        # is M_1 (same model with r free): start from there, without
-        # candidate, and Res_wr* is done at the minimum of its profile; if
-        # nothing else enters, the result is its profile
-        m10 = [e for e in self.ev if e['node'] == 'pref' and 'M_1,0' in
-               e.get('question', '') and e.get('answer') == 'Yes']
-        if self.ignore_m10:
-            m10 = []
-        cur, cand = M0, M1c
-        rejected = set()          # groups already rejected as candidates
-        n_it = self.max_it
-        if not m10 and M1c is None:
-            log.node('start', 'no new moment found by the tree (nothing '
-                     'detected in Res_r0): no candidate, result from the '
-                     'profile of M_0,r', M0.label)
-            n_it = 0
-        if m10:
-            cur = model_from_label(m10[-1]['question'].split('(')[1]
-                                   .split(')')[0]).with_r(True)
-            cand = None
-            log.node('adopt', f'M_1,0 was preferred in the tree (ln B = '
-                     f'{m10[-1].get("lnB", float("nan")):+.2f}): start from '
-                     'M_1', cur.label)
-        for it in range(1, n_it + 1):
-            if cand is None:
-                fine, cf, r_k = prof(cur, f'it{it}')
-                log.info(f"\n==> iteration {it}: model {cur.label}, no "
-                         f"candidate, r_{it} = {r_k:.4f} (minimum of its "
-                         "profile)")
-                log.node('profile', f'profile of {cur.label} -> r_{it}',
-                         f'{r_k:.4f}', r_bayes_tree=med, sigma_bayes_tree=sig,
-                         **summary(fine, cf))
-                try:
-                    base = base_at(cur, r_k, f'ml_{cur.label}_r{it}')
-                except NoValidStart as err:
-                    log.node('resid', 'Res_wr*: no valid ML start at r_k',
-                             'stop', reason=str(err))
-                    break
-                return_to_res = True
-            else:
-                return_to_res = False
-            if not return_to_res:
-                g_c = new_group(cand, cur)
-                # 2. profile of the current model + candidate -> r_k
-                try:
-                    fine, cf, r_k = prof(cand, f'it{it}')
-                except NoValidStart as err:
-                    # candidate that cannot be fitted (moment constraints):
-                    # rejected
-                    rejected.add(g_c)
-                    log.node('profile', f'profile of {cand.label}',
-                             'unfittable', reason=str(err))
-                    log.node('stop', f'candidate {g_c} cannot be fitted: '
-                             'stop, no search for further moments', cur.label)
-                    break
-                log.info(f"\n==> iteration {it}: model {cur.label}, "
-                         f"candidate {g_c} ({cand.label}), r_{it} = "
-                         f"{r_k:.4f}")
-                log.node('profile', f'profile of {cand.label} -> r_{it}',
-                         f'{r_k:.4f}', r_bayes_tree=med, sigma_bayes_tree=sig,
-                         **summary(fine, cf))
-                # 3. comparison: each model around its own ML best fit, each
-                #    with its own r; free only its moments (amplitudes,
-                #    slopes) and their betas. The current model at its best:
-                #    r at the minimum of its profile
-                _, _, r_cur = prof(cur, f'cur{it}')
+        log, R = self.log, self.R
+        M0, med, sig = self.M0, self.med, self.sig
 
-                # the SAME betas free in the two models (those of the groups
-                # of the candidate, which contains the current model): the
-                # difference is only in the moment spectra, the Occam factor
-                # of the betas cancels
-                betas = set().union(*(MOMENT_GROUPS[g]['free']
-                                      for g in cand.moments)) \
-                    if cand.moments else set()
-                free1 = moment_spectra(cand) | betas
-                free0 = moment_spectra(cur) | betas
-                b0 = b1 = None
+        # 2-3. every model at its own r, local evidences, the best one wins
+        final, comparison, runs = M0, {}, {}
+        if self.cands:
+            models = [M0] + [M for _, M in self.cands]
+            for M in models:
                 try:
-                    b0 = base_at(cur, r_cur, f'ml_{cur.label}_rcur{it}')
-                    b1 = base_at(cand, r_k, f'ml_{cand.label}_r{it}')
-                    lz1 = self.local_logz(cand, b1, free1,
-                                          f'loc_{cand.label}_r{it}')
-                    lz0 = self.local_logz(cur, b0, free0,
-                                          f'loc_{cur.label}_r{it}')
-                    lnb_full = lz1 - lz0
+                    fine, cf, r_m = self.prof(M, M.label)
+                    base = self.base_at(M, r_m, f'ml_{M.label}_rmin')
+                    free = moment_spectra(M) | BETAS | set().union(
+                        *(MOMENT_GROUPS[g]['free'] for g in M.moments))
+                    lz, lzerr = self.local_logz(M, base, free,
+                                                f'loc_{M.label}')
                 except NoValidStart as err:
-                    log.node('pref', f'{cand.label} at r_{it}', 'unfittable',
-                             reason=str(err))
-                    lnb_full, lz1, lz0 = -np.inf, None, None
-                ok = lnb_full > self.lnb_full
-                log.node('pref', f'Each model at its own ML point '
-                         f'({cand.label}: r = {r_k:.4f}; {cur.label}: r = '
-                         f'{r_cur:.4f}), is {cand.label} preferred?',
-                         'Yes' if ok else 'No', lnB=lnb_full,
-                         r_cand=r_k, r_cur=r_cur, logZ_cand=lz1,
-                         logZ_cur=lz0, free_cand=sorted(free1),
-                         free_cur=sorted(free0),
-                         chi2_ml_cur=b0.chi2 if b0 else None,
-                         chi2_ml_cand=b1.chi2 if b1 else None)
-                if ok:
-                    cur, base = cand, b1
-                    log.node('adopt', f'{g_c} enters the model', cur.label)
-                else:
-                    # candidate rejected: stop (no Res_wr*), the result is
-                    # the profile of the current model
-                    rejected.add(g_c)
-                    if not self.no_stop:
-                        log.node('stop', f'candidate {g_c} rejected: stop, '
-                                 'no search for further moments', cur.label)
-                        break
-                    # diagnostic: Res_wr* on the current model refitted at
-                    # r = r_k
-                    try:
-                        base = base_at(cur, r_k, f'ml_{cur.label}_r{it}')
-                    except NoValidStart as err:
-                        log.node('resid', 'Res_wr*: no valid ML start at r_k',
-                                 'stop', reason=str(err))
-                        break
-            # 4. Res_wr*: each group g is tested at ITS OWN r: r_g = minimum
-            #    of the profile of (current model + g); residuals of the
-            #    current model refitted at r = r_g; HPD screening, then
-            #    evidence against the null at the same point
-            groups = [g for g in candidate_groups(cur.with_r(False),
-                                                  self.groups,
-                                                  extra_requires=self.req)
-                      if g not in rejected]
-            passed = []
-            for g in groups:
-                Mg = cur.apply(g)
-                try:
-                    fg_, cg_, r_g = prof(Mg, f'g{it}_{g}')
-                    base_g = base_at(cur, r_g, f'ml_{cur.label}_r{it}_{g}')
-                    rr = F.residual_test(base_g, g)
-                except (NoValidStart, ValueError) as err:
-                    log.node('resid_fit', f'Res_wr*: {g}', 'unfittable',
+                    log.node('compare', f'{M.label}', 'unfittable',
                              reason=str(err))
                     continue
-                where = f'Res_wr* (r = r_{g} = {r_g:.4f}, minimum of the ' \
-                        f'profile of {Mg.label}): moment {g} on the ' \
-                        f'residuals of {cur.label}'
-                if not rr.detected:
-                    log.node('resid_fit', where, 'not detected (HPD)',
-                             r_g=r_g,
-                             hpd68={k: list(v) for k, v in rr.hpd.items()})
-                    continue
-                lz0 = self.null_logz(base_g, g, f'null_{it}_{g}')
-                lnb = rr.logZ - lz0
-                okr = lnb > self.lnb_res
-                log.node('resid_fit', where, 'passes' if okr else 'rejected',
-                         r_g=r_g, lnB_vs_null=lnb, logZ=rr.logZ,
-                         logZ_null=lz0,
-                         hpd68={k: list(v) for k, v in rr.hpd.items()})
-                if okr:
-                    passed.append((lnb, g, rr))
-            if not passed:
-                log.node('resid', 'Res_wr*: any new moment?', 'No')
-                break
-            lnb, g, rr = max(passed, key=lambda x: x[0])
-            cand = cur.apply(g).without(rr.off)
-            log.node('resid', 'Res_wr*: any new moment?', 'Yes',
-                     new_candidate=cand.label, lnB_vs_null=lnb)
+                runs[M.label] = (M, base, free, [lz], [lzerr])
+                comparison[M.label] = dict(r_min=r_m, logZ=lz,
+                                           logZerr=lzerr, chi2_ml=base.chi2)
+                log.node('compare', f'{M.label} at its own r = {r_m:.4f}',
+                         f'ln Z = {lz:.2f}', r_min=r_m, logZ=lz,
+                         logZerr=lzerr, chi2_ml=base.chi2, free=sorted(free),
+                         **self.summary(fine, cf))
+            self.settle_close(comparison, runs)
+            best = max(comparison, key=lambda k: comparison[k]['logZ'])
+            final = next(M for M in models if M.label == best)
+            log.node('final', 'model with the highest evidence (each at its '
+                     'own r)', final.label,
+                     lnB_vs_tree={k: v['logZ'] - comparison[M0.label]['logZ']
+                                  for k, v in comparison.items()}
+                     if M0.label in comparison else None)
         else:
-            if n_it:
-                log.node('stop', 'max iterations reached', 'stop',
-                         max_it=self.max_it)
+            log.node('final', 'no candidates from Res_r0: the final model is '
+                     'the one of the tree', M0.label)
 
-        # ── result: profile of the last model (the old M_0,r if nothing
-        #    entered), with the profile as the likelihood ────────────────────
-        fine, cf, r_fin = prof(cur, 'final')
-        # other parameters: Bayesian posterior of the final model conditioned
-        # on r = r* (minimum of its profile), everything else free
-        bf = base_at(cur, r_fin, f'ml_{cur.label}_final')
-        pn, ps = R.emcee(cur.with_r(False), f'post_{cur.label}_rstar',
+        # 4. result: profile of the final model, as the likelihood of r
+        fine, cf, r_fin = self.prof(final, final.label)
+        # 5. other parameters: Bayesian posterior of the final model
+        # conditioned on r = r_min (minimum of its profile)
+        bf = self.base_at(final, r_fin, f'ml_{final.label}_final')
+        pn, ps = R.emcee(final.with_r(False), f'post_{final.label}_rstar',
                          fixed={'r_tensor': r_fin}, centers=bf.best)
         params = post_summary(pn, ps)
-        log.node('post', f'posterior of the other parameters of {cur.label} '
-                 f'at r = r* = {r_fin:.4f} (emcee)', 'ok',
+        log.node('post', f'posterior of the other parameters of {final.label}'
+                 f' at r = r_min = {r_fin:.4f} (emcee)', 'ok',
                  **{f'{n}_med': v['med'] for n, v in params.items()})
-        res = dict(rule='profile scheme (Res_wr*)', model_tree=M0.label,
-                   model_final=cur.label,
-                   first_candidate=M1c.label if M1c else None,
-                   start=('M_1 (M_1,0 preferred)' if m10 else
-                          'M_0,r + candidate' if M1c else
-                          'M_0,r, no candidate'),
-                   rejected=sorted(rejected),
+        res = dict(rule='profile scheme (every model at its own r)',
+                   model_tree=M0.label, model_final=final.label,
+                   candidates=[g for g, _ in self.cands],
+                   comparison=comparison,
+                   start='candidates from Res_r0' if self.cands
+                   else 'no candidates',
+                   rejected=sorted(g for g, M in self.cands
+                                   if M.label != final.label),
                    r_bayes_tree=med, sigma_bayes_tree=sig,
-                   **summary(fine, cf),
+                   **self.summary(fine, cf),
                    r_star_final=r_fin, best_fit_at_rstar=dict(bf.best),
                    chi2_at_rstar=float(bf.chi2), params_at_rstar=params,
                    bayes=self.bayes)
-        # final decision, as in the tree but with the posterior from the
-        # profile (prior of the tree on r): 0 inside the central 3 sigma
-        # interval -> upper limit (r_95 with r >= 0), otherwise detection
-        # (median and 68%)
+        # 6. decision, as in the tree but with the posterior from the profile
+        # (prior of the tree on r): 0 inside the central 3 sigma interval ->
+        # upper limit (r_95 with r >= 0), otherwise detection (median, 68%)
         ul = res['r_lo3_pl'] <= 0.0 <= res['r_hi3_pl']
         res['conclusion'] = 'upper_limit' if ul else 'r_detection'
         log.node('r3sigma', 'Is r compatible with zero at 3 sigma (profile '
@@ -580,7 +455,7 @@ class ProfileScheme:
                  res['conclusion'],
                  **{k: v for k, v in res.items()
                     if k not in ('params_at_rstar', 'best_fit_at_rstar',
-                                 'bayes')})
+                                 'bayes', 'comparison')})
         json.dump(res, open(os.path.join(self.out, 'result.json'), 'w'),
                   indent=2)
         return res

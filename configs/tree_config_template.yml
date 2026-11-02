@@ -20,18 +20,17 @@ thresholds:
     # "Is model X preferred over Y?"  ->  ln B = lnZ_X - lnZ_Y > lnB_preferred
     # (Jeffreys/Trotta scale: 1 weak, 2.5 moderate, 5 strong)
     lnB_preferred: 0.0
+    # Pruning: the model without the undetected moment amplitudes is kept if
+    # ln B(pruned vs full) > lnB_prune
+    lnB_prune: 0.0
     # Moment detected in the residuals: zero outside the HPD interval
     # (fraction hpd_frac) of at least one amplitude of the group's spectra
     hpd_frac: 0.68
-    # Frequentist branch (profile likelihood, only without profile_scheme):
-    # M*_1 preferred over M*_0 if the likelihood-ratio test gives
-    # p-value < lrt_alpha
-    lrt_alpha: 0.05
     # Borderline comparisons: if |ln B - threshold| < seed_band * error,
     # PolyChord is repeated with other seeds (mean of ln Z), up to
     # seed_max_runs runs per fit
     seed_band: 2.0
-    seed_max_runs: 1
+    seed_max_runs: 3
 
 moments:
     # Moment groups tested in the residuals (see MOMENT_GROUPS in
@@ -51,19 +50,10 @@ emcee:
     n_iters: 2000
     burn_frac: 0.5
 
-profile:
-    # r grid of the profile likelihood of the frequentist branch
-    r_min: -0.01
-    r_max: 0.04
-    n_r: 21
-
 profile_scheme:
-    # thresholds of Res_wr* and of the candidate comparison, points of the
-    # initial profile grid, maximum iterations (see bbsure/profile_scheme.py)
-    lnb_res: 0.0
-    lnb_full: 0.0
+    # points of the initial grid of the profiles in r (see
+    # bbsure/profile_scheme.py)
     n: 37
-    max_it: 4
 
 polychord:
     # nlive and nrepeat proportional to the free parameters of each run:
@@ -88,13 +78,8 @@ run:
     # Maximum iterations of the loop (every time a more complex model is
     # adopted the tree restarts from "is chi2 good?")
     max_iterations: 5
-    # Profile scheme after the tree (no frequentist branch: if M_1,0 is
-    # preferred the tree goes to the 3 sigma test and the scheme starts from
-    # M_1). With false, the frequentist branch of the original flowchart.
+    # Profile scheme after the tree: the families detected in the last
+    # Res_r0 are compared at their own r (false: the tree alone)
     profile_scheme: true
-    # Frequentist branch only: if M*_1,r wins the flowchart goes back to the
-    # top.  true -> M_1,r becomes the reference model; false -> M_0,r stays
-    # the reference and the tree goes to the 3 sigma test
-    frequentist_replaces_baseline: true
     # Reuse the fits already done (same config) instead of rerunning them
     reuse_runs: true

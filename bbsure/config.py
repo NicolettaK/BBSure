@@ -73,12 +73,13 @@ def _center(p):
 
 
 def build_config(base, model: Model, sampler, fixed=None, centers=None,
-                 settings=None):
+                 settings=None, free_temp=False):
     """
     Variant of the base config for a given model.
 
     Moment spectra of the groups that are off: amplitude fixed to 0 and slope
-    to its central value. T_d fixed to its central value without dT.
+    to its central value. T_d fixed to its central value without dT (unless
+    free_temp).
 
     fixed    : {param: value} to fix (e.g. blocks at the best fit)
     centers  : {param: value} new central values of the tophats (starting
@@ -106,7 +107,7 @@ def build_config(base, model: Model, sampler, fixed=None, centers=None,
             entries[al][1:] = ['fixed', [_center(entries[al])]]
 
     tname, tgroup = TEMP_PARAM
-    if tname in entries and tgroup not in model.moments:
+    if tname in entries and tgroup not in model.moments and not free_temp:
         entries[tname][1:] = ['fixed', [_center(entries[tname])]]
 
     if not model.r_free:

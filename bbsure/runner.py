@@ -207,13 +207,16 @@ class BBCompSepRunner:
         chi2 = float(z['chi2']) - gaussian_prior_chi2(cfg['BBCompSep'], best)
         return FitResult(model, tag, names, best, chi2, int(z['ndof']))
 
-    def polychord(self, model, tag, fixed=None, centers=None):
+    def polychord(self, model, tag, fixed=None, centers=None,
+                  free_temp=False):
         """
         Evidence and posterior (equal weights) with PolyChord (random seed:
         a different tag, e.g. _rep2, gives an independent run).
+        free_temp: T_d free also without the dT moments.
         Returns logZ, logZerr, names, samples [nsamp, npar], -2lnL.
         """
-        cfg = build_config(self.base, model, 'polychord', fixed, centers)
+        cfg = build_config(self.base, model, 'polychord', fixed, centers,
+                           free_temp=free_temp)
         names = free_param_names(cfg['BBCompSep'])
         cfg['BBCompSep'].update(self.pc_settings(len(names)))
         d = self._run(tag, cfg, os.path.join('polychord', 'pch.stats'))

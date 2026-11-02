@@ -9,9 +9,11 @@ node, whether the data need moments of the foreground SEDs (moment
 expansion in the formalism of
 [Vacher et al. 2022](https://arxiv.org/abs/2111.07742), with a power law in
 ell for each moment spectrum), until it reaches an upper limit on r or an r
-detection. The profile scheme then rechecks the moment candidates at their
-own value of r, to reduce the degeneracy between moments and r, and gives
-the final posterior of r from the profile likelihood.
+detection. The moments are searched with r = 0, where they have the most
+room; the profile scheme then compares the candidates found there with every
+model at its own value of r (the minimum of its profile likelihood), to
+reduce the degeneracy between moments and r, and gives the final posterior
+of r from the profile likelihood.
 
 The flowcharts are in `docs/flowcharts/`:
 `decision_tree_v3_profile` (Bayesian tree) and `profile_scheme_nersc`
@@ -60,9 +62,8 @@ tree.
 The tree config (`configs/tree_config_template.yml`) sets the thresholds
 (PTE, ln B, HPD fraction), the moment groups tested, PolyChord and emcee
 settings, and `run: profile_scheme: true` to run the profile scheme after
-the tree (with `false`, the tree uses the frequentist branch of the
-original flowchart). The BBPower config (`configs/base_config_tree.yml`)
-holds the model and the priors of all the parameters, moments included.
+the tree (with `false`, the tree alone). The BBPower config
+(`configs/base_config_tree.yml`) holds the model and the priors of all the parameters, moments included.
 
 Output of a tree (in `runs_dir`): `decision_log.{txt,json}` (every node
 with question, answer and numbers), `conclusion.json` (final result:

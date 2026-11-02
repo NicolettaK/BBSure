@@ -3,7 +3,7 @@
 Profile scheme on a concluded tree (see bbsure/profile_scheme.py).
 
   python scripts/run_profile.py --config tree_config.yml --tree-dir <runs_dir>
-         --out <dir> [--lnb-res 0] [--lnb-full 0] [--n 37] [--max-it 4]
+         --out <dir> [--n 37]
 
 or, on the layout of the validation (nersc/):
 
@@ -31,19 +31,11 @@ def main():
     ap.add_argument('--config', help='tree_config of the tree')
     ap.add_argument('--tree-dir', help='runs_dir of the concluded tree')
     ap.add_argument('--out', dest='out_dir', help='output directory')
-    ap.add_argument('--lnb-res', type=float, default=0.0)
-    ap.add_argument('--lnb-full', type=float, default=0.0)
-    ap.add_argument('--n', type=int, default=37)
-    ap.add_argument('--max-it', type=int, default=4)
+    ap.add_argument('--n', type=int, default=37,
+                    help='points of the initial profile grid')
     ap.add_argument('--nproc', type=int,
                     default=int(os.environ.get('PROFILE_NPROC', 8)),
                     help='profile points fitted in parallel (one ML each)')
-    ap.add_argument('--no-stop', action='store_true',
-                    help='diagnostic: after a rejected candidate still run '
-                         'Res_wr* on all the other groups')
-    ap.add_argument('--ignore-m10', action='store_true',
-                    help='test: ignore M_1,0 preferred in the tree '
-                         '(detection path)')
     a = ap.parse_args()
 
     if a.config:
@@ -57,9 +49,7 @@ def main():
         cfg_path = os.path.join(src, 'tree_config.yml')
 
     tc = yaml.safe_load(open(cfg_path))
-    ProfileScheme(tc, tree, out, n=a.n, nproc=a.nproc, lnb_res=a.lnb_res,
-                  lnb_full=a.lnb_full, max_it=a.max_it, no_stop=a.no_stop,
-                  ignore_m10=a.ignore_m10, name=name).run()
+    ProfileScheme(tc, tree, out, n=a.n, nproc=a.nproc, name=name).run()
 
 
 if __name__ == '__main__':
