@@ -169,7 +169,13 @@ class DecisionTree:
         """
         found = []
         for g in groups:
-            rr = self.F.residual_test(base, g)
+            try:
+                rr = self.F.residual_test(base, g)
+            except NoValidStart as err:
+                self.log.node('unfittable', f'{name}: {g} cannot be fitted '
+                              'with the moment constraints, skipped',
+                              'skipped', reason=str(err))
+                continue
             hpd = {a: list(v) for a, v in rr.hpd.items()}
             self.log.node('resid_fit', f'{name}: moment {g} on the residuals '
                           f'of {base.model.label} ({which})',

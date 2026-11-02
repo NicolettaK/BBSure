@@ -19,6 +19,15 @@ from .config import build_config, free_param_names, gaussian_prior_chi2
 from .paths import load_yaml
 from .stats import FitResult
 
+
+class NoValidStart(RuntimeError):
+    """No point with finite likelihood (constraints on the moments)."""
+
+
+class NoLivePoints(NoValidStart):
+    """PolyChord could not generate its live points: the region of the
+    prior allowed by the moment constraints is too small."""
+
 # ── BBCompSep in the same process (fast fits) ────────────────────────────
 # Launching `python -m bbpower` costs the Python start-up, the imports and
 # the reading of the spectra at every fit (~4 s on a laptop, ~50 s at NERSC),
@@ -167,8 +176,24 @@ class BBCompSepRunner:
                       f"{f', {nproc} MPI procs' if sampler == 'polychord' and nproc > 1 else ''})")
         t0 = time.time()
         log_path = os.path.join(d, 'stdout.log')
+        stuck = os.path.join(d, 'no_live_points')
+        if sampler == 'polychord' and os.path.isfile(stuck) \
+                and open(stuck).read() == h:
+            raise NoLivePoints(f"{tag}: no live points (already found)")
         with open(log_path, 'w') as out:
-            ret = subprocess.run(cmd, stdout=out, stderr=subprocess.STDOUT)
+            if sampler == 'polychord':
+                ret = self._polychord_proc(cmd, out, log_path)
+            else:
+                ret = subprocess.run(cmd, stdout=out,
+                                     stderr=subprocess.STDOUT)
+        if ret is None:
+            # the live points were never all generated: the prior volume
+            # allowed by the moment constraints is too small
+            with open(stuck, 'w') as f:
+                f.write(h)
+            raise NoLivePoints(f"{tag}: live points not generated in "
+                               f"{self.pc_cfg.get('start_timeout', 1800)} s "
+                               "(moment constraints)")
         if (ret.returncode != 0 and sampler == 'polychord' and nproc > 1
                 and 'Finished sampling' not in open(log_path).read()):
             # MPI does not start (PMIx, no network) or crashes half way
@@ -193,6 +218,32 @@ class BBCompSepRunner:
             f.write(h)
         self.log.info(f"          done in {time.time() - t0:.0f} s")
         return d
+
+    def _polychord_proc(self, cmd, out, log_path):
+        """
+        PolyChord as a subprocess; killed (returns None) if the live points
+        are not all generated within polychord: start_timeout seconds
+        (default 1800): with the moment constraints almost all the prior
+        samples can be rejected, and the generation never ends.
+        """
+        timeout = float(self.pc_cfg.get('start_timeout', 1800))
+        p = subprocess.Popen(cmd, stdout=out, stderr=subprocess.STDOUT)
+        t0 = time.time()
+        while p.poll() is None:
+            time.sleep(10)
+            if time.time() - t0 < timeout:
+                continue
+            out.flush()
+            if 'all live points generated' in open(log_path).read():
+                return p.wait()
+            p.terminate()
+            try:
+                p.wait(60)
+            except subprocess.TimeoutExpired:
+                p.kill()
+                p.wait()
+            return None
+        return p.returncode
 
     def ml(self, model, tag, fixed=None, centers=None):
         """Maximum likelihood: best fit and chi2 (without Gaussian priors)."""
