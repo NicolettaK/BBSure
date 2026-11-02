@@ -45,7 +45,11 @@ def collect_tree(root, unblind=False, tree='tree'):
         row = dict(index=i, kind=kind,
                    sky='d9s4' if kind == 'd9s4' else sky[i],
                    status='running/failed')
-        f = os.path.join(d, tree, 'conclusion.json')
+        # the tree alone: conclusion_tree.json when the profile scheme
+        # followed it (conclusion.json is then the one of the scheme)
+        f = os.path.join(d, tree, 'conclusion_tree.json')
+        if not os.path.isfile(f):
+            f = os.path.join(d, tree, 'conclusion.json')
         if os.path.isfile(f):
             c = json.load(open(f))
             row.update(status='done', conclusion=c['conclusion'],

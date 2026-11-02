@@ -37,9 +37,12 @@ def main():
     for k, v in result.items():
         log.info(f"    {k:<18} {fmt(v)}")
     runs_dir = tc['paths']['runs_dir']
-    with open(os.path.join(runs_dir, 'conclusion.json'), 'w') as f:
-        json.dump(result, f, indent=2, default=json_default)
+    # conclusion.json only at the very end (nersc/run_one.sh skips the sets
+    # that have it): with the profile scheme the tree goes in
+    # conclusion_tree.json, so an interrupted scheme is restarted
     if not tc['run'].get('profile_scheme', False):
+        with open(os.path.join(runs_dir, 'conclusion.json'), 'w') as f:
+            json.dump(result, f, indent=2, default=json_default)
         return
 
     # ── profile scheme on the concluded tree (run_profile.py) ─────────────
