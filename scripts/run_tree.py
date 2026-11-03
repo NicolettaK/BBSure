@@ -77,6 +77,10 @@ def main():
         undecided_profile=prof.get('undecided', False),
         undecided_choices=dict(tree=result.get('undecided_choices', []),
                                profile=prof.get('undecided_choices', [])),
+        # final model with PTE < pte_flag: it does not describe the data
+        # well (e.g. a foreground outside the moment families)
+        low_pte_tree=result.get('low_pte', False),
+        low_pte_profile=prof.get('low_pte', False),
         # Bayesian part: model chosen by the tree, ML best fit, posterior
         # (PolyChord) of all the parameters, conclusion of the tree
         bayesian=dict(prof['bayes'], conclusion=result.get('conclusion')),

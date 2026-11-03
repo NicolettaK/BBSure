@@ -168,6 +168,15 @@ def main():
           res['conclusion'] == 'upper_limit' and res['model'] == M0
           and ('r1sigma', 'Yes') in path)
 
+    check("  good chi2: no low-PTE flag", not res['low_pte'])
+
+    # 1b. PTE 0.02: chi2 accepted (> pte_min 0.01) but flagged (< 0.05)
+    from scipy import stats as st
+    res, path, _ = run({'chi2': {M0: float(st.chi2.isf(0.02, NDATA - 9))}})
+    check("PTE 0.02: accepted as good, but low PTE flagged",
+          ('chi2', 'Yes') in path and res['low_pte']
+          and abs(res['pte'] - 0.02) < 1e-6)
+
     # 2. r at 2 sigma, nothing in Res_wr nor in Res_r0 -> 3 sigma ok
     res, path, F = run({'r': {M0: (0.006, 0.003)}})
     check("nothing in Res_wr and Res_r0 -> 3 sigma -> upper limit",

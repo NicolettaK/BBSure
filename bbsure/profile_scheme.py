@@ -160,6 +160,8 @@ class ProfileScheme:
         # models -> more PolyChord runs (other seeds), up to seed_max_runs
         self.seed_band = th.get('seed_band', 2.0)
         self.seed_max_runs = th.get('seed_max_runs', 1)
+        # final model with PTE < pte_flag (at r = r_min): flagged
+        self.pte_flag = th.get('pte_flag', 0.05)
         self.PROF = {}          # label -> (fine grid, interpolated chi2)
         self.PROF_FITS = {}     # label -> {r of the grid: ML fit}
 
@@ -525,6 +527,8 @@ class ProfileScheme:
                    r_star_final=r_fin, best_fit_at_rstar=dict(bf.best),
                    chi2_at_rstar=float(bf.chi2), params_at_rstar=params,
                    undecided=bool(undecided), undecided_choices=undecided,
+                   pte_at_rstar=bf.pte,
+                   low_pte=bool(bf.pte < self.pte_flag),
                    bayes=self.bayes)
         # 6. decision, as in the tree but with the posterior from the profile
         # (prior of the tree on r): 0 inside the central 3 sigma interval ->

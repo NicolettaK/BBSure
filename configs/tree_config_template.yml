@@ -17,6 +17,9 @@ paths:
 thresholds:
     # "Is chi2 good?"  ->  PTE > pte_min
     pte_min: 0.01
+    # final model with PTE < pte_flag: flagged in the results (the best
+    # model available does not describe the data well)
+    pte_flag: 0.05
     # "Is model X preferred over Y?"  ->  ln B = lnZ_X - lnZ_Y > lnB_preferred
     # (Jeffreys/Trotta scale: 1 weak, 2.5 moderate, 5 strong)
     lnB_preferred: 0.0

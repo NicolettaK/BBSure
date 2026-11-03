@@ -93,6 +93,9 @@ class DecisionTree:
         self.log = log
         th = tc['thresholds']
         self.pte_min = th['pte_min']
+        # final model with PTE < pte_flag: flagged in the conclusion (the
+        # best model available does not describe the data well)
+        self.pte_flag = th.get('pte_flag', 0.05)
         self.lnB_pref = th['lnB_preferred']
         # pruning: the model without the undetected spectra is kept if
         # ln B(pruned vs full) > lnB_prune
@@ -183,7 +186,7 @@ class DecisionTree:
                       max_iterations=self.max_it)
         M0, fit0 = self.prune(M0, self.F.full_fit(M0))
         return dict(conclusion='max_iterations', model=M0.label,
-                    **self.flags())
+                    **self.flags(fit0))
 
     # ── residual tests ────────────────────────────────────────────────────
     def residual_scan(self, base: FitResult, groups, name, which):
@@ -490,15 +493,16 @@ class DecisionTree:
         return dict(lnB_rfree_vs_r0=lb, lnB_err=lberr,
                     chi2_M00=fit00.chi2, pte_M00=fit00.pte)
 
-    def flags(self):
+    def flags(self, fit0):
         return dict(undecided=bool(self.undecided),
-                    undecided_choices=list(self.undecided))
+                    undecided_choices=list(self.undecided),
+                    pte=fit0.pte, low_pte=bool(fit0.pte < self.pte_flag))
 
     def conclude_upper_limit(self, M0, fit0):
         rs = fit0.r_summary()
         res = dict(conclusion='upper_limit', model=M0.label,
                    r_95=rs['r_95'], r_med=rs['r_med'],
-                   **self._fit_r0(M0, fit0), **self.flags())
+                   **self._fit_r0(M0, fit0), **self.flags(fit0))
         self.log.node('END', 'put an upper limit on r', 'upper limit', **res)
         return res
 
@@ -507,7 +511,7 @@ class DecisionTree:
         res = dict(conclusion='r_detection', model=M0.label,
                    r_med=rs['r_med'], r_lo1=rs['r_lo1'], r_hi1=rs['r_hi1'],
                    r_snr=rs['r_mean'] / rs['r_std'],
-                   **self._fit_r0(M0, fit0), **self.flags())
+                   **self._fit_r0(M0, fit0), **self.flags(fit0))
         self.log.node('END', 'You cannot get rid of your r detection!!! Be '
                       'careful and wait before organizing a press '
                       'conference!!!', 'r detection', **res)
