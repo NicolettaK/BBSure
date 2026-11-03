@@ -30,8 +30,11 @@ def main():
     tc = yaml.safe_load(open(args.config))
     os.makedirs(tc['paths']['runs_dir'], exist_ok=True)
     log = DecisionLog(tc['paths']['runs_dir'])
+    mc = tc.get('moments', {})
     fitter = Fitter(BBCompSepRunner(tc, log),
-                    hpd_frac=tc['thresholds'].get('hpd_frac', 0.68))
+                    hpd_frac=tc['thresholds'].get('hpd_frac', 0.68),
+                    residual_test=mc.get('residual_test', 'bayes'),
+                    lrt_p=mc.get('lrt_p', 0.3173))
     result = DecisionTree(tc, fitter, log).run()
     log.info("\n==> CONCLUSION")
     for k, v in result.items():

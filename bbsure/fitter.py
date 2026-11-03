@@ -7,6 +7,7 @@ import copy
 import re
 
 import numpy as np
+from scipy.stats import chi2 as chi2_dist
 
 from .config import iter_param_entries
 from .models import MOMENT_GROUPS, Model, cand_group
@@ -20,9 +21,14 @@ class Fitter:
     interface is used in tests/test_decision_tree.py.
     """
 
-    def __init__(self, runner: BBCompSepRunner, hpd_frac=0.68):
+    def __init__(self, runner: BBCompSepRunner, hpd_frac=0.68,
+                 residual_test='bayes', lrt_p=0.3173):
         self.R = runner
         self.hpd_frac = hpd_frac
+        # residual test: 'bayes' (emcee HPD, PolyChord evidence) or 'lrt'
+        # (likelihood ratio from two ML fits, detected if p < lrt_p)
+        self.residual_test_kind = residual_test
+        self.lrt_p = lrt_p
         self._cache = {}
 
     def full_fit(self, model: Model, centers=None) -> FitResult:
@@ -141,6 +147,8 @@ class Fitter:
         tag = f"resid_{base.model.label}_plus_{group}"
         bounds = self.prior_bounds(amps)
 
+        if self.residual_test_kind == 'lrt':
+            return self._residual_lrt(base, group, m, fixed, amps, tag)
         names, samp = self.R.emcee(m, tag + "_MC", fixed=fixed,
                                    centers=base.best)
         det, hpd = detection(names, samp, amps, self.hpd_frac, bounds)
@@ -161,3 +169,31 @@ class Fitter:
         best = dict(zip(names, map(float, samp[i])))
         return ResidualResult(group, det, hpd, logZ, logZerr, best,
                               stage='polychord', off=weak)
+
+    def _residual_lrt(self, base, group, m, fixed, amps, tag):
+        """
+        Likelihood-ratio residual test: ML fit of the group on the residuals
+        (everything else fixed as in the Bayesian test) against the base
+        best fit; Delta chi2 with k = number of new amplitudes degrees of
+        freedom, detected if p < lrt_p (0.3173: 1 sigma, the analogue of
+        zero outside the 68% HPD). No pruning of single spectra: the group
+        enters whole. Candidates ordered by log p.
+        """
+        res = self.R.ml(m, tag + "_ML", fixed=fixed, centers=base.best)
+        if not np.isfinite(res.chi2):
+            # start outside the moment constraints: amplitudes at zero
+            # except the first-order auto-spectra (as in screen_fit)
+            start = dict(base.best)
+            start.update({a: 0. for a in amps
+                          if not re.match(r'A_[ds]_(w10w10|w01w01)$', a)})
+            res = self.R.ml(m, tag + "_ML0", fixed=fixed, centers=start)
+        if not np.isfinite(res.chi2):
+            raise NoValidStart(f"no valid starting point for {tag}")
+        # nested models: a negative gain is a minimizer that did not move
+        dchi2 = max(base.chi2 - res.chi2, 0.)
+        k = len(amps)
+        logp = float(chi2_dist.logsf(dchi2, k))
+        return ResidualResult(group, bool(np.exp(logp) < self.lrt_p), {},
+                              best=dict(res.best), stage='lrt',
+                              dchi2=dchi2, pvalue=float(np.exp(logp)),
+                              rank=logp)

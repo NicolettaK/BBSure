@@ -142,7 +142,9 @@ def tree_items(ev):
                 g = re.search(r'moment (\S+) on', p['question'])
                 g = g.group(1) if g else '?'
                 s = f"  {g}: {p['answer']}"
-                if p['answer'] == 'detected' and p.get('logZ') is not None:
+                if p.get('stage') == 'lrt':
+                    s += f"  (Δχ² = {p['dchi2']:.1f}, p = {p['pvalue']:.2g})"
+                elif p['answer'] == 'detected' and p.get('logZ') is not None:
                     s += f"  (residual ln Z = {p['logZ']:.1f})"
                 lines.append(s)
             pending = []

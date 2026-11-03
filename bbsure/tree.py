@@ -185,7 +185,8 @@ class DecisionTree:
     def residual_scan(self, base: FitResult, groups, name, which):
         """
         Residual test for each group; returns the detected ones sorted by
-        decreasing evidence.
+        decreasing evidence (or significance, with the likelihood-ratio
+        test).
         """
         found = []
         for g in groups:
@@ -201,10 +202,11 @@ class DecisionTree:
                           f'of {base.model.label} ({which})',
                           'detected' if rr.detected else 'not detected',
                           stage=rr.stage, logZ=rr.logZ, logZerr=rr.logZerr,
+                          dchi2=rr.dchi2, pvalue=rr.pvalue,
                           pruned=list(rr.off), hpd68=hpd)
             if rr.detected:
                 found.append(rr)
-        found.sort(key=lambda rr: -rr.logZ)
+        found.sort(key=lambda rr: rr.rank)
         self.log.node('resid', f'{name}: is there any moment in the '
                       'residuals?', 'Yes' if found else 'No',
                       base=base.model.label,

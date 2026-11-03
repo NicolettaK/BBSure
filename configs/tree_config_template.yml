@@ -43,6 +43,13 @@ moments:
     # with the positivity a cross term requires the auto-spectra: ds1
     # (w1^beta_d x A_s, A_d x w1^beta_s) requires s
     requires: {ds1: ['s']}
+    # Residual test: bayes = emcee (zero outside the 68% HPD of an
+    # amplitude), confirmed by PolyChord, candidates ordered by the residual
+    # evidence; lrt = likelihood ratio of two ML fits, detected if
+    # p < lrt_p (Delta chi2, k = amplitudes of the group; 0.3173 = 1 sigma),
+    # ordered by p, no pruning of single spectra (much faster)
+    residual_test: bayes
+    lrt_p: 0.3173
 
 emcee:
     # Detection screening in the residual tests

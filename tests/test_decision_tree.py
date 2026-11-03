@@ -510,11 +510,44 @@ def main():
           and ('screen', 'M_d-d_w00w10_r') in F.calls
           and res['model'] == 'M_d-d_w00w10_r')
 
+    print("\nLikelihood-ratio residual test:")
+    test_lrt()
     print("\nGenerated BBCompSep configs:")
     test_configs()
     print("\nHPD and detection:")
     test_hpd()
     print("\nAll tests passed.")
+
+
+def test_lrt():
+    """Fitter with residual_test: lrt, on a runner that returns given chi2:
+    detection from Delta chi2 with k = amplitudes, order by log p."""
+    class R:
+        base = load_yaml(os.path.join(REPO, 'configs',
+                                      'base_config_tree.yml'))
+
+        def __init__(self, chi2):
+            self.chi2, self.calls = chi2, []
+
+        def ml(self, model, tag, fixed=None, centers=None):
+            self.calls.append(tag)
+            return dt.FitResult(model, tag, ['A'], {'A': 0.5},
+                                self.chi2[tag], NDATA)
+
+    base = dt.FitResult(dt.Model(frozenset(), False), 'b', ['p'], {'p': 0.},
+                        400., NDATA)
+    tag = 'resid_M_none_0_plus_'
+    r = R({tag + 'd_ML': 397., tag + 's_ML': 399., tag + 'dT_ML': 390.})
+    F = dt.Fitter(r, residual_test='lrt', lrt_p=0.3173)
+    d, s_, dT = (F.residual_test(base, g) for g in ('d', 's', 'dT'))
+    check("Delta chi2 = 3 with 2 amplitudes: p = 0.22 < 0.32 -> detected",
+          d.detected and abs(d.pvalue - np.exp(-1.5)) < 1e-9
+          and d.stage == 'lrt' and d.off == ())
+    check("  Delta chi2 = 1: p = 0.61 -> not detected",
+          not s_.detected and abs(s_.dchi2 - 1.) < 1e-12)
+    check("  order by log p (dT, Delta chi2 = 10, before d), only ML fits",
+          sorted([d, dT], key=lambda x: x.rank)[0].group == 'dT'
+          and all(t.endswith('_ML') for t in r.calls))
 
 
 def test_configs():
