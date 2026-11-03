@@ -87,3 +87,6 @@ run:
     profile_scheme: true
     # Reuse the fits already done (same config) instead of rerunning them
     reuse_runs: true
+    # Full fit (ML + PolyChord) of M_0,0 at the end, only to report ln B(r
+    # free vs r = 0) in the conclusion: no decision uses it
+    fit_r0_at_end: false

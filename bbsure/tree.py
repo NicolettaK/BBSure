@@ -112,6 +112,9 @@ class DecisionTree:
         # refitted with r free they are undetected again (d10s5 seed 6002)
         self.restore = mc.get('res_r0_restore', False)
         self.max_it = tc['run']['max_iterations']
+        # PolyChord of M_0,0 at the end, only for ln B(r free vs r = 0) in
+        # the conclusion (off: one PolyChord run less per tree)
+        self.fit_r0_at_end = tc['run'].get('fit_r0_at_end', False)
 
     # ── entry point ───────────────────────────────────────────────────────
     def run(self):
@@ -452,28 +455,32 @@ class DecisionTree:
         return self.conclude_detection(M0, fit0)
 
     def _fit_r0(self, M0, fit0):
-        M00 = M0.with_r(False)
-        fit00 = self.F.full_fit(M00, centers=fit0.best)
+        """
+        Only with run: fit_r0_at_end: true: full fit (ML + PolyChord) of
+        M_0,0 and ln B(r free vs r = 0), reported in the conclusion. No
+        decision uses it, and it costs one PolyChord run per tree.
+        """
+        if not self.fit_r0_at_end:
+            return {}
+        fit00 = self.F.full_fit(M0.with_r(False), centers=fit0.best)
         lb, lberr = lnB(fit0, fit00)
-        return fit00, lb, lberr
+        return dict(lnB_rfree_vs_r0=lb, lnB_err=lberr,
+                    chi2_M00=fit00.chi2, pte_M00=fit00.pte)
 
     def conclude_upper_limit(self, M0, fit0):
-        fit00, lb, lberr = self._fit_r0(M0, fit0)          # M_0,0
         rs = fit0.r_summary()
         res = dict(conclusion='upper_limit', model=M0.label,
                    r_95=rs['r_95'], r_med=rs['r_med'],
-                   lnB_rfree_vs_r0=lb, lnB_err=lberr,
-                   chi2_M00=fit00.chi2, pte_M00=fit00.pte)
+                   **self._fit_r0(M0, fit0))
         self.log.node('END', 'put an upper limit on r', 'upper limit', **res)
         return res
 
     def conclude_detection(self, M0, fit0):
-        fit00, lb, lberr = self._fit_r0(M0, fit0)
         rs = fit0.r_summary()
         res = dict(conclusion='r_detection', model=M0.label,
                    r_med=rs['r_med'], r_lo1=rs['r_lo1'], r_hi1=rs['r_hi1'],
                    r_snr=rs['r_mean'] / rs['r_std'],
-                   lnB_rfree_vs_r0=lb, lnB_err=lberr)
+                   **self._fit_r0(M0, fit0))
         self.log.node('END', 'You cannot get rid of your r detection!!! Be '
                       'careful and wait before organizing a press '
                       'conference!!!', 'r detection', **res)
