@@ -4,6 +4,7 @@ New validation root from a concluded one, to rerun with a new version of the
 tree only the sets it can change, reusing all the fits already done.
 
   python scripts/prepare_rerun.py <old root> <new root> [--all] [--dry-run]
+                                  [--range FIRST LAST]
 
 Every set of <old root>/runs is copied in <new root>/runs (the spectra in
 output/ as a symbolic link; tree/ copied, so that the new runs never write
@@ -14,7 +15,8 @@ last Res_r0 detected at least one family (the only ones where M_1,0 and
 the combinations of the profile scheme enter) are reset: conclusion files
 and decision logs of tree and profile scheme removed, the fits kept (same config -> reused). The others
 keep their conclusion and are skipped by nersc/run_one.sh. With --all every
-set is reset. plan/, truth/ and cov/ are linked; truth is not read.
+set is reset. With --range only the sets with index FIRST..LAST (both skies)
+are copied. plan/, truth/ and cov/ are linked; truth is not read.
 """
 import argparse
 import json
@@ -57,11 +59,16 @@ def main():
                     help='only print the sets that would be rerun')
     ap.add_argument('--jobs', type=int, default=8,
                     help='sets copied in parallel')
+    ap.add_argument('--range', type=int, nargs=2, metavar=('FIRST', 'LAST'),
+                    help='only the sets with index FIRST..LAST')
     a = ap.parse_args()
     old, new = os.path.abspath(a.old), os.path.abspath(a.new)
 
     sets = sorted(d for d in os.listdir(os.path.join(old, 'runs'))
-                  if d.startswith('set_'))
+                  if d.startswith('set_') and not d.endswith('.tmp'))
+    if a.range:
+        sets = [d for d in sets
+                if a.range[0] <= int(d.split('_')[1]) <= a.range[1]]
     rerun = []
     for s in sets:
         f = os.path.join(old, 'runs', s, 'tree', 'decision_log.json')
