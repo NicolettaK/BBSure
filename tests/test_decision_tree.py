@@ -446,11 +446,15 @@ def main():
     pref = [a for n, a in path if n == 'pref']
     check("seed_max_runs = 1: no reruns, single-run decision",
           not any(c[0] == 'rerun' for c in F.calls) and pref[0] == 'Yes')
+    check("  still within 2 errors: choice flagged in the conclusion",
+          res['undecided'] and res['undecided_choices'][0]['chosen']
+          == 'M_d_r' and res['undecided_choices'][0]['other'] == M0)
     # far from the threshold: no repetition
     scen['logZ']['M_d_r'] = -190.
     res, path, F = run(scen, seed_max_runs=4)
     check("clear lnB -> no reruns",
           not any(c[0] == 'rerun' for c in F.calls))
+    check("  clear lnB -> no undecided flag", not res['undecided'])
 
     # 21. group s with all its spectra pruned: does not satisfy the
     #     requirements of s2 / ds1 / ds2, but can still be restored

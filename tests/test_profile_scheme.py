@@ -210,6 +210,9 @@ def main():
     res, R = run(scen, 'M_d_r', [('s', [])])
     check("  no repetitions with seed_max_runs = 1",
           not any('_rep' in c[3] for c in R.calls if c[0] == 'pc'))
+    check("  the two best still within 2 errors: choice flagged",
+          res['undecided'] and res['undecided_choices'][0]['chosen']
+          == 'M_d_r' and res['undecided_choices'][0]['other'] == 'M_d+s_r')
 
     # 8. M_1,0 preferred in the tree: M_0,r = M_none, M_1 =
     #    M_d+s; the same candidates (every model in between and M_1)

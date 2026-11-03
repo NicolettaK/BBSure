@@ -189,6 +189,11 @@ def end_item(e, model, chi=None, where=''):
     extra = [] if chi is None else \
         [f"chi2{where} = {chi[0]:.1f} / {chi[1]},  "
          f"PTE = {stats.chi2.sf(chi[0], chi[1]):.3g}"]
+    # choices taken with ln B within 2 errors (also after the repetitions)
+    for c in e.get('undecided_choices') or []:
+        extra.append(f"undecided: {short(c['chosen'])} over "
+                     f"{short(c['other'])} (ln B = {c['lnB']:.2f} ± "
+                     f"{c['lnB_err']:.2f})")
     if e.get('conclusion') == 'upper_limit':
         r95 = e.get('r_95', e.get('r_95_pl0'))
         return ('blue', ['UPPER LIMIT', model, f"r < {r95:.4f} (95%)"]

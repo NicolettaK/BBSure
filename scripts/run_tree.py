@@ -71,6 +71,12 @@ def main():
         r_med=prof['r_med_pl'], r_lo1=prof['r_lo1_pl'],
         r_hi1=prof['r_hi1_pl'], r_std=prof['r_std_pl'],
         r_95=prof['r_95_pl0'] if ul else None, source='profile scheme',
+        # choices taken with ln B within seed_band errors (also after the
+        # PolyChord repetitions), in the tree and in the profile scheme
+        undecided_tree=result.get('undecided', False),
+        undecided_profile=prof.get('undecided', False),
+        undecided_choices=dict(tree=result.get('undecided_choices', []),
+                               profile=prof.get('undecided_choices', [])),
         # Bayesian part: model chosen by the tree, ML best fit, posterior
         # (PolyChord) of all the parameters, conclusion of the tree
         bayesian=dict(prof['bayes'], conclusion=result.get('conclusion')),

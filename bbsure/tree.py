@@ -112,6 +112,9 @@ class DecisionTree:
         # refitted with r free they are undetected again (d10s5 seed 6002)
         self.restore = mc.get('res_r0_restore', False)
         self.max_it = tc['run']['max_iterations']
+        # comparisons still within seed_band errors of the threshold after
+        # the PolyChord repetitions: reported in the conclusion
+        self.undecided = []
         # PolyChord of M_0,0 at the end, only for ln B(r free vs r = 0) in
         # the conclusion (off: one PolyChord run less per tree)
         self.fit_r0_at_end = tc['run'].get('fit_r0_at_end', False)
@@ -179,7 +182,8 @@ class DecisionTree:
         self.log.node('stop', 'max_iterations reached', 'stop',
                       max_iterations=self.max_it)
         M0, fit0 = self.prune(M0, self.F.full_fit(M0))
-        return dict(conclusion='max_iterations', model=M0.label)
+        return dict(conclusion='max_iterations', model=M0.label,
+                    **self.flags())
 
     # ── residual tests ────────────────────────────────────────────────────
     def residual_scan(self, base: FitResult, groups, name, which):
@@ -235,9 +239,23 @@ class DecisionTree:
             lb, lberr = lnB(fit1, fit0)
         return lb, lberr
 
+    def note_undecided(self, kind, chosen, other, lb, lberr, threshold):
+        """Records a choice taken with ln B within seed_band errors of the
+        threshold (also after the repetitions): flagged in the results."""
+        if abs(lb - threshold) >= self.seed_band * lberr:
+            return
+        d = dict(kind=kind, chosen=chosen, other=other, lnB=lb,
+                 lnB_err=lberr, threshold=threshold)
+        self.undecided.append(d)
+        self.log.info(f"    [undecided] {kind}: {chosen} chosen over {other}"
+                      f" with ln B = {lb:.2f} +- {lberr:.2f}")
+
     def compare(self, fit1: FitResult, fit0: FitResult, name):
         lb, lberr = self.lnB_decided(fit1, fit0, self.lnB_pref)
         pref = lb > self.lnB_pref
+        m1, m0 = fit1.model.label, fit0.model.label
+        self.note_undecided(f'{name} vs M_0,r', m1 if pref else m0,
+                            m0 if pref else m1, lb, lberr, self.lnB_pref)
         self.log.node('pref', f'Is {name} ({fit1.model.label}) preferred '
                       f'over M_0,r ({fit0.model.label})?',
                       'Yes' if pref else 'No', lnB=lb, lnB_err=lberr,
@@ -434,6 +452,9 @@ class DecisionTree:
                           **fit1.summary())
             lb, lberr = self.lnB_decided(fit1, fit0, self.lnB_prune)
             keep = lb > self.lnB_prune
+            self.note_undecided('pruning', M1.label if keep else M0.label,
+                                M0.label if keep else M1.label, lb, lberr,
+                                self.lnB_prune)
             self.log.node('prune', f'Is the pruned model {M1.label} not '
                           f'disfavoured w.r.t. {M0.label}?',
                           'Yes' if keep else 'No', lnB=lb, lnB_err=lberr,
@@ -469,11 +490,15 @@ class DecisionTree:
         return dict(lnB_rfree_vs_r0=lb, lnB_err=lberr,
                     chi2_M00=fit00.chi2, pte_M00=fit00.pte)
 
+    def flags(self):
+        return dict(undecided=bool(self.undecided),
+                    undecided_choices=list(self.undecided))
+
     def conclude_upper_limit(self, M0, fit0):
         rs = fit0.r_summary()
         res = dict(conclusion='upper_limit', model=M0.label,
                    r_95=rs['r_95'], r_med=rs['r_med'],
-                   **self._fit_r0(M0, fit0))
+                   **self._fit_r0(M0, fit0), **self.flags())
         self.log.node('END', 'put an upper limit on r', 'upper limit', **res)
         return res
 
@@ -482,7 +507,7 @@ class DecisionTree:
         res = dict(conclusion='r_detection', model=M0.label,
                    r_med=rs['r_med'], r_lo1=rs['r_lo1'], r_hi1=rs['r_hi1'],
                    r_snr=rs['r_mean'] / rs['r_std'],
-                   **self._fit_r0(M0, fit0))
+                   **self._fit_r0(M0, fit0), **self.flags())
         self.log.node('END', 'You cannot get rid of your r detection!!! Be '
                       'careful and wait before organizing a press '
                       'conference!!!', 'r detection', **res)

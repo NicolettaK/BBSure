@@ -442,6 +442,22 @@ class ProfileScheme:
                 logZerr=float(np.sqrt(np.sum(np.square(errs))) / len(lzs)),
                 logZ_runs=list(lzs))
 
+    def close_pair(self, comparison):
+        """The two best models still within seed_band errors (after the
+        repetitions): [dict(chosen, other, lnB, lnB_err)] or []."""
+        if len(comparison) < 2:
+            return []
+        top = sorted(comparison, key=lambda k: -comparison[k]['logZ'])[:2]
+        a, b = comparison[top[0]], comparison[top[1]]
+        lb = a['logZ'] - b['logZ']
+        err = float(np.hypot(a['logZerr'], b['logZerr']))
+        if lb >= self.seed_band * err:
+            return []
+        self.log.info(f"    [undecided] {top[0]} chosen over {top[1]} with "
+                      f"ln B = {lb:.2f} +- {err:.2f}")
+        return [dict(kind='best two models', chosen=top[0], other=top[1],
+                     lnB=lb, lnB_err=err, threshold=0.)]
+
     # ── the scheme ────────────────────────────────────────────────────────
     def run(self):
         """Runs the scheme, writes result.json in `out` and returns it."""
@@ -449,7 +465,7 @@ class ProfileScheme:
         M0, med, sig = self.M0, self.med, self.sig
 
         # 2-3. every model at its own r, local evidences, the best one wins
-        final, comparison, runs = M0, {}, {}
+        final, comparison, runs, undecided = M0, {}, {}, []
         if self.cands:
             models = [M0] + [M for _, M in self.cands]
             for M in models:
@@ -472,6 +488,7 @@ class ProfileScheme:
                          logZerr=lzerr, chi2_ml=base.chi2, free=sorted(free),
                          **self.summary(fine, cf))
             self.settle_close(comparison, runs)
+            undecided = self.close_pair(comparison)
             best = max(comparison, key=lambda k: comparison[k]['logZ'])
             final = next(M for M in models if M.label == best)
             log.node('final', 'model with the highest evidence (each at its '
@@ -507,6 +524,7 @@ class ProfileScheme:
                    **self.summary(fine, cf),
                    r_star_final=r_fin, best_fit_at_rstar=dict(bf.best),
                    chi2_at_rstar=float(bf.chi2), params_at_rstar=params,
+                   undecided=bool(undecided), undecided_choices=undecided,
                    bayes=self.bayes)
         # 6. decision, as in the tree but with the posterior from the profile
         # (prior of the tree on r): 0 inside the central 3 sigma interval ->
