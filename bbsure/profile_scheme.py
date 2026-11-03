@@ -4,9 +4,11 @@ Profile scheme: run on a concluded tree. The moments are searched with r = 0
 judged with every model at its own r, the minimum of its profile likelihood,
 instead of with r marginalised.
 
-1. M* = final model of the tree; candidates g = the families detected (among
-   all those tested) in the last Res_r0 of the tree on M* (none if the tree
-   concluded before Res_r0 or nothing was detected).
+1. M* = final model of the tree (M_0,r). Candidates: M* +
+   every combination of the families added to M_0,r in the last Res_r0 of
+   the tree (M_1 included), respecting the requirements of the families
+   (e.g. ds1 only with s); none if the tree concluded before Res_r0 or
+   nothing was detected there.
 2. Profiles in r: M* -> r* = its minimum; M* + g -> r*_g for every candidate.
    A profile: r fixed on a grid, all the other parameters re-fitted (ML).
 3. Comparison of all the models, each at its own r (M* at r*, M* + g at
@@ -29,10 +31,13 @@ instead of with r marginalised.
 Output in `out`: the fits, decision_log.{txt,json}, profile_<model>.npz,
 result.json.
 """
+import itertools
 import json
 import os
 import re
-from concurrent.futures import ThreadPoolExecutor
+import multiprocessing
+import sys
+from concurrent.futures import ProcessPoolExecutor
 
 import numpy as np
 import yaml
@@ -41,7 +46,8 @@ from scipy.interpolate import interp1d
 from .config import build_config, free_param_names, iter_param_entries
 from .fitter import Fitter, NoValidStart
 from .log import DecisionLog
-from .models import MOMENT_GROUPS, amp_name, model_from_label, slope_name
+from .models import (MOMENT_GROUPS, amp_name,
+                     model_from_label, requirements_met, slope_name)
 from .runner import BBCompSepRunner
 
 # at the edges the profile must rise at least this much (4 sigma): needed
@@ -69,16 +75,60 @@ def moment_spectra(M):
 BETAS = {'beta_d', 'beta_s'}
 
 
-def res_r0_candidates(ev):
-    """
-    Families detected in the last Res_r0 of the tree, with the spectra the
-    residual screening removed: [(group, off)]. Empty if there is no Res_r0
-    or if the tree adopted a new model after it.
-    """
+def _ml_job(job):
+    """One ML fit of a profile point (in a worker process): job = (runner,
+    model, tag, fixed, centers)."""
+    R, m, tag, fixed, centers = job
+    return R.ml(m, tag, fixed=fixed, centers=centers)
+
+
+def last_res_r0(ev):
+    """Index of the 'resid' node of the last Res_r0 of the tree (None if
+    there is none)."""
     last = None
     for i, e in enumerate(ev):
         if e['node'] == 'resid' and e['question'].startswith('Res_r0'):
             last = i
+    return last
+
+
+def add_combinations(M0, fams):
+    """
+    M0 + every combination of the families fams = [(group, off)] (each with
+    the spectra of `off` removed): [(label, model)], label e.g. 'd2+s'.
+    """
+    fams = [(g, off) for g, off in fams if g not in M0.moments]
+    out = []
+    for k in range(1, len(fams) + 1):
+        for combo in itertools.combinations(fams, k):
+            M = M0
+            for g, off in combo:
+                M = M.apply(g).without(off)
+            out.append(('+'.join(g for g, _ in combo), M))
+    return out
+
+
+def chain_candidates(ev):
+    """
+    Families added to M_0,r in the last Res_r0 of the tree (node
+    'r0chain'), with their removed spectra: [(group, off)]. Empty if there
+    is none or if the tree adopted a new model after it.
+    """
+    idx = [i for i, e in enumerate(ev) if e['node'] == 'r0chain']
+    if not idx or any(e['node'] == 'replace' for e in ev[idx[-1]:]):
+        return []
+    e = ev[idx[-1]]
+    return list(zip(e['families'], e['pruned']))
+
+
+def res_r0_candidates(ev):
+    """
+    Families detected in the last Res_r0 of the tree, with the spectra the
+    residual screening removed: [(group, off)]. Empty if there is no Res_r0
+    or if the tree adopted a new model after it. (Trees of the previous
+    versions, e.g. to choose the sets to rerun: scripts/prepare_rerun.py.)
+    """
+    last = last_res_r0(ev)
     if last is None or any(e['node'] == 'replace' for e in ev[last:]):
         return []
     e = ev[last]
@@ -110,6 +160,8 @@ class ProfileScheme:
         # models -> more PolyChord runs (other seeds), up to seed_max_runs
         self.seed_band = th.get('seed_band', 2.0)
         self.seed_max_runs = th.get('seed_max_runs', 1)
+        # final model with PTE < pte_flag (at r = r_min): flagged
+        self.pte_flag = th.get('pte_flag', 0.05)
         self.PROF = {}          # label -> (fine grid, interpolated chi2)
         self.PROF_FITS = {}     # label -> {r of the grid: ML fit}
 
@@ -122,9 +174,14 @@ class ProfileScheme:
         ev = json.load(open(os.path.join(tree_dir, 'decision_log.json')))
         M0 = model_from_label(concl['model'])
         self.M0 = M0
-        self.cands = [(g, M0.apply(g).without(off))
-                      for g, off in res_r0_candidates(ev)
-                      if g not in M0.moments]
+        # candidates: M_0,r + every combination of the families added in
+        # Res_r0 (node 'r0chain') that respects the requirements (e.g. ds1
+        # only with s), both when M_1,0 was preferred and when not
+        self.m10 = any(e['node'] == 'm10' for e in ev)
+        req = tc.get('moments', {}).get('requires')
+        self.cands = [(lab, M) for lab, M in
+                      add_combinations(M0, chain_candidates(ev))
+                      if requirements_met(M, req)]
         cfg = yaml.safe_load(open(os.path.join(tree_dir, f'{M0.label}_PC',
                                                'config.yml')))
         names = free_param_names(cfg['BBCompSep'])
@@ -172,15 +229,27 @@ class ProfileScheme:
         grid = list(GRID)
         fits = {}
 
-        def fit(r, centers=None, sfx=''):
+        def args(r, centers=None, sfx=''):
             k = int(round((r - GRID[0]) / STEP))
-            return R.ml(m, f'prof_{tag}_{k:+03d}{sfx}',
-                        fixed={'r_tensor': float(r)}, centers=centers)
+            return (R, m, f'prof_{tag}_{k:+03d}{sfx}',
+                    {'r_tensor': float(r)}, centers)
 
         def batch(jobs):
-            """Independent ML fits in parallel: [(r, centers, sfx)] -> fits."""
-            with ThreadPoolExecutor(max_workers=self.nproc) as ex:
-                return list(ex.map(lambda j: fit(*j), jobs))
+            """Independent ML fits in parallel: [(r, centers, sfx)] -> fits.
+            In separate processes (the in-process BBCompSep fits are
+            serialized by a lock within one process); fits already done are
+            read from their run directory."""
+            todo = [args(*j) for j in jobs]
+            # macOS: fork after the Objective-C runtime is initialised
+            # crashes, unless OBJC_DISABLE_INITIALIZE_FORK_SAFETY=YES
+            mac_unsafe = (sys.platform == 'darwin' and os.environ.get(
+                'OBJC_DISABLE_INITIALIZE_FORK_SAFETY') != 'YES')
+            if self.nproc <= 1 or len(todo) <= 1 or mac_unsafe:
+                return [_ml_job(t) for t in todo]
+            ctx = multiprocessing.get_context('fork')
+            with ProcessPoolExecutor(max_workers=min(self.nproc, len(todo)),
+                                     mp_context=ctx) as ex:
+                return list(ex.map(_ml_job, todo))
 
         for r, f in zip(grid, batch([(r, None, '') for r in grid])):
             fits[r] = f
@@ -375,6 +444,22 @@ class ProfileScheme:
                 logZerr=float(np.sqrt(np.sum(np.square(errs))) / len(lzs)),
                 logZ_runs=list(lzs))
 
+    def close_pair(self, comparison):
+        """The two best models still within seed_band errors (after the
+        repetitions): [dict(chosen, other, lnB, lnB_err)] or []."""
+        if len(comparison) < 2:
+            return []
+        top = sorted(comparison, key=lambda k: -comparison[k]['logZ'])[:2]
+        a, b = comparison[top[0]], comparison[top[1]]
+        lb = a['logZ'] - b['logZ']
+        err = float(np.hypot(a['logZerr'], b['logZerr']))
+        if lb >= self.seed_band * err:
+            return []
+        self.log.info(f"    [undecided] {top[0]} chosen over {top[1]} with "
+                      f"ln B = {lb:.2f} +- {err:.2f}")
+        return [dict(kind='best two models', chosen=top[0], other=top[1],
+                     lnB=lb, lnB_err=err, threshold=0.)]
+
     # ── the scheme ────────────────────────────────────────────────────────
     def run(self):
         """Runs the scheme, writes result.json in `out` and returns it."""
@@ -382,7 +467,7 @@ class ProfileScheme:
         M0, med, sig = self.M0, self.med, self.sig
 
         # 2-3. every model at its own r, local evidences, the best one wins
-        final, comparison, runs = M0, {}, {}
+        final, comparison, runs, undecided = M0, {}, {}, []
         if self.cands:
             models = [M0] + [M for _, M in self.cands]
             for M in models:
@@ -405,6 +490,7 @@ class ProfileScheme:
                          logZerr=lzerr, chi2_ml=base.chi2, free=sorted(free),
                          **self.summary(fine, cf))
             self.settle_close(comparison, runs)
+            undecided = self.close_pair(comparison)
             best = max(comparison, key=lambda k: comparison[k]['logZ'])
             final = next(M for M in models if M.label == best)
             log.node('final', 'model with the highest evidence (each at its '
@@ -431,14 +517,18 @@ class ProfileScheme:
                    model_tree=M0.label, model_final=final.label,
                    candidates=[g for g, _ in self.cands],
                    comparison=comparison,
-                   start='candidates from Res_r0' if self.cands
-                   else 'no candidates',
+                   start=('M_1,0 preferred in the tree' if self.m10
+                          else 'M_1,0 not preferred in the tree')
+                   if self.cands else 'no candidates',
                    rejected=sorted(g for g, M in self.cands
                                    if M.label != final.label),
                    r_bayes_tree=med, sigma_bayes_tree=sig,
                    **self.summary(fine, cf),
                    r_star_final=r_fin, best_fit_at_rstar=dict(bf.best),
                    chi2_at_rstar=float(bf.chi2), params_at_rstar=params,
+                   undecided=bool(undecided), undecided_choices=undecided,
+                   pte_at_rstar=bf.pte,
+                   low_pte=bool(bf.pte < self.pte_flag),
                    bayes=self.bayes)
         # 6. decision, as in the tree but with the posterior from the profile
         # (prior of the tree on r): 0 inside the central 3 sigma interval ->

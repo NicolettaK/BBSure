@@ -17,13 +17,20 @@ from scipy import stats
 
 TREE_COLS = ['index', 'kind', 'sky', 'status', 'conclusion', 'model',
              'r_med', 'r_std', 'r_lo1', 'r_hi1', 'r_95', 'lnB_rfree_vs_r0',
-             'chi2', 'pte']
+             'chi2', 'pte', 'low_pte', 'undecided', 'undecided_choices']
 UNBLIND_COLS = ['r_true', 'pull', 'in_1sigma', 'in_95']
 PROFILE_COLS = ['index', 'kind', 'status', 'conclusion', 'model_tree',
                 'model_final', 'start', 'rejected', 'r_bayes_tree',
                 'sigma_bayes_tree', 'r_star_final', 'r_med_pl', 'r_lo1_pl',
                 'r_hi1_pl', 'r_std_pl', 'r_lo3_pl', 'r_hi3_pl', 'r_95_pl0',
-                'dchi2_r0', 'chi2_at_rstar', 'dof_rstar', 'pte_rstar']
+                'dchi2_r0', 'chi2_at_rstar', 'dof_rstar', 'pte_rstar',
+                'low_pte', 'undecided', 'undecided_choices']
+
+
+def choices_text(choices):
+    """Undecided choices in one csv cell: 'chosen>other (lnB+-err); ...'."""
+    return '; '.join(f"{c['chosen']}>{c['other']} ({c['lnB']:.2f}+-"
+                     f"{c['lnB_err']:.2f})" for c in choices or [])
 
 
 def collect_tree(root, unblind=False, tree='tree'):
@@ -56,7 +63,11 @@ def collect_tree(root, unblind=False, tree='tree'):
                        model=c['model'], r_med=c.get('r_med'),
                        r_lo1=c.get('r_lo1'), r_hi1=c.get('r_hi1'),
                        r_95=c.get('r_95'),
-                       lnB_rfree_vs_r0=c.get('lnB_rfree_vs_r0'))
+                       lnB_rfree_vs_r0=c.get('lnB_rfree_vs_r0'),
+                       undecided=int(bool(c.get('undecided'))),
+                       low_pte=int(bool(c.get('low_pte'))),
+                       undecided_choices=choices_text(
+                           c.get('undecided_choices')))
             ev = json.load(open(os.path.join(d, tree, 'decision_log.json')))
             fits = [e for e in ev if e['node'] == 'fit' and
                     e.get('model') == c['model'] and 'r_std' in e]
@@ -135,7 +146,11 @@ def collect_profile(root, out):
                 continue
             r = json.load(open(f))
             r.update(index=int(i), kind=kind, status='done',
-                     rejected='+'.join(r.get('rejected', [])))
+                     rejected='+'.join(r.get('rejected', [])),
+                     undecided=int(bool(r.get('undecided'))),
+                     low_pte=int(bool(r.get('low_pte'))),
+                     undecided_choices=choices_text(
+                         r.get('undecided_choices')))
             # number of data points from the final ML fit; free parameters =
             # best fit without r
             z = os.path.join(d, f"ml_{r['model_final']}_final", 'chi2.npz')

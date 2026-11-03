@@ -142,7 +142,9 @@ def tree_items(ev):
                 g = re.search(r'moment (\S+) on', p['question'])
                 g = g.group(1) if g else '?'
                 s = f"  {g}: {p['answer']}"
-                if p['answer'] == 'detected' and p.get('logZ') is not None:
+                if p.get('stage') == 'lrt':
+                    s += f"  (Δχ² = {p['dchi2']:.1f}, p = {p['pvalue']:.2g})"
+                elif p['answer'] == 'detected' and p.get('logZ') is not None:
                     s += f"  (residual ln Z = {p['logZ']:.1f})"
                 lines.append(s)
             pending = []
@@ -187,6 +189,13 @@ def end_item(e, model, chi=None, where=''):
     extra = [] if chi is None else \
         [f"chi2{where} = {chi[0]:.1f} / {chi[1]},  "
          f"PTE = {stats.chi2.sf(chi[0], chi[1]):.3g}"]
+    if e.get('low_pte'):
+        extra.append("low PTE: the model does not describe the data well")
+    # choices taken with ln B within 2 errors (also after the repetitions)
+    for c in e.get('undecided_choices') or []:
+        extra.append(f"undecided: {short(c['chosen'])} over "
+                     f"{short(c['other'])} (ln B = {c['lnB']:.2f} ± "
+                     f"{c['lnB_err']:.2f})")
     if e.get('conclusion') == 'upper_limit':
         r95 = e.get('r_95', e.get('r_95_pl0'))
         return ('blue', ['UPPER LIMIT', model, f"r < {r95:.4f} (95%)"]

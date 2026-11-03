@@ -154,6 +154,28 @@ def model_from_label(lab):
     return m
 
 
+def requirements(group, extra_requires=None):
+    """Groups required by `group` (MOMENT_GROUPS + extra_requires)."""
+    req = MOMENT_GROUPS[group].get('requires') or []
+    req = [req] if isinstance(req, str) else list(req)
+    return req + list((extra_requires or {}).get(group, []))
+
+
+def active_groups(M):
+    """Groups of M with at least one spectrum left: a group with all its
+    spectra removed by the pruning does not satisfy the requirements (e.g.
+    s2 without the spectra of s: with the hierarchical bound and the
+    positivity the likelihood is -inf everywhere)."""
+    return {g for g in M.moments if set(group_amplitudes(g)) - set(M.off)}
+
+
+def requirements_met(M, extra_requires=None):
+    """Every group of M has the groups it requires."""
+    active = active_groups(M)
+    return all(set(requirements(g, extra_requires)) <= active
+               for g in M.moments)
+
+
 def candidate_groups(current: Model, allowed, restore=False,
                      extra_requires=None) -> List[str]:
     """
@@ -163,18 +185,11 @@ def candidate_groups(current: Model, allowed, restore=False,
     {group: [groups]} (e.g. with the positivity ds1 requires s, the
     auto-spectrum of w1^beta_s).
     """
-    # a group with all its spectra removed by the pruning does not satisfy
-    # the requirements (e.g. s2 without the spectra of s: with the
-    # hierarchical bound and the positivity the likelihood is -inf
-    # everywhere)
-    active = {g for g in current.moments
-              if set(group_amplitudes(g)) - set(current.off)}
+    active = active_groups(current)
     out = []
     for g in allowed:
-        req = MOMENT_GROUPS[g].get('requires') or []
-        req = [req] if isinstance(req, str) else list(req)
-        req += list((extra_requires or {}).get(g, []))
-        if g not in current.moments and set(req) <= active:
+        if g not in current.moments and \
+                set(requirements(g, extra_requires)) <= active:
             out.append(g)
     if restore:
         for g in sorted(current.moments):

@@ -17,6 +17,9 @@ paths:
 thresholds:
     # "Is chi2 good?"  ->  PTE > pte_min
     pte_min: 0.01
+    # final model with PTE < pte_flag: flagged in the results (the best
+    # model available does not describe the data well)
+    pte_flag: 0.05
     # "Is model X preferred over Y?"  ->  ln B = lnZ_X - lnZ_Y > lnB_preferred
     # (Jeffreys/Trotta scale: 1 weak, 2.5 moderate, 5 strong)
     lnB_preferred: 0.0
@@ -43,6 +46,14 @@ moments:
     # with the positivity a cross term requires the auto-spectra: ds1
     # (w1^beta_d x A_s, A_d x w1^beta_s) requires s
     requires: {ds1: ['s']}
+    # Residual test: lrt = likelihood ratio of two ML fits, detected if
+    # p < lrt_p (Delta chi2, k = amplitudes of the group; 0.3173 = 1 sigma,
+    # the analogue of zero outside the 68% HPD), ordered by p, no pruning of
+    # single spectra; bayes = emcee (zero outside the 68% HPD of an
+    # amplitude) confirmed by PolyChord, ordered by the residual evidence
+    # (same final results on the test sets, ~3x slower)
+    residual_test: lrt
+    lrt_p: 0.3173
 
 emcee:
     # Detection screening in the residual tests
@@ -87,3 +98,6 @@ run:
     profile_scheme: true
     # Reuse the fits already done (same config) instead of rerunning them
     reuse_runs: true
+    # Full fit (ML + PolyChord) of M_0,0 at the end, only to report ln B(r
+    # free vs r = 0) in the conclusion: no decision uses it
+    fit_r0_at_end: false

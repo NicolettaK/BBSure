@@ -86,9 +86,17 @@ class ResidualResult:
     logZ: float = np.nan                # only if detected (PolyChord)
     logZerr: float = np.nan
     best: Dict[str, float] = field(default_factory=dict)  # max likelihood
-    stage: str = ''                     # 'emcee' or 'polychord'
+    stage: str = ''                     # 'emcee', 'polychord' or 'lrt'
     off: tuple = ()                     # spectra of the group not detected
                                         # by the screening, removed before PC
+    dchi2: float = np.nan               # likelihood-ratio test: chi2 gain
+    pvalue: float = np.nan              # and its p-value (k = amplitudes)
+    rank: float = np.nan                # order of the candidates (lower
+                                        # first): -logZ, or log p of the LRT
+
+    def __post_init__(self):
+        if not np.isfinite(self.rank):
+            self.rank = -self.logZ
 
 
 def lnB(a: FitResult, b: FitResult):
