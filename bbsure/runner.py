@@ -221,7 +221,8 @@ class BBCompSepRunner:
 
     def _polychord_proc(self, cmd, out, log_path):
         """
-        PolyChord as a subprocess; killed (returns None) if the live points
+        PolyChord as a subprocess (returns the finished Popen, with its
+        returncode); killed (returns None) if the live points
         are not all generated within polychord: start_timeout seconds
         (default 1800): with the moment constraints almost all the prior
         samples can be rejected, and the generation never ends.
@@ -235,7 +236,8 @@ class BBCompSepRunner:
                 continue
             out.flush()
             if 'all live points generated' in open(log_path).read():
-                return p.wait()
+                p.wait()
+                return p
             p.terminate()
             try:
                 p.wait(60)
@@ -243,7 +245,7 @@ class BBCompSepRunner:
                 p.kill()
                 p.wait()
             return None
-        return p.returncode
+        return p
 
     def ml(self, model, tag, fixed=None, centers=None):
         """Maximum likelihood: best fit and chi2 (without Gaussian priors)."""
