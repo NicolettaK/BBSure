@@ -128,9 +128,9 @@
   box(330, 460, 280, 130, 'purple', [`<tspan font-weight="700">Res_wr</tspan>: residuals of ${M(0, 'r')}`, 'all parameters fixed at their', 'best fit (r too); test the d and s', 'families, each with its own β free']);
   arrow([[285, 525], [328, 525]], 'No', 305, 510);
   arrow([[610, 525], [638, 525]]);
-  diamond(760, 525, 240, 140, 'yellow', ['moment detected? (*)', '0 outside the 68% HPD', 'of an amplitude']);
+  diamond(760, 525, 240, 140, 'yellow', ['moment detected? (*)', 'Δχ² of the residual fit:', 'p &lt; 0.32 (1σ)']);
   arrow([[880, 525], [918, 525]], 'Yes', 898, 510);
-  box(920, 465, 300, 120, 'purple', [`${M(0, 'r')} + a detected family,`, 'in order of residual evidence (**);', 'full fit (all parameters free),', 'pruned (***)']);
+  box(920, 465, 300, 120, 'purple', [`${M(0, 'r')} + a detected family,`, 'in order of significance (**);', 'full fit (all parameters free),', 'pruned (***)']);
   text(925, 448, [M(1, 'r')], 'tag', { anchor: 'start', fill: C.purple[0] });
   arrow([[1220, 525], [1228, 525]]);
   diamond(1360, 525, 260, 120, 'red', [`is ${M(1, 'r')} preferred`, `over ${M(0, 'r')}? (ln B &gt; 0) (****)`]);
@@ -141,9 +141,9 @@
   arrow([[1360, 585], [1360, 710], [520, 710], [520, 768]], 'No', 1385, 625);
   box(330, 770, 280, 120, 'purple', [`<tspan font-weight="700">Res_r0</tspan>: residuals of ${M(0, 0)} (r = 0)`, 'all parameters fixed, own β free;', 'test the families', 'd, s, dT, d2, s2, ds1, ds2']);
   arrow([[610, 830], [638, 830]]);
-  diamond(760, 830, 240, 140, 'yellow', ['moment detected? (*)', '0 outside the 68% HPD', 'of an amplitude']);
+  diamond(760, 830, 240, 140, 'yellow', ['moment detected? (*)', 'Δχ² of the residual fit:', 'p &lt; 0.32 (1σ)']);
   arrow([[880, 830], [918, 830]], 'Yes', 898, 815);
-  box(920, 770, 300, 120, 'purple', [`${M(0, 'r')} + the detected family with`, 'the highest residual evidence (**);', 'full fit (all parameters free),', 'pruned (***)']);
+  box(920, 770, 300, 120, 'purple', [`${M(0, 'r')} + the detected family with`, 'the highest significance (**);', 'full fit (all parameters free),', 'pruned (***)']);
   text(925, 753, [M(1, 'r')], 'tag', { anchor: 'start', fill: C.purple[0] });
   arrow([[1220, 830], [1228, 830]]);
   diamond(1360, 830, 260, 120, 'red', [`is ${M(1, 'r')} preferred`, `over ${M(0, 'r')}? (ln B &gt; 0) (****)`]);
@@ -154,7 +154,7 @@
   note(1385, 938, [`${M1} = the pruned ${M(1, 'r')}`], 'purple');
   diamond(1360, 1015, 280, 110, 'red', [`is ${M(1, 0)} (r = 0) preferred`, `over ${M(0, 'r')}? (ln B &gt; 0) (****)`]);
   arrow([[1360, 1070], [1360, 1128]], 'No', 1385, 1098);
-  box(1220, 1130, 280, 100, 'purple', [`<tspan font-weight="700">Res_r0</tspan> on the residuals of ${M(1, 0)}:`, `add to ${M1} the family with the`, 'highest residual evidence', '(no pruning)']);
+  box(1220, 1130, 280, 100, 'purple', [`<tspan font-weight="700">Res_r0</tspan> on the residuals of ${M(1, 0)}:`, `add to ${M1} the family with the`, 'highest significance', '(no pruning)']);
   arrow([[1500, 1180], [1520, 1180], [1520, 1015], [1502, 1015]], 'detected', 1462, 1100);
   arrow([[1220, 1015], [766, 1015]], 'Yes', 1190, 1000);
   note(900, 1040, [`→ ${M1} to the profile scheme`], 'teal');
@@ -214,8 +214,8 @@
   note(2312, 1125, ['median and 68%', 'of the posterior of r'], 'orange');
 
   // footnotes
-  text(1580, 1300, ['(*) all the amplitudes of the family are fitted (emcee);', 'detected if 0 is outside the 68% HPD (highest posterior', 'density interval) of at least one of them; only the', 'amplitudes with 0 outside their HPD are kept',
-                    '(**) residual evidence: ln Z of the residual fit of each', 'detected family; it sets the order in which the families', 'are tried (Res_wr) or picks the one added (Res_r0)'], 'note', { anchor: 'start', lh: 21 });
+  text(1580, 1300, ['(*) ML fit of the family on the residuals (everything else', 'fixed): Δχ² vs the base fit, χ² with k = amplitudes of the', 'family degrees of freedom; detected if p &lt; 0.32 (1σ, the', 'analogue of 0 outside the 68% HPD); the family enters whole',
+                    '(**) significance: p of the residual test of each detected', 'family; it sets the order in which the families are tried', '(Res_wr) or picks the one added (Res_r0)'], 'note', { anchor: 'start', lh: 21 });
   text(2070, 1300, ['(***) amplitudes with 0 in their 68% HPD (posterior of the', 'full fit) removed and the model refitted, until all are', 'detected; the pruned model is kept if ln B(pruned vs full) > 0', `and is the one compared with ${M(0, 'r')}`,
                     '(****) ln B within 2σ of the threshold (A) or between the', 'two best models (B): PolyChord repeated with other seeds,', 'mean of ln Z, up to 3 runs per fit'], 'note', { anchor: 'start', lh: 21 });
 })();
