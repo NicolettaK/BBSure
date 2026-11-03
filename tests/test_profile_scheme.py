@@ -69,21 +69,21 @@ class MockRunner:
         return names, 0.1 + 0.01 * np.random.randn(2000, len(names))
 
 
-def fake_tree(d, model, res_r0=None, replace_after=False, m10=False,
-              base=None):
-    """Files of a concluded tree read by the scheme: final model `model`,
-    last Res_r0 with res_r0 = [(group, pruned spectra)] detected."""
+def fake_tree(d, model, chain=None, replace_after=False, m10=False):
+    """Files of a concluded tree read by the scheme: M_0,r `model`, families
+    added in the last Res_r0 chain = [(group, pruned spectra)]; m10: M_1,0
+    preferred."""
     M = model_from_label(model)
     ev = []
-    if res_r0 is not None:
-        ev.append(dict(node='resid', question='Res_r0: is there any moment '
-                       'in the residuals?', answer='Yes' if res_r0 else 'No',
-                       base=base or M.with_r(False).label,
-                       detected=[g for g, _ in res_r0],
-                       pruned=[list(off) for _, off in res_r0]))
+    if chain is not None:
+        ev.append(dict(node='r0chain', question='Res_r0: families added to '
+                       'M_0,r; is M_1,0 preferred?',
+                       answer='Yes' if m10 else 'No', base=model,
+                       families=[g for g, _ in chain],
+                       pruned=[list(off) for _, off in chain]))
     if m10:
-        ev.append(dict(node='m10', question='M_1,0 preferred over M_0,r: '
-                       'upper limit with M_1,r', answer=model))
+        ev.append(dict(node='m10', question='M_1,0 preferred over M_0,r',
+                       answer=model))
     if replace_after:
         ev.append(dict(node='replace', question='M_0,r = M_1,r (from Res_r0)',
                        answer=model))
@@ -104,13 +104,14 @@ def fake_tree(d, model, res_r0=None, replace_after=False, m10=False,
              params=np.full(len(names), 0.1), chi2=450., ndof=NDATA)
 
 
-def run(scen, model, res_r0=None, replace_after=False, seed_max_runs=1,
-        m10=False, base=None):
+def run(scen, model, chain=None, replace_after=False, seed_max_runs=1,
+        m10=False):
     tree = tempfile.mkdtemp()
-    fake_tree(tree, model, res_r0, replace_after, m10, base)
+    fake_tree(tree, model, chain, replace_after, m10)
     tc = dict(paths=dict(runs_dir=tree, base_config='unused'),
               thresholds=dict(hpd_frac=0.68, seed_band=2.0,
-                              seed_max_runs=seed_max_runs))
+                              seed_max_runs=seed_max_runs),
+              moments=dict(requires={'ds1': ['s']}))
     orig = psm.BBCompSepRunner
     psm.BBCompSepRunner = lambda tc, log: MockRunner(scen)
     try:
@@ -210,29 +211,39 @@ def main():
     check("  no repetitions with seed_max_runs = 1",
           not any('_rep' in c[3] for c in R.calls if c[0] == 'pc'))
 
-    # 8. the tree chose M_1 = M_0,r + d + s (M_0,r = M_none) because M_1,0
-    #    was preferred: every model in between, down to M_none, is tried
+    # 8. M_1,0 preferred in the tree: M_0,r = M_none, M_1 =
+    #    M_d+s; the same candidates (every model in between and M_1)
     scen = {'r_min': {'M_d+s_r': 0.002, 'M_d_r': 0.008, 'M_s_r': 0.006,
                       'M_none_r': 0.012},
             'logz': {'M_d+s_r': -10., 'M_d_r': -9., 'M_s_r': -11.,
                      'M_none_r': -12.}}
-    res, R = run(scen, 'M_d+s_r', [('d', []), ('s', [])], m10=True,
-                 base='M_none_0')
-    check("M_1,0 in the tree: models between M_1 and M_0,r, M_d wins",
-          sorted(res['candidates']) == ['-d', '-d+s', '-s']
+    res, R = run(scen, 'M_none_r', [('d', []), ('s', [])], m10=True)
+    check("M_1,0 preferred in the tree: d, s, d+s from M_0,r, M_d wins",
+          res['candidates'] == ['d', 's', 'd+s']
           and res['model_final'] == 'M_d_r'
-          and res['start'].startswith('families removed')
+          and res['start'] == 'M_1,0 preferred in the tree'
           and close(res['r_star_final'], 0.008))
 
-    # 9. additions: all the combinations of the Res_r0 families
+    # 9. M_1,0 never preferred (3 sigma test in the tree): the same
+    #    combinations of the families of the chain
     scen = {'r_min': {'M_none_r': 0.010, 'M_d_r': 0.008, 'M_s_r': 0.007,
                       'M_d+s_r': 0.004},
             'logz': {'M_none_r': -10., 'M_d_r': -11., 'M_s_r': -11.,
                      'M_d+s_r': -9.}}
     res, R = run(scen, 'M_none_r', [('d', []), ('s', [])])
-    check("additions: d, s and d+s tried; d+s wins",
+    check("M_1,0 not preferred: d, s and d+s tried; d+s wins",
           res['candidates'] == ['d', 's', 'd+s']
-          and res['model_final'] == 'M_d+s_r')
+          and res['model_final'] == 'M_d+s_r'
+          and res['start'] == 'M_1,0 not preferred in the tree')
+
+    # 10. chain s, then ds1 (requires s): ds1 alone is not a candidate
+    scen = {'r_min': {'M_d_r': 0.010, 'M_d+s_r': 0.007,
+                      'M_d+ds1+s_r': 0.004},
+            'logz': {'M_d_r': -10., 'M_d+s_r': -11., 'M_d+ds1+s_r': -12.}}
+    res, R = run(scen, 'M_d_r', [('s', []), ('ds1', [])])
+    check("requirements: s and s+ds1, not ds1 alone",
+          res['candidates'] == ['s', 's+ds1']
+          and res['model_final'] == 'M_d_r')
     print("\nAll tests passed.")
 
 

@@ -257,47 +257,56 @@ def main():
           and resid_calls(F, 'M_d_0') == ['s', 'dT', 'd2', 'ds1']
           and ('replace', 'M_d+d2_r') in path)
 
-    # 9. Res_r0: d and s detected, no M_1,r preferred; M_1,0 of d, of s
-    #    (pruned) and of d+s, none preferred -> 3 sigma on M_0,r; the
-    #    detected families are logged for the profile scheme
-    D0, S0, DS0 = 'M_d_0', 'M_s-s_w00w10_0', 'M_d+s-s_w00w10_0'
+    # 9. Res_r0: d and s detected; only d (highest evidence) as M_1,r, not
+    #    preferred; M_1,0 = M_d_0 not preferred; nothing in the residuals of
+    #    M_d_0 -> 3 sigma on M_0,r; the chain (d) logged for the profile
     scen = {'r': {M0: (0.012, 0.003)},
             'resid': {('M_none_0', 'd'): -100., ('M_none_0', 's'): -110.},
-            'resid_off': {('M_none_0', 's'): ['A_s_w00w10']},
-            'logZ': {M0: -150., 'M_d_r': -150.5, D0: -152., S0: -153.,
-                     DS0: -151.}}
+            'logZ': {M0: -150., 'M_d_r': -150.5, 'M_d_0': -152.}}
     res, path, F = run(scen)
-    r0 = [e for e in log_events(scen) if e['node'] == 'resid'
-          and e['question'].startswith('Res_r0')][-1]
-    check("Res_r0: no M_1,r, no M_1,0 preferred -> 3 sigma on M_0,r",
+    ev = log_events(scen)
+    chain = [e for e in ev if e['node'] == 'r0chain'][-1]
+    check("Res_r0: only the first family as M_1,r, then M_1,0, then 3 sigma",
           path[-2][0] == 'r3sigma' and res['model'] == M0
-          and all(('full', m) in F.calls for m in (D0, S0, DS0)))
-    check("  detected families and their pruned spectra in the log",
-          r0['base'] == 'M_none_0' and r0['detected'] == ['d', 's']
-          and r0['pruned'] == [[], ['A_s_w00w10']])
+          and ('full', 'M_d_0') in F.calls
+          and ('screen', 'M_s_r') not in F.calls
+          and resid_calls(F, 'M_d_0') == ['s', 'dT', 'd2', 'ds1'])
+    check("  chain of families in the log for the profile scheme",
+          chain['answer'] == 'No' and chain['families'] == ['d']
+          and chain['base'] == M0)
 
-    # 9b. only d+s preferred at r = 0 -> M_1 = M_d+s, upper limit
+    # 9b. s found in the residuals of M_d_0 -> M_1 = M_d+s (no pruning),
+    #     M_1,0 preferred -> stop; Bayesian result: 3 sigma test on M_0,r
+    scen['resid'][('M_d_0', 's')] = -105.
+    scen['resid_off'] = {('M_d_0', 's'): ['A_s_w00w10']}
+    DS0 = 'M_d+s-s_w00w10_0'
     scen['logZ'][DS0] = -140.
     res, path, F = run(scen)
-    check("Res_r0: M_1,0 of d+s preferred -> upper limit with M_d+s",
-          res['conclusion'] == 'upper_limit'
-          and res['model'] == 'M_d+s-s_w00w10_r'
-          and not any(n == 'r3sigma' for n, _ in path))
+    chain = [e for e in log_events(scen) if e['node'] == 'r0chain'][-1]
+    check("second round: M_d+s,0 preferred -> M_1 = M_d+s, 3 sigma on M_0,r",
+          ('m10', 'M_d+s-s_w00w10_r') in path
+          and path[-2][0] == 'r3sigma' and res['model'] == M0
+          and res['conclusion'] == 'r_detection')
+    check("  no pruning in the rounds, chain d, s with the residual "
+          "screening",
+          not any(c[0] == 'screen' and 's' in c[1] for c in F.calls)
+          and chain['families'] == ['d', 's']
+          and chain['pruned'] == [[], ['A_s_w00w10']])
 
-    # 9c. d alone is already preferred -> M_1 = M_d, d+s not tried
-    scen['logZ'][D0] = -145.
+    # 9c. M_d_0 already preferred -> M_1 = M_d, no second round
+    scen['logZ']['M_d_0'] = -145.
     res, path, F = run(scen)
-    check("  the simplest preferred one (d), the pair not even fitted",
-          res['model'] == 'M_d_r' and ('full', DS0) not in F.calls
-          and ('m10', 'M_d_r') in path)
+    check("  M_1,0 of the first family preferred: no second round",
+          ('m10', 'M_d_r') in path and path[-2][0] == 'r3sigma'
+          and resid_calls(F, 'M_d_0') == [])
 
-    # 9d. the second family (s) is preferred as M_1,r -> adopted
+    # 9d. the first family preferred as M_1,r -> adopted, s never tried
     scen = {'r': {M0: (0.012, 0.003)},
             'resid': {('M_none_0', 'd'): -100., ('M_none_0', 's'): -110.},
-            'logZ': {M0: -150., 'M_d_r': -151., 'M_s_r': -140.}}
+            'logZ': {M0: -150., 'M_d_r': -140.}}
     res, path, F = run(scen)
-    check("Res_r0: every family tried as M_1,r, the second one adopted",
-          ('replace', 'M_s_r') in path)
+    check("Res_r0: first family preferred as M_1,r -> adopted",
+          ('replace', 'M_d_r') in path and ('screen', 'M_s_r') not in F.calls)
 
     # 13. immediate pruning: A_d_w00w10 not detected in the full fit of
     #     M_d_r -> the pruned model is compared directly, and adopted

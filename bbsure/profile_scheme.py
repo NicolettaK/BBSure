@@ -4,14 +4,11 @@ Profile scheme: run on a concluded tree. The moments are searched with r = 0
 judged with every model at its own r, the minimum of its profile likelihood,
 instead of with r marginalised.
 
-1. M* = final model of the tree. Candidates, in the opposite direction of
-   the choice of the tree: if M* is M_0,r, M* + g for the families g
-   detected (among all those tested) in the last Res_r0 of the tree (none
-   if the tree concluded before Res_r0 or nothing was detected); if M* is
-   M_1 = M_0,r + all the families of Res_r0 because M_1,0 was preferred
-   over M_0,r, every model in between, down to that M_0,r: families
-   removed, each model checked at its own r.
-   In both cases every combination of the families is tried.
+1. M* = final model of the tree (M_0,r). Candidates: M* +
+   every combination of the families added to M_0,r in the last Res_r0 of
+   the tree (M_1 included), respecting the requirements of the families
+   (e.g. ds1 only with s); none if the tree concluded before Res_r0 or
+   nothing was detected there.
 2. Profiles in r: M* -> r* = its minimum; M* + g -> r*_g for every candidate.
    A profile: r fixed on a grid, all the other parameters re-fitted (ML).
 3. Comparison of all the models, each at its own r (M* at r*, M* + g at
@@ -49,8 +46,8 @@ from scipy.interpolate import interp1d
 from .config import build_config, free_param_names, iter_param_entries
 from .fitter import Fitter, NoValidStart
 from .log import DecisionLog
-from .models import (MOMENT_GROUPS, amp_name, group_amplitudes,
-                     model_from_label, slope_name)
+from .models import (MOMENT_GROUPS, amp_name,
+                     model_from_label, requirements_met, slope_name)
 from .runner import BBCompSepRunner
 
 # at the edges the profile must rise at least this much (4 sigma): needed
@@ -111,11 +108,25 @@ def add_combinations(M0, fams):
     return out
 
 
+def chain_candidates(ev):
+    """
+    Families added to M_0,r in the last Res_r0 of the tree (node
+    'r0chain'), with their removed spectra: [(group, off)]. Empty if there
+    is none or if the tree adopted a new model after it.
+    """
+    idx = [i for i, e in enumerate(ev) if e['node'] == 'r0chain']
+    if not idx or any(e['node'] == 'replace' for e in ev[idx[-1]:]):
+        return []
+    e = ev[idx[-1]]
+    return list(zip(e['families'], e['pruned']))
+
+
 def res_r0_candidates(ev):
     """
     Families detected in the last Res_r0 of the tree, with the spectra the
     residual screening removed: [(group, off)]. Empty if there is no Res_r0
-    or if the tree adopted a new model after it.
+    or if the tree adopted a new model after it. (Trees of the previous
+    versions, e.g. to choose the sets to rerun: scripts/prepare_rerun.py.)
     """
     last = last_res_r0(ev)
     if last is None or any(e['node'] == 'replace' for e in ev[last:]):
@@ -161,24 +172,14 @@ class ProfileScheme:
         ev = json.load(open(os.path.join(tree_dir, 'decision_log.json')))
         M0 = model_from_label(concl['model'])
         self.M0 = M0
-        # the opposite direction of the tree: if it chose M_0,r, the families
-        # of the last Res_r0 are added (all their combinations); if it chose
-        # M_1 because M_1,0 was preferred (node 'm10'), the family added by
-        # M_1,0 is removed: the only candidate is the M_0,r of that Res_r0
-        self.removal = any(e['node'] == 'm10' for e in ev)
-        if self.removal:
-            # every model between M_0,r (included) and M_1 = M*: M_0,r + each
-            # proper subset of the families of M_1, label '-<removed>'
-            M0r = model_from_label(ev[last_res_r0(ev)]['base']).with_r(True)
-            new = sorted(M0.moments - M0r.moments)
-            fams = [(g, sorted(set(group_amplitudes(g)) & set(M0.off)))
-                    for g in new]
-            inner = [M for lab, M in add_combinations(M0r, fams)
-                     if M.moments != M0.moments]
-            self.cands = [('-' + '+'.join(sorted(M0.moments - M.moments)), M)
-                          for M in [M0r] + inner]
-        else:
-            self.cands = add_combinations(M0, res_r0_candidates(ev))
+        # candidates: M_0,r + every combination of the families added in
+        # Res_r0 (node 'r0chain') that respects the requirements (e.g. ds1
+        # only with s), both when M_1,0 was preferred and when not
+        self.m10 = any(e['node'] == 'm10' for e in ev)
+        req = tc.get('moments', {}).get('requires')
+        self.cands = [(lab, M) for lab, M in
+                      add_combinations(M0, chain_candidates(ev))
+                      if requirements_met(M, req)]
         cfg = yaml.safe_load(open(os.path.join(tree_dir, f'{M0.label}_PC',
                                                'config.yml')))
         names = free_param_names(cfg['BBCompSep'])
@@ -497,8 +498,8 @@ class ProfileScheme:
                    model_tree=M0.label, model_final=final.label,
                    candidates=[g for g, _ in self.cands],
                    comparison=comparison,
-                   start=('families removed (M_1,0 preferred in the tree)'
-                          if self.removal else 'candidates from Res_r0')
+                   start=('M_1,0 preferred in the tree' if self.m10
+                          else 'M_1,0 not preferred in the tree')
                    if self.cands else 'no candidates',
                    rejected=sorted(g for g, M in self.cands
                                    if M.label != final.label),
