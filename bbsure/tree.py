@@ -23,11 +23,15 @@ Flowchart
     sigma -> upper limit.
  2. Res_wr: residual test with everything fixed at the best fit of M_0,r, r
     included; candidates are the res_wr groups (d, s) not yet in the model,
-    each with its spectral parameter free. Detected = zero outside the 68%
-    HPD interval of at least one amplitude (screening with emcee, then
-    PolyChord on the detected ones: confirmation and evidence).
+    each with its spectral parameter free. Default (moments: residual_test:
+    lrt): likelihood ratio of two ML fits, detected if p < lrt_p (Delta
+    chi2 with k = amplitudes of the group; 0.3173 = 1 sigma), candidates
+    ordered by p. With residual_test: bayes: detected = zero outside the
+    68% HPD interval of at least one amplitude (screening with emcee, then
+    PolyChord on the detected ones: confirmation and evidence, which sets
+    the order).
       - none detected -> 3.
-      - in order of evidence: full fit of M_0,r + group and comparison with
+      - in order of significance: full fit of M_0,r + group and comparison with
         M_0,r (ln B > lnB_preferred). The first one that passes becomes
         M_0,r -> 1.
       - none passes -> 3 (with r = 0, families not detected or not

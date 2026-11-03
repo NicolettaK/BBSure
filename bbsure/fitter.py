@@ -22,11 +22,11 @@ class Fitter:
     """
 
     def __init__(self, runner: BBCompSepRunner, hpd_frac=0.68,
-                 residual_test='bayes', lrt_p=0.3173):
+                 residual_test='lrt', lrt_p=0.3173):
         self.R = runner
         self.hpd_frac = hpd_frac
-        # residual test: 'bayes' (emcee HPD, PolyChord evidence) or 'lrt'
-        # (likelihood ratio from two ML fits, detected if p < lrt_p)
+        # residual test: 'lrt' (likelihood ratio from two ML fits, detected
+        # if p < lrt_p) or 'bayes' (emcee HPD, PolyChord evidence)
         self.residual_test_kind = residual_test
         self.lrt_p = lrt_p
         self._cache = {}
