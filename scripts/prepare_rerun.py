@@ -5,15 +5,14 @@ tree only the sets it can change, reusing all the fits already done.
 
   python scripts/prepare_rerun.py <old root> <new root> [--all] [--dry-run]
 
-Every set of <old root>/runs is copied in <new root>/runs: the spectra in
-output/ as a symbolic link, the run directories of tree/ and tree/profile/
-as hard links (no copy, no space: a reused run is only read; a run that is
-redone writes new files only if its config changed, which does not happen
-between versions with the same BBPower configs), the small files at the
-top of tree/ and tree/profile/ copied (they are rewritten). The sets whose
+Every set of <old root>/runs is copied in <new root>/runs (the spectra in
+output/ as a symbolic link; tree/ copied, so that the new runs never write
+in <old root>), several sets in parallel (--jobs). Each set is copied in
+<set>.tmp and renamed at the end: an interrupted copy leaves no half set,
+and running the script again copies only the missing ones. The sets whose
 last Res_r0 detected at least one family (the only ones where M_1,0 and
-the combinations of the profile scheme enter) are reset: conclusion files and decision logs of tree and
-profile scheme removed, the fits kept (same config -> reused). The others
+the combinations of the profile scheme enter) are reset: conclusion files
+and decision logs of tree and profile scheme removed, the fits kept (same config -> reused). The others
 keep their conclusion and are skipped by nersc/run_one.sh. With --all every
 set is reset. plan/, truth/ and cov/ are linked; truth is not read.
 """
@@ -21,6 +20,7 @@ import argparse
 import json
 import os
 import shutil
+from concurrent.futures import ThreadPoolExecutor
 
 from bbsure.profile_scheme import res_r0_candidates
 
@@ -28,18 +28,22 @@ RESET = ['conclusion.json', 'conclusion_tree.json', 'decision_log.json',
          'decision_log.txt', 'tree_path.pdf', 'tree_path.png']
 
 
-def link_tree(src, dst):
-    """Run directories hard-linked, top-level files (logs, conclusions,
-    profiles) copied; the same for the profile/ subdirectory."""
-    os.makedirs(dst)
-    for x in os.listdir(src):
-        s, d = os.path.join(src, x), os.path.join(dst, x)
-        if x == 'profile' and os.path.isdir(s):
-            link_tree(s, d)
-        elif os.path.isdir(s) and not os.path.islink(s):
-            shutil.copytree(s, d, symlinks=True, copy_function=os.link)
-        else:
-            shutil.copy2(s, d, follow_symlinks=False)
+def copy_set(src, dst, reset):
+    tmp = dst + '.tmp'
+    if os.path.exists(tmp):
+        shutil.rmtree(tmp)
+    os.makedirs(tmp)
+    os.symlink(os.path.join(src, 'output'), os.path.join(tmp, 'output'))
+    shutil.copytree(os.path.join(src, 'tree'), os.path.join(tmp, 'tree'),
+                    symlinks=True)
+    if reset:
+        for sub in ('', 'profile'):
+            for f in RESET + ['result.json']:
+                p = os.path.join(tmp, 'tree', sub, f)
+                if os.path.isfile(p):
+                    os.remove(p)
+    os.rename(tmp, dst)
+    return os.path.basename(dst)
 
 
 def main():
@@ -51,6 +55,8 @@ def main():
                          'detections')
     ap.add_argument('--dry-run', action='store_true',
                     help='only print the sets that would be rerun')
+    ap.add_argument('--jobs', type=int, default=8,
+                    help='sets copied in parallel')
     a = ap.parse_args()
     old, new = os.path.abspath(a.old), os.path.abspath(a.new)
 
@@ -74,20 +80,17 @@ def main():
     for d in ('plan', 'truth', 'cov'):
         if not os.path.exists(os.path.join(new, d)):
             os.symlink(os.path.join(old, d), os.path.join(new, d))
+    todo = []
     for s in sets:
         src, dst = os.path.join(old, 'runs', s), os.path.join(new, 'runs', s)
         if os.path.exists(dst):
             print(f"{s}: already in {new}, left as it is")
             continue
-        os.makedirs(dst)
-        os.symlink(os.path.join(src, 'output'), os.path.join(dst, 'output'))
-        link_tree(os.path.join(src, 'tree'), os.path.join(dst, 'tree'))
-        if s in rerun:
-            for sub in ('', 'profile'):
-                for f in RESET + ['result.json']:
-                    p = os.path.join(dst, 'tree', sub, f)
-                    if os.path.isfile(p):
-                        os.remove(p)
+        todo.append((src, dst, s in rerun))
+    print(f"copying {len(todo)} sets, {a.jobs} in parallel", flush=True)
+    with ThreadPoolExecutor(max_workers=a.jobs) as ex:
+        for i, s in enumerate(ex.map(lambda t: copy_set(*t), todo), 1):
+            print(f"[{i}/{len(todo)}] {s}", flush=True)
     print(f"ready: {new}")
 
 
