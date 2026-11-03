@@ -4,6 +4,7 @@ emcee and single_point, with a generated config. Each run has its own
 directory (config.yml, config.md5, stdout.log, output); runs with the same
 config are reused.
 """
+import copy
 import hashlib
 import os
 import re
@@ -15,7 +16,8 @@ import time
 import numpy as np
 import yaml
 
-from .config import build_config, free_param_names, gaussian_prior_chi2
+from .config import (build_config, free_param_names, gaussian_prior_chi2,
+                     iter_param_entries)
 from .paths import load_yaml
 from .stats import FitResult
 
@@ -71,6 +73,22 @@ def _run_inproc(args, log_path):
             return False
 
 
+# samplers whose result does not depend on the centre of the tophats (only
+# a starting point: PolyChord samples the prior between the edges, emcee
+# starts its walkers there): a run with the same config up to the centres
+# is reused
+CENTRE_FREE_SAMPLERS = ('polychord', 'emcee')
+
+
+def without_centres(cfg):
+    """The config with the centres of the tophat priors removed."""
+    cfg = copy.deepcopy(cfg)
+    for p in iter_param_entries(cfg['BBCompSep']).values():
+        if len(p) > 2 and str(p[1]).lower() == 'tophat':
+            p[2][1] = None
+    return cfg
+
+
 def parse_polychord_stats(fname):
     txt = open(fname).read()
     m = re.search(r'log\(Z\)\s*=\s*([-+0-9.eE]+)\s*\+/-\s*([-+0-9.eE]+)', txt)
@@ -119,16 +137,29 @@ class BBCompSepRunner:
         res_path = os.path.join(d, result_file)
 
         if (self.reuse and os.path.isfile(res_path)
-                and os.path.isfile(hash_path)
-                and open(hash_path).read().strip() == h):
-            self.log.info(f"    [reuse] {tag}")
-            return d
+                and os.path.isfile(hash_path)):
+            if open(hash_path).read().strip() == h:
+                self.log.info(f"    [reuse] {tag}")
+                return d
+            # PolyChord / emcee: the same run with another starting point
+            # (e.g. a best fit that differs in the last digits) is reused
+            sampler = cfg['BBCompSep']['sampler']
+            if (sampler in CENTRE_FREE_SAMPLERS and os.path.isfile(cfg_path)
+                    and without_centres(yaml.safe_load(open(cfg_path)))
+                    == without_centres(cfg)):
+                self.log.info(f"    [reuse] {tag} (same config up to the "
+                              "starting point)")
+                return d
 
         # emcee checkpoint of an interrupted run (e.g. job killed by the time
         # limit): BBPower would resume from a truncated file and fail
         stale = os.path.join(d, 'emcee.npz.h5')
         if os.path.isfile(stale):
             os.remove(stale)
+        # the hash marks a completed run: removed now, written again only at
+        # the end, so that an interrupted run is never reused
+        if os.path.isfile(hash_path):
+            os.remove(hash_path)
 
         with open(cfg_path, 'w') as f:
             f.write(txt)
