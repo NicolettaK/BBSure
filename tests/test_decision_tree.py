@@ -284,8 +284,9 @@ def main():
           chain['answer'] == 'No' and chain['families'] == ['d']
           and chain['base'] == M0)
 
-    # 9b. s found in the residuals of M_d_0 -> M_1 = M_d+s (no pruning),
-    #     M_1,0 preferred -> stop; Bayesian result: 3 sigma test on M_0,r
+    # 9b. s found in the residuals of M_d_0 -> M_1,0 = M_d+s,0 (new spectra
+    #     pruned with r = 0), M_1,r not preferred, M_1,0 preferred -> stop;
+    #     Bayesian result: 3 sigma test on M_0,r
     scen['resid'][('M_d_0', 's')] = -105.
     scen['resid_off'] = {('M_d_0', 's'): ['A_s_w00w10']}
     DS0 = 'M_d+s-s_w00w10_0'
@@ -296,9 +297,11 @@ def main():
           ('m10', 'M_d+s-s_w00w10_r') in path
           and path[-2][0] == 'r3sigma' and res['model'] == M0
           and res['conclusion'] == 'r_detection')
-    check("  no pruning in the rounds, chain d, s with the residual "
-          "screening",
-          not any(c[0] == 'screen' and 's' in c[1] for c in F.calls)
+    check("  second round pruned with r = 0, M_1,r compared first, chain "
+          "d, s with the residual screening",
+          ('screen', DS0) in F.calls
+          and ('screen', 'M_d+s-s_w00w10_r') in F.calls
+          and [e[1] for e in path if e[0] == 'pref'][-2:] == ['No', 'Yes']
           and chain['families'] == ['d', 's']
           and chain['pruned'] == [[], ['A_s_w00w10']])
 
@@ -309,13 +312,50 @@ def main():
           ('m10', 'M_d_r') in path and path[-2][0] == 'r3sigma'
           and resid_calls(F, 'M_d_0') == [])
 
+    # 9e. the first family (d) pruned to nothing with r = 0 -> the next one
+    #     (s) is tried; M_s,0 preferred
+    scen = {'r': {M0: (0.012, 0.003)},
+            'resid': {('M_none_0', 'd'): -100., ('M_none_0', 's'): -110.},
+            'logZ': {M0: -150., 'M_s_0': -140.},
+            'amps': {'M_d_0': {'A_d_w00w10': (0.1, 1.), 'A_d_w10w10': (0.1, 1.)}}}
+    res, path, F = run(scen)
+    check("Res_r0: family pruned to nothing with r = 0 -> next family",
+          ('pruned_out', 'rejected') in path and ('full', 'M_d_0') not in F.calls
+          and ('screen', 'M_s_0') in F.calls and ('m10', 'M_s_r') in path)
+
+    # 9f. the case of the flowchart question: M_1,r pruned to nothing with r
+    #     free (r absorbs the moment), but M_1,0 (pruned with r = 0) is
+    #     preferred over M_0,r -> profile scheme
+    scen = {'r': {M0: (0.012, 0.003)},
+            'resid': {('M_none_0', 'd'): -100.},
+            'logZ': {M0: -150., 'M_d_0': -140.},
+            'amps': {'M_d_r': {'A_d_w00w10': (0.1, 1.), 'A_d_w10w10': (0.1, 1.)}}}
+    res, path, F = run(scen)
+    pr = [e for e in path if e[0] in ('pruned_out', 'pref')]
+    check("M_1,r rejected with r free, M_1,0 preferred -> profile scheme",
+          pr == [('pruned_out', 'rejected'), ('pref', 'Yes')]
+          and ('m10', 'M_d_r') in path and path[-2][0] == 'r3sigma')
+
+    # 9g. r = 0 pruning removes one spectrum: M_1,0 and M_1,r without it
+    D0 = 'M_d-d_w00w10_0'
+    scen = {'r': {M0: (0.012, 0.003)},
+            'resid': {('M_none_0', 'd'): -100.},
+            'logZ': {M0: -150., D0: -140.},
+            'amps': {'M_d_0': {'A_d_w00w10': (0.1, 1.)}}}
+    res, path, F = run(scen)
+    check("r = 0 pruning of one spectrum: M_1,0 and M_1,r without it",
+          ('full', D0) in F.calls and ('screen', 'M_d-d_w00w10_r') in F.calls
+          and ('full', 'M_d_0') not in F.calls
+          and ('m10', 'M_d-d_w00w10_r') in path)
+
     # 9d. the first family preferred as M_1,r -> adopted, s never tried
     scen = {'r': {M0: (0.012, 0.003)},
             'resid': {('M_none_0', 'd'): -100., ('M_none_0', 's'): -110.},
             'logZ': {M0: -150., 'M_d_r': -140.}}
     res, path, F = run(scen)
     check("Res_r0: first family preferred as M_1,r -> adopted",
-          ('replace', 'M_d_r') in path and ('screen', 'M_s_r') not in F.calls)
+          ('replace', 'M_d_r') in path and ('screen', 'M_s_r') not in F.calls
+          and ('screen', 'M_s_0') not in F.calls)
 
     # 13. immediate pruning: A_d_w00w10 not detected in the full fit of
     #     M_d_r -> the pruned model is compared directly, and adopted
@@ -504,11 +544,11 @@ def main():
                       ('M_d+s_0', 's2'): -80., ('M_d+s_0', 'd2'): -85.},
             'logZ': {'M_d_r': GOOD, 'M_d+s_r': GOOD + 1.},
             'r': {'M_d_r': (0.03, 0.005), 'M_d+s_r': (0.03, 0.005)},
-            'unfittable': {'M_d+s+s2_r'}}
+            'unfittable': {'M_d+s+s2_0'}}
     res, path, F = run(scen, lnB_preferred=0.)
     check("Res_r0: unfittable best candidate skipped, next one tried",
           ('unfittable', 'skipped') in path
-          and ('screen', 'M_d+d2+s_r') in F.calls)
+          and ('screen', 'M_d+d2+s_0') in F.calls)
 
     # 24. pruning in the residual test: A_d_w00w10 not detected by the
     #     screening -> the candidate starts without it (no screening of the
