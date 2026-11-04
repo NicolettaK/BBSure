@@ -3,7 +3,8 @@
 New validation root from a concluded one, to rerun with a new version of the
 tree only the sets it can change, reusing all the fits already done.
 
-  python scripts/prepare_rerun.py <old root> <new root> [--all] [--dry-run]
+  python scripts/prepare_rerun.py <old root> <new root> [--all]
+                                  [--any-res-r0] [--dry-run]
                                   [--range FIRST LAST]
 
 Every set of <old root>/runs is copied in <new root>/runs (the spectra in
@@ -14,7 +15,10 @@ and running the script again copies only the missing ones. The sets whose
 last Res_r0 detected at least one family (the only ones where M_1,0 and
 the combinations of the profile scheme enter) are reset: conclusion files
 and decision logs of tree and profile scheme removed, the fits kept (same config -> reused). The others
-keep their conclusion and are skipped by nersc/run_one.sh. With --all every
+keep their conclusion and are skipped by nersc/run_one.sh. With
+--any-res-r0 the sets reset are those where ANY Res_r0 detected a family
+(also before an adoption, or followed by a chain whose last residuals are
+empty): the ones a change of the Res_r0 rounds can modify. With --all every
 set is reset. With --range only the sets with index FIRST..LAST (both skies)
 are copied. plan/, truth/ and cov/ are linked; truth is not read.
 """
@@ -28,6 +32,12 @@ from bbsure.profile_scheme import res_r0_candidates
 
 RESET = ['conclusion.json', 'conclusion_tree.json', 'decision_log.json',
          'decision_log.txt', 'tree_path.pdf', 'tree_path.png']
+
+
+def any_res_r0(ev):
+    """True if any Res_r0 of the tree detected at least one family."""
+    return any(e['node'] == 'resid' and e['question'].startswith('Res_r0')
+               and e['answer'] == 'Yes' for e in ev)
 
 
 def copy_set(src, dst, reset):
@@ -55,6 +65,10 @@ def main():
     ap.add_argument('--all', action='store_true',
                     help='reset every set, not only those with Res_r0 '
                          'detections')
+    ap.add_argument('--any-res-r0', action='store_true',
+                    help='reset the sets where any Res_r0 detected a family '
+                         '(default: only the last Res_r0, not followed by an '
+                         'adoption)')
     ap.add_argument('--dry-run', action='store_true',
                     help='only print the sets that would be rerun')
     ap.add_argument('--jobs', type=int, default=8,
@@ -76,7 +90,9 @@ def main():
             print(f"{s}: no decision log, rerun")
             rerun.append(s)
             continue
-        if a.all or res_r0_candidates(json.load(open(f))):
+        ev = json.load(open(f))
+        if a.all or (any_res_r0(ev) if a.any_res_r0
+                     else res_r0_candidates(ev)):
             rerun.append(s)
     print(f"{len(rerun)}/{len(sets)} sets to rerun: {' '.join(rerun)}")
     if a.dry_run:
