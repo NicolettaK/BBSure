@@ -217,6 +217,6 @@
   text(1580, 1300, ['(*) ML fit of the family on the residuals (everything else', 'fixed): Δχ² vs the base fit, χ² with k = amplitudes of the', 'family degrees of freedom; detected if p &lt; 0.32 (1σ, the', 'analogue of 0 outside the 68% HPD); the family enters whole',
                     '(**) significance: p of the residual test of each detected', 'family; it sets the order in which the families are tried', '(Res_wr) or picks the one added (Res_r0)'], 'note', { anchor: 'start', lh: 21 });
   text(2070, 1300, ['(***) amplitudes with 0 in their 68% HPD (posterior of the', 'full fit) removed and the model refitted, until all are', 'detected; the pruned model is kept if ln B(pruned vs full) > 0', `and is the one compared with ${M(0, 'r')}; for ${M(1, 0)} only the`, 'new spectra are pruned, with r = 0',
-                    '(****) ln B within 2σ of the threshold (A) or between the', 'two best models (B): the choice is flagged as undecided', '(one PolyChord run per fit, no repetitions)'], 'note', { anchor: 'start', lh: 21 });
+                    '(****) ln B within 2σ of the threshold (A) or between the', 'two best models (B): PolyChord repeated with other seeds,', 'mean of ln Z, up to 3 runs per fit'], 'note', { anchor: 'start', lh: 21 });
 })();
 </script>
