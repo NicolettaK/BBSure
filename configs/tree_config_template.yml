@@ -30,10 +30,11 @@ thresholds:
     # (fraction hpd_frac) of at least one amplitude of the group's spectra
     hpd_frac: 0.68
     # Borderline comparisons: if |ln B - threshold| < seed_band * error,
-    # PolyChord is repeated with other seeds (mean of ln Z), up to
-    # seed_max_runs runs per fit
+    # the choice is flagged as undecided; with seed_max_runs > 1 PolyChord is
+    # also repeated with other seeds (mean of ln Z), up to seed_max_runs runs
+    # per fit (1: no repetitions, only the flag)
     seed_band: 2.0
-    seed_max_runs: 3
+    seed_max_runs: 1
 
 moments:
     # Moment groups tested in the residuals (see MOMENT_GROUPS in
