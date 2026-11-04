@@ -26,7 +26,7 @@ from matplotlib.patches import FancyBboxPatch  # noqa: E402
 from scipy import stats  # noqa: E402
 
 from bbsure.models import (MOMENT_CROSS, MOMENT_GROUPS,  # noqa: E402
-                           amp_name, model_from_label)
+                           RESTORE, amp_name, model_from_label)
 
 COLORS = {'green': ('#2f9e44', '#ebfbee'), 'purple': ('#9c36b5', '#f8f0fc'),
           'yellow': ('#e0a800', '#fff9db'), 'red': ('#e03131', '#fff5f5'),
@@ -70,32 +70,39 @@ def spec_name(pref, spec):
     return f"${TERM.get(a, a)}_{ca}\\times {TERM.get(b, b)}_{cb}$"
 
 
+def amp_tex(name):
+    """A_d_w00w10 -> the moment spectrum A_d x beta_d (mathtext)."""
+    _, pref, spec = name.split('_', 2)
+    return spec_name(pref, spec)
+
+
+def fam_tex(g):
+    """Moment group (or 'restore-<group>') -> its spectra (mathtext)."""
+    if g.startswith(RESTORE):
+        return 'restore ' + fam_tex(g[len(RESTORE):])
+    G = MOMENT_GROUPS.get(g)
+    if G is None:
+        return g
+    return ', '.join(spec_name(G['pref'], x) for x in G['spectra'])
+
+
 def short(lab):
-    """M_d+s-d_w00w10_r -> 'd [beta_d x beta_d] + s' (mathtext): the moment
-    families with the spectra left after the pruning (a family without
-    brackets is complete), ', r = 0' if r is fixed."""
+    """M_d+s-d_w00w10_r -> the moment spectra left in the model after the
+    pruning, in mathtext ('beta_d x beta_d, A_s x beta_s, ...'), as in the
+    results table; ', r = 0' if r is fixed."""
     if not lab or not LABEL.fullmatch(lab):
         return str(lab)
     M = model_from_label(lab)
-
-    def names(pref, specs):
-        return ', '.join(spec_name(pref, x) for x in specs)
-
     parts = []
     for g in sorted(M.moments):
         G = MOMENT_GROUPS[g]
-        kept = [x for x in G['spectra']
-                if amp_name(G['pref'], x) not in M.off]
-        parts.append(g if len(kept) == len(G['spectra'])
-                     else f"{g} [{names(G['pref'], kept) or 'none'}]")
+        parts += [spec_name(G['pref'], x) for x in G['spectra']
+                  if amp_name(G['pref'], x) not in M.off]
     for pair, X in MOMENT_CROSS.items():
-        # cross spectra between two groups: shown only if pruned
         if set(pair) <= M.moments:
-            gone = [x for x in X['spectra']
-                    if amp_name(X['pref'], x) in M.off]
-            if gone:
-                parts.append(f"(no {names(X['pref'], gone)})")
-    s = ' + '.join(parts) or 'no moments'
+            parts += [spec_name(X['pref'], x) for x in X['spectra']
+                      if amp_name(X['pref'], x) not in M.off]
+    s = ', '.join(parts) or 'no moments'
     return s + (', $r = 0$' if not M.r_free else '')
 
 
@@ -141,7 +148,7 @@ def tree_items(ev):
             for p in pending:
                 g = re.search(r'moment (\S+) on', p['question'])
                 g = g.group(1) if g else '?'
-                s = f"  {g}: {p['answer']}"
+                s = f"  {fam_tex(g)}: {p['answer']}"
                 if p.get('stage') == 'lrt':
                     s += f"  (Δχ² = {p['dchi2']:.1f}, p = {p['pvalue']:.2g})"
                 elif p['answer'] == 'detected' and p.get('logZ') is not None:
@@ -159,9 +166,11 @@ def tree_items(ev):
             items.append(('red', lines, a))
         elif n == 'prune_check':
             if e.get('undetected'):
-                items.append(('purple', ['pruning: amplitudes with 0 in '
+                r0 = ' (r = 0)' if q.endswith('(r = 0)?') else ' (r free)'
+                items.append(('purple', [f'pruning{r0}: amplitudes with 0 in '
                                          'their 68% HPD',
-                                         ', '.join(e['undetected'])], None))
+                                         ', '.join(amp_tex(x) for x in
+                                                   e['undetected'])], None))
         elif n == 'replace':
             src = q[q.find('(') + 1:q.rfind(')')] if '(' in q else ''
             items.append(('green', [f"M_0,r = M_1,r = {short(a)}"
@@ -216,7 +225,8 @@ def profile_items(ev, res, ndata=None):
     comp = (res or {}).get('comparison') or {}
     items = []
     if res:
-        cands = ', '.join(res.get('candidates') or []) or 'none'
+        cands = '; '.join(fam_tex(c) for c in res.get('candidates')
+                          or []) or 'none'
         items.append(('green', [f"M* = {short(res['model_tree'])}",
                                 f"candidates from the last Res_r0: {cands}"],
                       None))
