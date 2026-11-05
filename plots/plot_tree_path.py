@@ -27,6 +27,7 @@ from scipy import stats  # noqa: E402
 
 from bbsure.models import (MOMENT_CROSS, MOMENT_GROUPS,  # noqa: E402
                            RESTORE, amp_name, model_from_label)
+from bbsure.profile_scheme import chain_candidates  # noqa: E402
 
 COLORS = {'green': ('#2f9e44', '#ebfbee'), 'purple': ('#9c36b5', '#f8f0fc'),
           'yellow': ('#e0a800', '#fff9db'), 'red': ('#e03131', '#fff5f5'),
@@ -86,6 +87,19 @@ def fam_tex(g):
     return ', '.join(spec_name(G['pref'], x) for x in G['spectra'])
 
 
+def fam_left(g, off):
+    """Family g without the spectra of off (pruned with r = 0 in Res_r0),
+    as tested in the profile scheme: 'beta_d^2 x beta_d^2 (A_d x beta_d^2
+    pruned with r = 0)'."""
+    G = MOMENT_GROUPS.get(g)
+    if G is None or not off:
+        return fam_tex(g)
+    left = [spec_name(G['pref'], x) for x in G['spectra']
+            if amp_name(G['pref'], x) not in off]
+    return (', '.join(left) + ' (' + ', '.join(amp_tex(x) for x in off)
+            + ' pruned with r = 0)')
+
+
 def short(lab):
     """M_d+s-d_w00w10_r -> the moment spectra left in the model after the
     pruning, in mathtext ('beta_d x beta_d, A_s x beta_s, ...'), as in the
@@ -117,8 +131,11 @@ def pm(e, k, err, f='.4f'):
 def tree_items(ev):
     """(colour, [lines], answer) for the nodes of the tree."""
     items, pending = [], []
+    cut = False     # the last pruning check of this screening removed spectra
     for e in ev:
         n, q, a = e['node'], e['question'], e['answer']
+        if n not in ('fit', 'prune_check'):
+            cut = False
         if n == 'fit':
             # a new M_0,r: the first fit of each iteration
             if q == f"fit of {e.get('model')}":
@@ -165,12 +182,33 @@ def tree_items(ev):
                 lines.append(s)
             items.append(('red', lines, a))
         elif n == 'prune_check':
+            r0 = ' (r = 0)' if q.endswith('(r = 0)?') else ' (r free)'
+            lab = LABEL.search(q)
             if e.get('undetected'):
-                r0 = ' (r = 0)' if q.endswith('(r = 0)?') else ' (r free)'
-                items.append(('purple', [f'pruning{r0}: amplitudes with 0 in '
-                                         'their 68% HPD',
+                left = short(model_from_label(lab.group(0))
+                             .without(e['undetected']).label) if lab else '?'
+                if q.startswith('Undetected new'):
+                    # screening (ML + emcee): removed right away
+                    head, tail = 'removed (0 in their 68% HPD)', 'left: '
+                else:
+                    # full fit: removed only if the pruned model is not
+                    # disfavoured (next box)
+                    head, tail = ('full fit, 0 in their 68% HPD (removed if '
+                                  'not disfavoured)'), 'pruned model: '
+                items.append(('purple', [f'pruning{r0}: {head}',
                                          ', '.join(amp_tex(x) for x in
-                                                   e['undetected'])], None))
+                                                   e['undetected']),
+                                         tail + left], None))
+                cut = True
+            else:
+                # first check of a screening that removes nothing: shown
+                # too, so that every pruning step appears in the path
+                if q.startswith('Undetected new') and not cut and lab:
+                    items.append(('purple', [f'pruning{r0}: nothing removed '
+                                             '(all new spectra detected)',
+                                             'left: ' + short(lab.group(0))],
+                                  None))
+                cut = False
         elif n == 'replace':
             src = q[q.find('(') + 1:q.rfind(')')] if '(' in q else ''
             items.append(('green', [f"M_0,r = M_1,r = {short(a)}"
@@ -219,14 +257,15 @@ def end_item(e, model, chi=None, where=''):
     return ('grey', [shorten(e['question'])], e['answer'])
 
 
-def profile_items(ev, res, ndata=None):
+def profile_items(ev, res, ndata=None, tree_ev=()):
     """(colour, [lines], answer) for the nodes of the profile scheme;
-    ndata: size of the data vector (for the dof at r = r_min)."""
+    ndata: size of the data vector (for the dof at r = r_min); tree_ev: log
+    of the tree (families of the Res_r0 chain and their pruned spectra)."""
     comp = (res or {}).get('comparison') or {}
     items = []
     if res:
-        cands = '; '.join(fam_tex(c) for c in res.get('candidates')
-                          or []) or 'none'
+        cands = '; '.join(fam_left(g, off) for g, off in
+                          chain_candidates(list(tree_ev))) or 'none'
         items.append(('green', [f"M* = {short(res['model_tree'])}",
                                 f"candidates from the last Res_r0: {cands}"],
                       None))
@@ -333,7 +372,8 @@ def main():
         res = json.load(open(rf)) if os.path.isfile(rf) else None
         fits = [f for f in ev if f['node'] == 'fit' and 'nfree' in f]
         ndata = fits[0]['dof'] + fits[0]['nfree'] if fits else None
-        columns.append((profile_items(pev, res, ndata), 'profile scheme'))
+        columns.append((profile_items(pev, res, ndata, ev),
+                        'profile scheme'))
 
     def height(items):
         return sum(len(wrap(ln)) + (ans is not None) for _, ln, ans in items) \
