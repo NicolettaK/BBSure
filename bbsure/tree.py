@@ -55,7 +55,10 @@ Flowchart
       c) otherwise M_1,0 against M_0,r: preferred -> stop, M_1 to the
          profile scheme;
       d) otherwise Res_r0 on the residuals of M_1,0, M_1 = M_1,0 and the
-         next round; nothing left in the residuals -> stop.
+         next round; nothing left in the residuals -> stop. The families
+         tested and not detected in a round of the chain are not tested
+         again in the next rounds (only the new ones, allowed by the
+         requirements, and those detected but not chosen).
     M_1 starts as M_0,r.
     In both cases the Bayesian result is the 3 sigma test on M_0,r; the
     profile scheme compares M_0,r, M_1 and the models in between.
@@ -203,6 +206,9 @@ class DecisionTree:
         test).
         """
         found = []
+        # groups tested and not detected (excluded from the next rounds of
+        # the Res_r0 chain)
+        self.last_undetected = []
         for g in groups:
             try:
                 rr = self.F.residual_test(base, g)
@@ -220,6 +226,8 @@ class DecisionTree:
                           pruned=list(rr.off), hpd68=hpd)
             if rr.detected:
                 found.append(rr)
+            else:
+                self.last_undetected.append(g)
         found.sort(key=lambda rr: rr.rank)
         self.log.node('resid', f'{name}: is there any moment in the '
                       'residuals?', 'Yes' if found else 'No',
@@ -405,6 +413,9 @@ class DecisionTree:
             if groups else []
         if not found:
             return 'to_3sigma', None, 'Res_r0'
+        # families tested and not detected: not tested again in the next
+        # rounds of this chain
+        excluded = set(self.last_undetected)
 
         # rounds: the family with the highest residual evidence (the next
         # one if it cannot be fitted or is pruned to nothing with r = 0) is
@@ -447,10 +458,16 @@ class DecisionTree:
             if self.compare(fit10, fit0, 'M_1,0'):
                 self.log_chain(M0, M1, True)
                 return 'to_profile', M1, 'Res_r0'
-            groups = candidate_groups(M10, self.res_r0,
-                                      extra_requires=self.extra_requires)
+            groups = [g for g in candidate_groups(
+                M10, self.res_r0, extra_requires=self.extra_requires)
+                if g not in excluded]
             found = self.residual_scan(fit10, groups, 'Res_r0',
                                        'r fixed at 0') if groups else []
+            if not groups:
+                self.log.info("    (Res_r0: no family left to test on the "
+                              "residuals of M_1,0)")
+            else:
+                excluded |= set(self.last_undetected)
             if not found:
                 break
             fit00 = fit10

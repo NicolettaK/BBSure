@@ -279,7 +279,7 @@ def main():
           path[-2][0] == 'r3sigma' and res['model'] == M0
           and ('full', 'M_d_0') in F.calls
           and ('screen', 'M_s_r') not in F.calls
-          and resid_calls(F, 'M_d_0') == ['s', 'dT', 'd2', 'ds1'])
+          and resid_calls(F, 'M_d_0') == ['s', 'd2'])
     check("  chain of families in the log for the profile scheme",
           chain['answer'] == 'No' and chain['families'] == ['d']
           and chain['base'] == M0)
@@ -347,6 +347,18 @@ def main():
           ('full', D0) in F.calls and ('screen', 'M_d-d_w00w10_r') in F.calls
           and ('full', 'M_d_0') not in F.calls
           and ('m10', 'M_d-d_w00w10_r') in path)
+
+    # 9h. s not detected in the first round of the chain: not tested again
+    #     on the residuals of M_d_0 (even if it would be detected there)
+    scen = {'r': {M0: (0.012, 0.003)},
+            'resid': {('M_none_0', 'd'): -100., ('M_d_0', 's'): -90.},
+            'logZ': {M0: -150., 'M_d_r': -150.5, 'M_d_0': -152.}}
+    res, path, F = run(scen)
+    check("family not detected in a round is not retested in the next ones",
+          {'s', 'dT'} <= set(resid_calls(F, 'M_none_0'))
+          and not {'s', 'dT'} & set(resid_calls(F, 'M_d_0'))
+          and 'd2' in resid_calls(F, 'M_d_0')
+          and path[-2][0] == 'r3sigma')
 
     # 9d. the first family preferred as M_1,r -> adopted, s never tried
     scen = {'r': {M0: (0.012, 0.003)},
