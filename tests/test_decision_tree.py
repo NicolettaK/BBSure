@@ -360,6 +360,19 @@ def main():
           and 'd2' in resid_calls(F, 'M_d_0')
           and path[-2][0] == 'r3sigma')
 
+    # 9i. d pruned to nothing with r = 0 in the first round, s taken
+    #     instead and not preferred: d not tested again on the residuals of
+    #     M_s_0 (even if it would be detected there)
+    scen = {'r': {M0: (0.012, 0.003)},
+            'resid': {('M_none_0', 'd'): -100., ('M_none_0', 's'): -110.,
+                      ('M_s_0', 'd'): -90., ('M_s_0', 'ds1'): -95.},
+            'logZ': {M0: -150., 'M_s_r': -150.5, 'M_s_0': -152.},
+            'amps': {'M_d_0': {'A_d_w00w10': (0.1, 1.), 'A_d_w10w10': (0.1, 1.)}}}
+    res, path, F = run(scen)
+    check("family pruned to nothing with r = 0 is not retested",
+          ('pruned_out', 'rejected') in path and ('screen', 'M_s_0') in F.calls
+          and 'd' not in resid_calls(F, 'M_s_0'))
+
     # 9d. the first family preferred as M_1,r -> adopted, s never tried
     scen = {'r': {M0: (0.012, 0.003)},
             'resid': {('M_none_0', 'd'): -100., ('M_none_0', 's'): -110.},

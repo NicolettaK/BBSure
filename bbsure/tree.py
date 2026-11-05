@@ -56,9 +56,10 @@ Flowchart
          profile scheme;
       d) otherwise Res_r0 on the residuals of M_1,0, M_1 = M_1,0 and the
          next round; nothing left in the residuals -> stop. The families
-         tested and not detected in a round of the chain are not tested
-         again in the next rounds (only the new ones, allowed by the
-         requirements, and those detected but not chosen).
+         tested and not detected, or pruned to nothing with r = 0, in a
+         round of the chain are not tested again in the next rounds (only
+         the new ones, allowed by the requirements, and those detected but
+         not chosen).
     M_1 starts as M_0,r.
     In both cases the Bayesian result is the 3 sigma test on M_0,r; the
     profile scheme compares M_0,r, M_1 and the models in between.
@@ -441,6 +442,9 @@ class DecisionTree:
                     continue
                 if got is not None:
                     break
+                # pruned to nothing with r = 0: the moments can only grow
+                # along the chain, so it would be pruned again
+                excluded.add(rr.group)
             if got is None:
                 break
             M10, fit10 = got
