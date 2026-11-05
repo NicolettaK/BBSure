@@ -594,6 +594,8 @@ def main():
     test_configs()
     print("\nHPD and detection:")
     test_hpd()
+    print("\nNested ML fits:")
+    test_nested_ml()
     print("\nAll tests passed.")
 
 
@@ -706,6 +708,41 @@ def test_hpd():
     check("detection: B away from zero -> detected, A alone not",
           dt.detection(names, s, ['A', 'B'], bounds=b)[0]
           and not dt.detection(names, s, ['A'], bounds=b)[0])
+
+
+def test_nested_ml():
+    """A fit worse than the model it contains is redone from its best fit."""
+    small = dt.Model(frozenset({'d'}), True)
+    big = small.plus('s')
+
+    class FakeRunner:
+        def __init__(self):
+            self.tags = []
+
+        def ml(self, model, tag, fixed=None, centers=None):
+            self.tags.append(tag)
+            if model == small:
+                chi2 = 520.
+            elif tag.endswith('_ML'):
+                chi2 = 600.                  # stuck minimizer
+            else:
+                # restart from the best fit of the smaller model
+                chi2 = 515. if centers and centers.get('A_s_w10w10') == 0. else 600.
+            return dt.FitResult(model, tag, ['p'], {'p': 1.}, chi2, NDATA)
+
+    R = FakeRunner()
+    F = dt.Fitter(R)
+    F.ml_fit(small)
+    res = F.ml_fit(big)
+    check("stuck fit of the bigger model redone from the smaller one",
+          res.chi2 == 515. and res.tag.endswith('_MLn1'))
+    R2 = FakeRunner()
+    F2 = dt.Fitter(R2)
+    F2.ml_fit(big)
+    check("  no smaller model fitted: nothing redone", R2.tags == [big.label + '_ML'])
+    check("  contains(): r = 0 model inside the r-free one, not the opposite",
+          dt.contains(big, big.with_r(False)) and not dt.contains(big.with_r(False), big)
+          and dt.contains(big, small) and not dt.contains(small, big))
 
 
 if __name__ == '__main__':

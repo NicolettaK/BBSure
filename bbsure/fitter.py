@@ -14,6 +14,18 @@ from .models import MOMENT_GROUPS, Model, cand_group
 from .runner import BBCompSepRunner, NoValidStart  # noqa: F401
 from .stats import FitResult, ResidualResult, detection
 
+# a fit of a model may not have a chi2 above that of a model it contains
+# (nested: same model with some amplitudes, or r, set to zero) by more
+# than this; otherwise the minimizer stopped early and the fit is redone
+# from the best fit of the smaller model
+NESTED_TOL = 0.1
+
+
+def contains(big: Model, small: Model):
+    """True if `small` is `big` with some amplitudes (and/or r) at zero."""
+    return (big != small and (big.r_free or not small.r_free)
+            and set(small.amplitudes()) <= set(big.amplitudes()))
+
 
 class Fitter:
     """
@@ -119,9 +131,46 @@ class Fitter:
     def ml_fit(self, model: Model, centers=None) -> FitResult:
         key = ('ml', model)
         if key not in self._cache:
-            self._cache[key] = self.R.ml(model, f"{model.label}_ML",
-                                         centers=centers)
+            res = self.R.ml(model, f"{model.label}_ML", centers=centers)
+            self._cache[key] = self.nested_check(model, res)
         return self._cache[key]
+
+    def nested_check(self, model: Model, res: FitResult) -> FitResult:
+        """
+        The ML fit of a model must not be worse than that of a model it
+        contains, already fitted (chi2_big <= chi2_small): if it is (by more
+        than NESTED_TOL), the minimizer stopped early, and the fit is redone
+        from the best fit of the smaller model with the extra amplitudes
+        (and r) at zero; if that start is outside the moment constraints,
+        with the new first-order auto-spectra (w10w10, w01w01) where the
+        first fit put them. The best of the fits is kept.
+        """
+        subs = [f for (k, m), f in self._cache.items()
+                if k == 'ml' and contains(model, m) and np.isfinite(f.chi2)]
+        if not subs:
+            return res
+        sub = min(subs, key=lambda f: f.chi2)
+        if np.isfinite(res.chi2) and res.chi2 <= sub.chi2 + NESTED_TOL:
+            return res
+        new = [a for a in model.amplitudes() if a not in sub.model.amplitudes()]
+        start = dict(sub.best)
+        start.update({a: 0. for a in new})
+        if model.r_free and not sub.model.r_free:
+            start['r_tensor'] = 0.
+        start2 = dict(start)
+        start2.update({a: res.best[a] for a in new if a in res.best
+                       and re.match(r'A_[ds]_(w10w10|w01w01)$', a)})
+        for k, st in enumerate([start, start2], 1):
+            try:
+                alt = self.R.ml(model, f"{model.label}_MLn{k}", centers=st)
+            except NoValidStart:
+                continue
+            if np.isfinite(alt.chi2) and not (np.isfinite(res.chi2)
+                                              and alt.chi2 >= res.chi2):
+                res = alt
+            if np.isfinite(res.chi2) and res.chi2 <= sub.chi2 + NESTED_TOL:
+                break
+        return res
 
     def residual_test(self, base: FitResult, group) -> ResidualResult:
         """
