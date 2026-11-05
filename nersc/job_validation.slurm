@@ -20,7 +20,9 @@ set -uo pipefail
 FIRST="$1"; LAST="$2"
 ROOT="${SLURM_SUBMIT_DIR}"
 REPO="$(python -c 'import bbsure, os; print(os.path.dirname(os.path.dirname(bbsure.__file__)))')"
-NPAR=16
+# trees in parallel (16 on a full node; e.g. NPAR=8 on half a node of the
+# shared queue: sbatch -q shared -c 128 --export=ALL,NPAR=8 ...)
+NPAR=${NPAR:-16}
 
 export BBPOWER_NPROC=8           # emcee pool processes per tree
 # profile points fitted in parallel per tree (one ML each, one core each)
