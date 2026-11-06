@@ -34,11 +34,12 @@ class Fitter:
     """
 
     def __init__(self, runner: BBCompSepRunner, hpd_frac=0.68,
-                 residual_test='lrt', lrt_p=0.3173):
+                 residual_test='bic', lrt_p=0.3173):
         self.R = runner
         self.hpd_frac = hpd_frac
         # residual test: 'lrt' (likelihood ratio from two ML fits, detected
-        # if p < lrt_p) or 'bayes' (emcee HPD, PolyChord evidence)
+        # if p < lrt_p), 'bic' (same fits, detected if Delta chi2 > k ln N,
+        # i.e. the BIC decreases) or 'bayes' (emcee HPD, PolyChord evidence)
         self.residual_test_kind = residual_test
         self.lrt_p = lrt_p
         self._cache = {}
@@ -196,7 +197,7 @@ class Fitter:
         tag = f"resid_{base.model.label}_plus_{group}"
         bounds = self.prior_bounds(amps)
 
-        if self.residual_test_kind == 'lrt':
+        if self.residual_test_kind in ('lrt', 'bic'):
             return self._residual_lrt(base, group, m, fixed, amps, tag)
         names, samp = self.R.emcee(m, tag + "_MC", fixed=fixed,
                                    centers=base.best)
@@ -223,10 +224,13 @@ class Fitter:
         """
         Likelihood-ratio residual test: ML fit of the group on the residuals
         (everything else fixed as in the Bayesian test) against the base
-        best fit; Delta chi2 with k = number of new amplitudes degrees of
-        freedom, detected if p < lrt_p (0.3173: 1 sigma, the analogue of
-        zero outside the 68% HPD). No pruning of single spectra: the group
-        enters whole. Candidates ordered by log p.
+        best fit, k = number of new amplitudes. 'lrt': detected if p < lrt_p
+        (chi2 with k degrees of freedom; 0.3173: 1 sigma, the analogue of
+        zero outside the 68% HPD). 'bic': detected if Delta chi2 > k ln N
+        (N = size of the data vector), i.e. if the BIC of the model with the
+        group is lower. No pruning of single spectra: the group enters
+        whole. Candidates ordered by log p ('lrt') or by
+        Delta BIC = k ln N - Delta chi2 ('bic'), lowest first.
         """
         res = self.R.ml(m, tag + "_ML", fixed=fixed, centers=base.best)
         if not np.isfinite(res.chi2):
@@ -242,7 +246,16 @@ class Fitter:
         dchi2 = max(base.chi2 - res.chi2, 0.)
         k = len(amps)
         logp = float(chi2_dist.logsf(dchi2, k))
-        return ResidualResult(group, bool(np.exp(logp) < self.lrt_p), {},
+        if self.residual_test_kind == 'bic':
+            if not base.ndata:
+                raise ValueError(f"BIC residual test: size of the data vector "
+                                 f"unknown for {base.model.label}")
+            thr = k * float(np.log(base.ndata))
+        else:
+            thr = float(chi2_dist.isf(self.lrt_p, k))
+        # order: Delta BIC (bic) or log p (lrt), lowest first
+        rank = thr - dchi2 if self.residual_test_kind == 'bic' else logp
+        return ResidualResult(group, bool(dchi2 > thr), {},
                               best=dict(res.best), stage='lrt',
                               dchi2=dchi2, pvalue=float(np.exp(logp)),
-                              rank=logp)
+                              rank=rank, thr=thr)

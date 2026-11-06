@@ -23,11 +23,14 @@ Flowchart
     sigma -> upper limit.
  2. Res_wr: residual test with everything fixed at the best fit of M_0,r, r
     included; candidates are the res_wr groups (d, s) not yet in the model,
-    each with its spectral parameter free. Default (moments: residual_test:
-    lrt): likelihood ratio of two ML fits, detected if p < lrt_p (Delta
-    chi2 with k = amplitudes of the group; 0.3173 = 1 sigma), candidates
-    ordered by p. With residual_test: bayes: detected = zero outside the
-    68% HPD interval of at least one amplitude (screening with emcee, then
+    each with its spectral parameter free. moments: residual_test: lrt or
+    bic: two ML fits (with and without the group), k = amplitudes of the
+    group; lrt: detected if p < lrt_p (chi2 with k degrees of freedom;
+    0.3173 = 1 sigma); bic: detected if Delta chi2 > k ln N (N = size of
+    the data vector: the BIC decreases); candidates ordered by p (lrt) or
+    by Delta BIC = k ln N - Delta chi2 (bic). With
+    residual_test: bayes: detected = zero outside the 68% HPD interval of
+    at least one amplitude (screening with emcee, then
     PolyChord on the detected ones: confirmation and evidence, which sets
     the order).
       - none detected -> 3.
@@ -223,7 +226,7 @@ class DecisionTree:
                           f'of {base.model.label} ({which})',
                           'detected' if rr.detected else 'not detected',
                           stage=rr.stage, logZ=rr.logZ, logZerr=rr.logZerr,
-                          dchi2=rr.dchi2, pvalue=rr.pvalue,
+                          dchi2=rr.dchi2, pvalue=rr.pvalue, dchi2_thr=rr.thr,
                           pruned=list(rr.off), hpd68=hpd)
             if rr.detected:
                 found.append(rr)

@@ -46,13 +46,17 @@ moments:
     # with the positivity a cross term requires the auto-spectra: ds1
     # (w1^beta_d x A_s, A_d x w1^beta_s) requires s
     requires: {ds1: ['s']}
-    # Residual test: lrt = likelihood ratio of two ML fits, detected if
-    # p < lrt_p (Delta chi2, k = amplitudes of the group; 0.3173 = 1 sigma,
-    # the analogue of zero outside the 68% HPD), ordered by p, no pruning of
-    # single spectra; bayes = emcee (zero outside the 68% HPD of an
-    # amplitude) confirmed by PolyChord, ordered by the residual evidence
-    # (same final results on the test sets, ~3x slower)
-    residual_test: lrt
+    # Residual test: two ML fits, with and without the group (k = its
+    # amplitudes), no pruning of single spectra:
+    #   bic = detected if Delta chi2 > k ln N (N = size of the data vector:
+    #         the BIC decreases; ~6.1 per amplitude at nside 128); ordered
+    #         by Delta BIC = k ln N - Delta chi2
+    #   lrt = detected if p < lrt_p (chi2 with k degrees of freedom; 0.3173
+    #         = 1 sigma, the analogue of zero outside the 68% HPD); ordered
+    #         by p
+    # bayes = emcee (zero outside the 68% HPD of an amplitude) confirmed by
+    # PolyChord, ordered by the residual evidence (~3x slower)
+    residual_test: bic
     lrt_p: 0.3173
 
 emcee:

@@ -167,7 +167,11 @@ def tree_items(ev):
                 g = g.group(1) if g else '?'
                 s = f"  {fam_tex(g)}: {p['answer']}"
                 if p.get('stage') == 'lrt':
-                    s += f"  (Δχ² = {p['dchi2']:.1f}, p = {p['pvalue']:.2g})"
+                    thr = p.get('dchi2_thr')
+                    s += (f"  (Δχ² = {p['dchi2']:.1f}"
+                          + (f" vs {thr:.1f}" if thr is not None
+                             and thr == thr else '')
+                          + f", p = {p['pvalue']:.2g})")
                 elif p['answer'] == 'detected' and p.get('logZ') is not None:
                     s += f"  (residual ln Z = {p['logZ']:.1f})"
                 lines.append(s)

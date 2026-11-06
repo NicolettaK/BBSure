@@ -590,6 +590,7 @@ def main():
 
     print("\nLikelihood-ratio residual test:")
     test_lrt()
+    test_bic()
     print("\nGenerated BBCompSep configs:")
     test_configs()
     print("\nHPD and detection:")
@@ -628,6 +629,46 @@ def test_lrt():
     check("  order by log p (dT, Delta chi2 = 10, before d), only ML fits",
           sorted([d, dT], key=lambda x: x.rank)[0].group == 'dT'
           and all(t.endswith('_ML') for t in r.calls))
+
+
+def test_bic():
+    """Fitter with residual_test: bic: detected if Delta chi2 > k ln N."""
+    class R:
+        base = load_yaml(os.path.join(REPO, 'configs',
+                                      'base_config_tree.yml'))
+
+        def __init__(self, chi2):
+            self.chi2 = chi2
+
+        def ml(self, model, tag, fixed=None, centers=None):
+            return dt.FitResult(model, tag, ['A'], {'A': 0.5},
+                                self.chi2[tag], NDATA)
+
+    base = dt.FitResult(dt.Model(frozenset(), False), 'b', ['p'], {'p': 0.},
+                        400., NDATA)
+    tag = 'resid_M_none_0_plus_'
+    thr2 = 2 * np.log(NDATA)
+    r = R({tag + 'd_ML': 400. - thr2 + 0.5, tag + 's_ML': 400. - thr2 - 0.5})
+    F = dt.Fitter(r, residual_test='bic')
+    d, s_ = (F.residual_test(base, g) for g in ('d', 's'))
+    check(f"BIC: d (2 amplitudes) with Delta chi2 just below 2 ln N = "
+          f"{thr2:.1f} -> not detected", not d.detected
+          and abs(d.thr - thr2) < 1e-9)
+    check("  s with Delta chi2 just above 2 ln N -> detected", s_.detected)
+    # order by Delta BIC: s (2 amplitudes, Delta chi2 = 2 ln N + 3) before
+    # d2 (3 amplitudes, Delta chi2 = 3 ln N + 1), although d2 has the lower p
+    lnN = np.log(NDATA)
+    base_d = dt.FitResult(dt.Model(frozenset({'d'}), False), 'b', ['p'],
+                          {'p': 0.}, 400., NDATA)
+    tag_d = 'resid_M_d_0_plus_'
+    F2 = dt.Fitter(R({tag_d + 's_ML': 400. - 2 * lnN - 3,
+                      tag_d + 'd2_ML': 400. - 3 * lnN - 1}),
+                   residual_test='bic')
+    s2_, d2 = (F2.residual_test(base_d, g) for g in ('s', 'd2'))
+    check("  order by Delta BIC: s (-3) before d2 (-1), although d2 has "
+          "the lower p", s2_.detected and d2.detected
+          and sorted([d2, s2_], key=lambda x: x.rank)[0].group == 's'
+          and d2.pvalue < s2_.pvalue)
 
 
 def test_configs():
