@@ -50,6 +50,11 @@ class MockFitter:
     def __init__(self, scen):
         self.s = scen
         self.calls = []
+        # penalty of the Res_r0 order: the real one ('bic' unless given)
+        self.residual_test_kind = scen.get('ic', 'bic')
+
+    ic_penalty = dt.Fitter.ic_penalty
+    ic_name = dt.Fitter.ic_name
 
     def _fit(self, model, full=False):
         lab = model.label
@@ -658,6 +663,7 @@ def main():
     print("\nLikelihood-ratio residual test:")
     test_lrt()
     test_bic()
+    test_aic()
     print("\nGenerated BBCompSep configs:")
     test_configs()
     print("\nHPD and detection:")
@@ -696,6 +702,42 @@ def test_lrt():
     check("  order by log p (dT, Delta chi2 = 10, before d), only ML fits",
           sorted([d, dT], key=lambda x: x.rank)[0].group == 'dT'
           and all(t.endswith('_ML') for t in r.calls))
+
+
+def test_aic():
+    """Fitter with residual_test: aic: detected if Delta chi2 > 2k."""
+    class R:
+        base = load_yaml(os.path.join(REPO, 'configs',
+                                      'base_config_tree.yml'))
+
+        def __init__(self, chi2):
+            self.chi2 = chi2
+
+        def ml(self, model, tag, fixed=None, centers=None):
+            return dt.FitResult(model, tag, ['A'], {'A': 0.5},
+                                self.chi2[tag], NDATA)
+
+    base = dt.FitResult(dt.Model(frozenset(), False), 'b', ['p'], {'p': 0.},
+                        400., NDATA)
+    tag = 'resid_M_none_0_plus_'
+    r = R({tag + 'd_ML': 400. - 3.9, tag + 's_ML': 400. - 4.1})
+    F = dt.Fitter(r, residual_test='aic')
+    d, s_ = (F.residual_test(base, g) for g in ('d', 's'))
+    check("AIC: d (2 amplitudes) with Delta chi2 = 3.9 < 4 -> not detected",
+          not d.detected and abs(d.thr - 4.) < 1e-9)
+    check("  s with Delta chi2 = 4.1 > 4 -> detected", s_.detected)
+    # order by Delta AIC: d2 (3 amplitudes, Delta chi2 = 12 -> -6) before
+    # s (2 amplitudes, Delta chi2 = 8 -> -4); with BIC s would come first
+    base_d = dt.FitResult(dt.Model(frozenset({'d'}), False), 'b', ['p'],
+                          {'p': 0.}, 400., NDATA)
+    tag_d = 'resid_M_d_0_plus_'
+    F2 = dt.Fitter(R({tag_d + 's_ML': 400. - 8., tag_d + 'd2_ML': 400. - 12.}),
+                   residual_test='aic')
+    s2_, d2 = (F2.residual_test(base_d, g) for g in ('s', 'd2'))
+    check("  order by Delta AIC: d2 (-6) before s (-4)",
+          sorted([s2_, d2], key=lambda x: x.rank)[0].group == 'd2'
+          and abs(F2.ic_penalty(3, base_d) - 6.) < 1e-9
+          and F2.ic_name() == 'AIC')
 
 
 def test_bic():

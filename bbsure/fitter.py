@@ -34,12 +34,13 @@ class Fitter:
     """
 
     def __init__(self, runner: BBCompSepRunner, hpd_frac=0.68,
-                 residual_test='bic', lrt_p=0.3173):
+                 residual_test='aic', lrt_p=0.3173):
         self.R = runner
         self.hpd_frac = hpd_frac
         # residual test: 'lrt' (likelihood ratio from two ML fits, detected
-        # if p < lrt_p), 'bic' (same fits, detected if Delta chi2 > k ln N,
-        # i.e. the BIC decreases) or 'bayes' (emcee HPD, PolyChord evidence)
+        # if p < lrt_p), 'aic' / 'bic' (same fits, detected if
+        # Delta chi2 > 2k / k ln N, i.e. the AIC / BIC decreases) or 'bayes'
+        # (emcee HPD, PolyChord evidence)
         self.residual_test_kind = residual_test
         self.lrt_p = lrt_p
         self._cache = {}
@@ -197,7 +198,7 @@ class Fitter:
         tag = f"resid_{base.model.label}_plus_{group}"
         bounds = self.prior_bounds(amps)
 
-        if self.residual_test_kind in ('lrt', 'bic'):
+        if self.residual_test_kind in ('lrt', 'aic', 'bic'):
             return self._residual_lrt(base, group, m, fixed, amps, tag)
         names, samp = self.R.emcee(m, tag + "_MC", fixed=fixed,
                                    centers=base.best)
@@ -220,17 +221,33 @@ class Fitter:
         return ResidualResult(group, det, hpd, logZ, logZerr, best,
                               stage='polychord', off=weak)
 
+    def ic_penalty(self, k, base):
+        """
+        Delta chi2 that k new amplitudes must gain: 2k (AIC) or k ln N (BIC,
+        N = size of the data vector; also with 'lrt', for the order of the
+        Res_r0 candidates).
+        """
+        if self.residual_test_kind == 'aic':
+            return 2. * k
+        if not base.ndata:
+            raise ValueError(f"BIC: size of the data vector unknown for "
+                             f"{base.model.label}")
+        return k * float(np.log(base.ndata))
+
+    def ic_name(self):
+        return 'AIC' if self.residual_test_kind == 'aic' else 'BIC'
+
     def _residual_lrt(self, base, group, m, fixed, amps, tag):
         """
         Likelihood-ratio residual test: ML fit of the group on the residuals
         (everything else fixed as in the Bayesian test) against the base
         best fit, k = number of new amplitudes. 'lrt': detected if p < lrt_p
         (chi2 with k degrees of freedom; 0.3173: 1 sigma, the analogue of
-        zero outside the 68% HPD). 'bic': detected if Delta chi2 > k ln N
-        (N = size of the data vector), i.e. if the BIC of the model with the
-        group is lower. No pruning of single spectra: the group enters
-        whole. Candidates ordered by log p ('lrt') or by
-        Delta BIC = k ln N - Delta chi2 ('bic'), lowest first.
+        zero outside the 68% HPD). 'aic' / 'bic': detected if
+        Delta chi2 > 2k / k ln N (N = size of the data vector), i.e. if the
+        AIC / BIC of the model with the group is lower. No pruning of single
+        spectra: the group enters whole. Candidates ordered by log p ('lrt')
+        or by Delta AIC / Delta BIC = penalty - Delta chi2, lowest first.
         """
         res = self.R.ml(m, tag + "_ML", fixed=fixed, centers=base.best)
         if not np.isfinite(res.chi2):
@@ -246,15 +263,12 @@ class Fitter:
         dchi2 = max(base.chi2 - res.chi2, 0.)
         k = len(amps)
         logp = float(chi2_dist.logsf(dchi2, k))
-        if self.residual_test_kind == 'bic':
-            if not base.ndata:
-                raise ValueError(f"BIC residual test: size of the data vector "
-                                 f"unknown for {base.model.label}")
-            thr = k * float(np.log(base.ndata))
+        if self.residual_test_kind in ('aic', 'bic'):
+            thr = self.ic_penalty(k, base)
         else:
             thr = float(chi2_dist.isf(self.lrt_p, k))
-        # order: Delta BIC (bic) or log p (lrt), lowest first
-        rank = thr - dchi2 if self.residual_test_kind == 'bic' else logp
+        # order: Delta AIC / BIC or log p (lrt), lowest first
+        rank = thr - dchi2 if self.residual_test_kind != 'lrt' else logp
         return ResidualResult(group, bool(dchi2 > thr), {},
                               best=dict(res.best), stage='lrt',
                               dchi2=dchi2, pvalue=float(np.exp(logp)),

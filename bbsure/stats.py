@@ -93,9 +93,10 @@ class ResidualResult:
     pvalue: float = np.nan              # and its p-value (k = amplitudes)
     rank: float = np.nan                # order of the candidates (lower
                                         # first): -logZ, log p of the LRT
-                                        # or Delta BIC
+                                        # or Delta AIC / BIC
     thr: float = np.nan                 # Delta chi2 needed for a detection
-                                        # (lrt: chi2 quantile; bic: k ln N)
+                                        # (lrt: chi2 quantile; aic: 2k;
+                                        # bic: k ln N)
 
     def __post_init__(self):
         if not np.isfinite(self.rank):

@@ -23,12 +23,12 @@ Flowchart
     sigma -> upper limit.
  2. Res_wr: residual test with everything fixed at the best fit of M_0,r, r
     included; candidates are the res_wr groups (d, s) not yet in the model,
-    each with its spectral parameter free. moments: residual_test: lrt or
-    bic: two ML fits (with and without the group), k = amplitudes of the
-    group; lrt: detected if p < lrt_p (chi2 with k degrees of freedom;
-    0.3173 = 1 sigma); bic: detected if Delta chi2 > k ln N (N = size of
-    the data vector: the BIC decreases); candidates ordered by p (lrt) or
-    by Delta BIC = k ln N - Delta chi2 (bic). With
+    each with its spectral parameter free. moments: residual_test: lrt,
+    aic or bic: two ML fits (with and without the group), k = amplitudes of
+    the group; lrt: detected if p < lrt_p (chi2 with k degrees of freedom;
+    0.3173 = 1 sigma); aic / bic: detected if Delta chi2 > 2k / k ln N
+    (N = size of the data vector: the AIC / BIC decreases); candidates
+    ordered by p (lrt) or by Delta AIC / BIC = penalty - Delta chi2. With
     residual_test: bayes: detected = zero outside the 68% HPD interval of
     at least one amplitude (screening with emcee, then
     PolyChord on the detected ones: confirmation and evidence, which sets
@@ -53,7 +53,7 @@ Flowchart
       a) every detected family added to M_1 with r = 0 and its new spectra
          pruned with r = 0 by the screening (ML + emcee; the spectra
          already in M_1 stay); a family pruned to nothing is not tested
-         again; the others ordered by Delta BIC = k ln N - (chi2 of M_1
+         again; the others ordered by Delta AIC / BIC = penalty - (chi2 of M_1
          with r = 0 - chi2 of M_1,0), k = new spectra left;
       b) for each family in this order: M_1,r = M_1,0 with r free, pruned
          as in Res_wr (r free), against M_0,r: preferred -> replaces M_0,r,
@@ -458,7 +458,7 @@ class DecisionTree:
         excluded = set(self.last_undetected)
 
         # rounds (M_1 = M_0,r at the first one): every detected family
-        # pruned with r = 0 and ordered by Delta BIC (r0_candidates); each
+        # pruned with r = 0 and ordered by Delta AIC / BIC (r0_candidates); each
         # tried as M_1,r, then M_1,0 (try_family); none preferred -> Res_r0
         # on the residuals of the M_1,0 of the first family, next round
         M1, chained = M0, False
@@ -503,8 +503,9 @@ class DecisionTree:
         Every detected family added to M_1 with r = 0 and its new spectra
         pruned with r = 0 by the screening (prune_r0); the families pruned
         to nothing go in excluded. Returns [(family, M_1,0, screening fit)]
-        ordered by Delta BIC = k ln N - (chi2 of M_1 with r = 0 - chi2 of
-        M_1,0), k = new spectra left (lowest first).
+        ordered by Delta AIC / BIC = penalty - (chi2 of M_1 with r = 0 -
+        chi2 of M_1,0), penalty 2k / k ln N, k = new spectra left (lowest
+        first).
         """
         old = set(M1.amplitudes())
         cands = []
@@ -525,12 +526,12 @@ class DecisionTree:
                 continue
             M10, scr = got
             k = len(set(M10.amplitudes()) - old)
-            dbic = k * float(np.log(fit00.ndata)) - (fit00.chi2 - scr.chi2)
+            dbic = self.F.ic_penalty(k, fit00) - (fit00.chi2 - scr.chi2)
             cands.append((dbic, rr.group, M10, scr))
         cands.sort(key=lambda c: c[0])
         if cands:
             self.log.node('r0order', 'Res_r0: families pruned with r = 0, in '
-                          'order of Delta BIC',
+                          f'order of Delta {self.F.ic_name()}',
                           ', '.join(f'{g} ({b:+.1f})' for b, g, _, _ in cands),
                           order=[[g, b, M.label] for b, g, M, _ in cands])
         return [(g, M10, scr) for _, g, M10, scr in cands]

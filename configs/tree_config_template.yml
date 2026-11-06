@@ -55,6 +55,8 @@ moments:
     requires: {ds1: ['s']}
     # Residual test: two ML fits, with and without the group (k = its
     # amplitudes), no pruning of single spectra:
+    #   aic = detected if Delta chi2 > 2k (the AIC decreases); ordered by
+    #         Delta AIC = 2k - Delta chi2
     #   bic = detected if Delta chi2 > k ln N (N = size of the data vector:
     #         the BIC decreases; ~6.1 per amplitude at nside 128); ordered
     #         by Delta BIC = k ln N - Delta chi2
@@ -63,7 +65,7 @@ moments:
     #         by p
     # bayes = emcee (zero outside the 68% HPD of an amplitude) confirmed by
     # PolyChord, ordered by the residual evidence (~3x slower)
-    residual_test: bic
+    residual_test: aic
     lrt_p: 0.3173
 
 emcee:

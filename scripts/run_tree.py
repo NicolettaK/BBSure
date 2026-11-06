@@ -33,7 +33,7 @@ def main():
     mc = tc.get('moments', {})
     fitter = Fitter(BBCompSepRunner(tc, log),
                     hpd_frac=tc['thresholds'].get('hpd_frac', 0.68),
-                    residual_test=mc.get('residual_test', 'bic'),
+                    residual_test=mc.get('residual_test', 'aic'),
                     lrt_p=mc.get('lrt_p', 0.3173))
     result = DecisionTree(tc, fitter, log).run()
     log.info("\n==> CONCLUSION")
