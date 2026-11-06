@@ -179,7 +179,10 @@ def tree_items(ev):
             items.append(('purple', lines + ['moment detected?'], a))
         elif n in ('pref', 'prune'):
             lines = [shorten(q)]
-            if 'lnB' in e:
+            if e.get('method'):
+                lines.append(f"ln B ≈ {e['lnB']:.1f} from the ML fits: "
+                             "clearly rejected, no PolyChord")
+            elif 'lnB' in e:
                 s = f"ln B = {e['lnB']:.2f} ± {e['lnB_err']:.2f}"
                 if max(e.get('pc_runs', [1])) > 1:
                     s += f"  (PolyChord runs {e['pc_runs']})"
@@ -242,6 +245,10 @@ def end_item(e, model, chi=None, where=''):
          f"PTE = {stats.chi2.sf(chi[0], chi[1]):.3g}"]
     if e.get('low_pte'):
         extra.append("low PTE: the model does not describe the data well")
+    if e.get('lnB_rfree_vs_r0') is not None:
+        extra.append(f"ln B(r free vs r = 0) = {e['lnB_rfree_vs_r0']:.2f} ± "
+                     f"{e['lnB_err']:.2f}  (same model with r = 0; not used "
+                     "for the decision)")
     # choices taken with ln B within 2 errors (also after the repetitions)
     for c in e.get('undecided_choices') or []:
         extra.append(f"undecided: {short(c['chosen'])} over "

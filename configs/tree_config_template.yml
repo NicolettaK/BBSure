@@ -34,6 +34,13 @@ thresholds:
     # seed_max_runs runs per fit
     seed_band: 2.0
     seed_max_runs: 3
+    # Comparison of a candidate with M_0,r first from the ML fits:
+    # ln B ~ -Delta chi2 / 2 - occam_per_param * Delta k; below
+    # lnB_preferred - lnB_approx_skip -> rejected without PolyChord (never
+    # used to accept, not used for the pruning). occam_per_param = 1.0
+    # calibrated on the seed-8000 validation (BIC: ln N / 2 ~ 3, too strong)
+    lnB_approx_skip: 5.0
+    occam_per_param: 1.0
 
 moments:
     # Moment groups tested in the residuals (see MOMENT_GROUPS in
@@ -102,6 +109,7 @@ run:
     profile_scheme: true
     # Reuse the fits already done (same config) instead of rerunning them
     reuse_runs: true
-    # Full fit (ML + PolyChord) of M_0,0 at the end, only to report ln B(r
-    # free vs r = 0) in the conclusion: no decision uses it
-    fit_r0_at_end: false
+    # Full fit (ML + PolyChord) of M_0,0 (the final model with r = 0) at the
+    # end, only to report ln B(final model with r free vs r = 0) in the
+    # conclusion: no decision uses it
+    fit_r0_at_end: true

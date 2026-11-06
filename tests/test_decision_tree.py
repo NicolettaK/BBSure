@@ -117,22 +117,26 @@ class MockFitter:
 
 
 
-def tree_cfg(runs_dir, seed_max_runs=1, lnB_preferred=2.5):
+def tree_cfg(runs_dir, seed_max_runs=1, lnB_preferred=2.5, approx_skip=None):
     return dict(paths=dict(runs_dir=runs_dir),
                 thresholds=dict(pte_min=0.01, lnB_preferred=lnB_preferred,
-                                seed_band=2.0, seed_max_runs=seed_max_runs),
+                                seed_band=2.0, seed_max_runs=seed_max_runs,
+                                lnB_approx_skip=approx_skip),
                 moments=dict(res_wr=['d', 's'],
                              res_r0=['d', 's', 'dT', 'd2', 's2', 'ds1',
                                      'ds2']),
                 run=dict(max_iterations=6))
 
 
-def run(scen, seed_max_runs=1, lnB_preferred=2.5):
+def run(scen, seed_max_runs=1, lnB_preferred=2.5, approx_skip=None,
+        log_out=None):
     d = tempfile.mkdtemp()
     log = dt.DecisionLog(d, verbose=False)
     F = MockFitter(scen)
-    res = dt.DecisionTree(tree_cfg(d, seed_max_runs, lnB_preferred), F,
-                          log).run()
+    res = dt.DecisionTree(tree_cfg(d, seed_max_runs, lnB_preferred,
+                                   approx_skip), F, log).run()
+    if log_out is not None:
+        log_out.extend(log.events)
     path = [(e['node'], e['answer']) for e in log.events]
     return res, path, F
 
@@ -266,19 +270,21 @@ def main():
           and resid_calls(F, 'M_d_0') == ['s', 'dT', 'd2', 'ds1']
           and ('replace', 'M_d+d2_r') in path)
 
-    # 9. Res_r0: d and s detected; only d (highest evidence) as M_1,r, not
-    #    preferred; M_1,0 = M_d_0 not preferred; nothing in the residuals of
-    #    M_d_0 -> 3 sigma on M_0,r; the chain (d) logged for the profile
+    # 9. Res_r0: d and s detected; each in order (d first) as M_1,r then
+    #    M_1,0, none preferred; next round on the residuals of M_d_0 (the
+    #    first family), nothing there -> 3 sigma on M_0,r; the chain (d)
+    #    logged for the profile
     scen = {'r': {M0: (0.012, 0.003)},
             'resid': {('M_none_0', 'd'): -100., ('M_none_0', 's'): -110.},
             'logZ': {M0: -150., 'M_d_r': -150.5, 'M_d_0': -152.}}
     res, path, F = run(scen)
     ev = log_events(scen)
     chain = [e for e in ev if e['node'] == 'r0chain'][-1]
-    check("Res_r0: only the first family as M_1,r, then M_1,0, then 3 sigma",
+    c = F.calls
+    check("Res_r0: d then s, each as M_1,r then M_1,0, then 3 sigma",
           path[-2][0] == 'r3sigma' and res['model'] == M0
-          and ('full', 'M_d_0') in F.calls
-          and ('screen', 'M_s_r') not in F.calls
+          and c.index(('screen', 'M_d_r')) < c.index(('full', 'M_d_0'))
+          < c.index(('screen', 'M_s_r')) < c.index(('full', 'M_s_0'))
           and resid_calls(F, 'M_d_0') == ['s', 'd2'])
     check("  chain of families in the log for the profile scheme",
           chain['answer'] == 'No' and chain['families'] == ['d']
@@ -348,6 +354,21 @@ def main():
           and ('full', 'M_d_0') not in F.calls
           and ('m10', 'M_d-d_w00w10_r') in path)
 
+    # 9j. M_1,r preferred in Res_r0: no PolyChord of M_1,0 (its evidence
+    #     is needed only for the M_1,0 vs M_0,r comparison)
+    scen = {'r': {M0: (0.012, 0.003)},
+            'resid': {('M_none_0', 'd'): -100.},
+            'logZ': {M0: -150., 'M_d_r': -140.}}
+    res, path, F = run(scen)
+    # (M_d_0 is fitted only at the very end, as the final model with r = 0)
+    c = F.calls
+    check("M_1,r preferred in Res_r0: no PolyChord of M_1,0 (only the final "
+          "model with r = 0 at the end, ln B reported)",
+          ('replace', 'M_d_r') in path and ('screen', 'M_d_0') in c
+          and c.count(('full', 'M_d_0')) == 1
+          and c.index(('full', 'M_d_0')) > c.index(('full', 'M_d_r'))
+          and 'lnB_rfree_vs_r0' in res)
+
     # 9h. s not detected in the first round of the chain: not tested again
     #     on the residuals of M_d_0 (even if it would be detected there)
     scen = {'r': {M0: (0.012, 0.003)},
@@ -373,14 +394,60 @@ def main():
           ('pruned_out', 'rejected') in path and ('screen', 'M_s_0') in F.calls
           and 'd' not in resid_calls(F, 'M_s_0'))
 
-    # 9d. the first family preferred as M_1,r -> adopted, s never tried
+    # 9d. the first family preferred as M_1,r -> adopted; s only screened
+    #     with r = 0 (for the order), never tried as M_1,r or M_1,0
     scen = {'r': {M0: (0.012, 0.003)},
             'resid': {('M_none_0', 'd'): -100., ('M_none_0', 's'): -110.},
             'logZ': {M0: -150., 'M_d_r': -140.}}
     res, path, F = run(scen)
     check("Res_r0: first family preferred as M_1,r -> adopted",
-          ('replace', 'M_d_r') in path and ('screen', 'M_s_r') not in F.calls
-          and ('screen', 'M_s_0') not in F.calls)
+          ('replace', 'M_d_r') in path and ('screen', 'M_s_0') in F.calls
+          and ('screen', 'M_s_r') not in F.calls
+          and ('full', 'M_s_0') not in F.calls)
+
+    # 9k. order by Delta BIC after the pruning with r = 0: s (lower chi2 of
+    #     its M_1,0) tried before d, although d comes first in the residuals
+    scen = {'r': {M0: (0.012, 0.003)},
+            'resid': {('M_none_0', 'd'): -100., ('M_none_0', 's'): -110.},
+            'chi2': {'M_s_0': NDATA - 11 - 30.},
+            'logZ': {M0: -150., 'M_s_0': -160.}}
+    res, path, F = run(scen)
+    c = F.calls
+    order = [e for e in log_events(scen) if e['node'] == 'r0order'][0]
+    check("Res_r0: families ordered by Delta BIC after the pruning (s, d)",
+          [o[0] for o in order['order']] == ['s', 'd']
+          and c.index(('screen', 'M_s_r')) < c.index(('screen', 'M_d_r')))
+
+    # 9l. d: M_1,r and M_1,0 not preferred; s (second): M_1,r preferred ->
+    #     adopted
+    scen = {'r': {M0: (0.012, 0.003)},
+            'resid': {('M_none_0', 'd'): -100., ('M_none_0', 's'): -110.},
+            'logZ': {M0: -150., 'M_s_r': -140.}}
+    res, path, F = run(scen)
+    check("second family adopted as M_1,r after the first one lost",
+          ('full', 'M_d_0') in F.calls and ('replace', 'M_s_r') in path)
+
+    # 9m. s (second): M_1,r not preferred, M_1,0 preferred -> profile scheme
+    #     with M_1 = M_s
+    scen = {'r': {M0: (0.012, 0.003)},
+            'resid': {('M_none_0', 'd'): -100., ('M_none_0', 's'): -110.},
+            'logZ': {M0: -150., 'M_s_0': -140.}}
+    res, path, F = run(scen)
+    check("second family: M_1,0 preferred -> profile scheme with M_1 = M_s",
+          ('m10', 'M_s_r') in path and path[-2][0] == 'r3sigma')
+
+    # 9n. ML estimate first: M_1,0 = M_d_0 much worse than M_0,r -> rejected
+    #     without its PolyChord; M_1,r (borderline) still with PolyChord
+    scen = {'r': {M0: (0.012, 0.003)},
+            'resid': {('M_none_0', 'd'): -100.},
+            'chi2': {'M_d_0': NDATA - 8 + 60., 'M_d_r': NDATA - 10 - 15.},
+            'logZ': {M0: -150., 'M_d_r': -151.}}
+    ev = []
+    res, path, F = run(scen, approx_skip=5., log_out=ev)
+    bic = [e for e in ev if e.get('method')]
+    check("ML estimate first: M_1,0 clearly worse -> rejected without PolyChord",
+          ('full', 'M_d_0') not in F.calls and ('full', 'M_d_r') in F.calls
+          and len(bic) == 1 and bic[0]['question'].startswith('Is M_1,0'))
 
     # 13. immediate pruning: A_d_w00w10 not detected in the full fit of
     #     M_d_r -> the pruned model is compared directly, and adopted
