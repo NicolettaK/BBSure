@@ -9,6 +9,8 @@ instead of with r marginalised.
    the tree (M_1 included), respecting the requirements of the families
    (e.g. ds1 only with s); none if the tree concluded before Res_r0 or
    nothing was detected there.
+   With profile_scheme: candidates: false in the tree config the candidates
+   are not compared: only the profile of M* (steps 4-6).
 2. Profiles in r: M* -> r* = its minimum; M* + g -> r*_g for every candidate.
    A profile: r fixed on a grid, all the other parameters re-fitted (ML).
 3. Comparison of all the models, each at its own r (M* at r*, M* + g at
@@ -182,6 +184,13 @@ class ProfileScheme:
         self.cands = [(lab, M) for lab, M in
                       add_combinations(M0, chain_candidates(ev))
                       if requirements_met(M, req)]
+        # profile_scheme: candidates: false -> only the profile of the final
+        # model of the tree (no comparison with the candidates)
+        self.use_cands = (tc.get('profile_scheme') or {}).get('candidates',
+                                                              True)
+        self.skipped = [] if self.use_cands else [g for g, _ in self.cands]
+        if not self.use_cands:
+            self.cands = []
         cfg = yaml.safe_load(open(os.path.join(tree_dir, f'{M0.label}_PC',
                                                'config.yml')))
         names = free_param_names(cfg['BBCompSep'])
@@ -498,6 +507,10 @@ class ProfileScheme:
                      lnB_vs_tree={k: v['logZ'] - comparison[M0.label]['logZ']
                                   for k, v in comparison.items()}
                      if M0.label in comparison else None)
+        elif self.skipped:
+            log.node('final', 'candidates not compared (profile_scheme: '
+                     'candidates: false): the final model is the one of the '
+                     'tree', M0.label, skipped=self.skipped)
         else:
             log.node('final', 'no candidates from Res_r0: the final model is '
                      'the one of the tree', M0.label)
@@ -519,7 +532,9 @@ class ProfileScheme:
                    comparison=comparison,
                    start=('M_1,0 preferred in the tree' if self.m10
                           else 'M_1,0 not preferred in the tree')
-                   if self.cands else 'no candidates',
+                   if self.cands else ('candidates not compared'
+                                       if self.skipped else 'no candidates'),
+                   candidates_skipped=self.skipped,
                    rejected=sorted(g for g, M in self.cands
                                    if M.label != final.label),
                    r_bayes_tree=med, sigma_bayes_tree=sig,

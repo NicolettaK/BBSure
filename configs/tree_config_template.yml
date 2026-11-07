@@ -78,6 +78,11 @@ profile_scheme:
     # points of the initial grid of the profiles in r (see
     # bbsure/profile_scheme.py)
     n: 37
+    # true: compare the final model of the tree with the candidates of the
+    # Res_r0 chain, each at its own r; false: only the profile of the final
+    # model (the posterior of r and the decision); in the AIC validation run
+    # no candidate ever won
+    candidates: true
 
 polychord:
     # nlive and nrepeat proportional to the free parameters of each run:
