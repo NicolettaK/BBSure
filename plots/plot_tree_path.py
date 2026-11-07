@@ -9,9 +9,10 @@ the profile scheme on the right (if it was run).
 The profile scheme is read from <runs_dir>/profile (the default of
 scripts/run_tree.py) or from --profile. Writes <out> (pdf) and the same
 figure as png.
-Colours as in docs/flowcharts/decision_tree: green = new model, purple =
-action (residual test, pruning, comparison), yellow = question on chi2 or r,
-red = model comparison, blue = upper limit, orange = r detection.
+Colours, notation and step numbers as in the step-by-step flowchart
+(docs/flowcharts/step_by_step): blue = fits and actions, cream = questions,
+violet = profile scheme, green = upper limit, red = r detection; a step met
+more than once gets a letter (10a, 10b, ...).
 """
 import argparse
 import json
@@ -29,10 +30,13 @@ from bbsure.models import (MOMENT_CROSS, MOMENT_GROUPS,  # noqa: E402
                            RESTORE, amp_name, model_from_label)
 from bbsure.profile_scheme import chain_candidates  # noqa: E402
 
-COLORS = {'green': ('#2f9e44', '#ebfbee'), 'purple': ('#9c36b5', '#f8f0fc'),
-          'yellow': ('#e0a800', '#fff9db'), 'red': ('#e03131', '#fff5f5'),
-          'blue': ('#1971c2', '#e7f5ff'), 'orange': ('#e8590c', '#fff4e6'),
-          'grey': ('#868e96', '#f1f3f5')}
+# as the step-by-step flowchart (docs/flowcharts/step_by_step): blue boxes
+# = fits and actions of the tree, cream = questions, violet = profile
+# scheme, green = upper limit, red = r detection
+COLORS = {'box': ('#2a6fdb', '#eaf1fc'), 'dia': ('#d9822b', '#fff4e0'),
+          'pbox': ('#7b4fd6', '#f1eafc'), 'ul': ('#2f9e44', '#e6f4ea'),
+          'det': ('#d9534f', '#fbe9e7'), 'grey': ('#868e96', '#f1f3f5')}
+QUESTION = ('chi2', 'r1sigma', 'resid', 'pref', 'prune', 'cycle', 'r3sigma')
 LABEL = re.compile(r'M_[A-Za-z0-9+\-_]+?_(?:r|0)\b')
 WRAP = 140          # characters per line (of the mathtext source)
 LH = 1.0            # line height (data units)
@@ -48,7 +52,8 @@ TERM = {'00': 'A', '10': r'\beta', '20': r'\beta^2', '01': 'T'}
 TEX = [(r'M_(\d),(r|0)', r'$M_{\1,\2}$'), (r'M\*', r'$M^*$'),
        (r'\bchi2\b', r'$\\chi^2$'), (r'\bln ([ZB])\b', r'$\\ln \1$'),
        (r'\bRes_wr\b', r'Res$_{\\rm wr}$'),
-       (r'\bRes_r0\b', r'Res$_{r=0}$'), (r'\br_min\b', r'$r_{\\rm min}$'),
+       (r'\bRes_r0\b', r'Res$_{\\rm r0}$'), (r'\br_min\b', r'$r_{\\rm min}$'),
+       (r'\bM_1\b', r'$M_1$'), (r'\bDelta (AIC|BIC)\b', r'$\\Delta$\1'),
        (r'\bsigma\b', r'$\\sigma$'), (r'(?<![\w$])r(?![\w$])', r'$r$'),
        (r'<- ', '← '), (r'-> ', '→ ')]
 
@@ -128,12 +133,91 @@ def pm(e, k, err, f='.4f'):
     return f"{e[k]:{f}} ± {e[err]:{f}}"
 
 
+def tree_step(e, phase, early):
+    """Step of the flowchart of a node of the tree; phase = 'wr' or 'r0'
+    (search in progress) or None; early = r compatible with 0 at 1 sigma."""
+    n, q = e['node'], e['question']
+    wr = phase != 'r0'
+    if n == 'fit':
+        return '1'
+    if n in ('chi2', 'r1sigma'):
+        return {'chi2': '2', 'r1sigma': '3'}[n]
+    if n == 'resid':
+        return '4–5' if q.startswith('Res_wr') else '13–14'
+    if n == 'prune_check':
+        if q.startswith('Undetected new'):
+            return '15' if q.endswith('(r = 0)?') else ('7' if wr else '16')
+        if q.endswith('(r = 0)?'):
+            return '17'
+        return '3' if early else ('9' if wr else '16')
+    if n == 'prune':
+        ref = q.split('w.r.t.')[-1].strip(' ?')
+        return '17' if ref.endswith('_0') else ('9' if wr else '16')
+    if n == 'pref':
+        if q.startswith('Is M_1,0'):
+            return '17'
+        return ('8' if e.get('method') else '10') if wr else '16'
+    if n in ('replace', 'cycle'):
+        return '11'
+    if n == 'r0order':
+        return '15'
+    if n == 'r0chain':
+        return '17' if e['answer'] == 'Yes' else '18'
+    if n == 'm10':
+        return '17'
+    if n == 'pruned_out':
+        if q.startswith('M_1,0'):
+            return '15' if 'with r = 0' in q else '17'
+        return ('7' if 'no new moment detected' in q else '9') if wr else '16'
+    if n == 'unfittable':
+        return '7' if wr else '16'
+    if n in ('r3sigma',):
+        return '19'
+    if n == 'END':
+        return '3' if early else '19'
+    return ''
+
+
+def letters(items):
+    """Steps met more than once: a, b, c, ... for each visit (consecutive
+    boxes of the same step are one visit and share the label)."""
+    visit, prev = [], None
+    for it in items:
+        st = it[4]
+        visit.append(st if st != prev else None)
+        prev = st
+    count = {}
+    for st in visit:
+        if st:
+            count[st] = count.get(st, 0) + 1
+    out, seen, lab = [], {}, ''
+    for it, v in zip(items, visit):
+        st = it[4]
+        if v is not None or not st:
+            lab = st
+            if st and count.get(st, 0) > 1:
+                seen[st] = seen.get(st, 0) + 1
+                lab = st + 'abcdefghijklmnopqrstuvwxyz'[seen[st] - 1]
+        out.append(it[:4] + (lab,))
+    return out
+
+
 def tree_items(ev):
-    """(colour, [lines], answer) for the nodes of the tree."""
+    """(colour, [lines], answer, flags, step) for the nodes of the tree."""
     items, pending = [], []
+    phase, early = None, False
     cut = False     # the last pruning check of this screening removed spectra
     for e in ev:
+        before = len(items)
         n, q, a = e['node'], e['question'], e['answer']
+        if n == 'fit' and q == f"fit of {e.get('model')}":
+            phase = None
+        if n == 'resid':
+            phase = 'wr' if q.startswith('Res_wr') else 'r0'
+        if n == 'r1sigma':
+            early = a == 'Yes'
+        if n == 'r3sigma':
+            early = False
         if n not in ('fit', 'prune_check'):
             cut = False
         if n == 'fit':
@@ -179,6 +263,7 @@ def tree_items(ev):
             items.append(('purple', lines + ['moment detected?'], a))
         elif n in ('pref', 'prune'):
             lines = [shorten(q)]
+            flags = node_flags(e)
             if e.get('method'):
                 lines.append(f"ln B ≈ {e['lnB']:.1f} from the ML fits: "
                              "clearly rejected, no PolyChord")
@@ -187,7 +272,7 @@ def tree_items(ev):
                 if max(e.get('pc_runs', [1])) > 1:
                     s += f"  (PolyChord runs {e['pc_runs']})"
                 lines.append(s)
-            items.append(('red', lines, a))
+            items.append(('red', lines, a, flags))
         elif n == 'prune_check':
             r0 = ' (r = 0)' if q.endswith('(r = 0)?') else ' (r free)'
             lab = LABEL.search(q)
@@ -235,7 +320,45 @@ def tree_items(ev):
             items.append(end_item(e, short(e.get('model')), chi))
         else:
             items.append(('grey', [shorten(q)], a))
-    return items
+        st = tree_step(e, phase, early)
+        for k in range(before, len(items)):
+            col, lines, ans = items[k][:3]
+            fl = items[k][3] if len(items[k]) > 3 else []
+            if col in ('blue', 'orange'):
+                col = 'ul' if col == 'blue' else 'det'
+            elif n in QUESTION:
+                col = 'dia'
+            else:
+                col = 'box'
+            items[k] = (col, lines, ans, fl, st)
+    return letters(items)
+
+
+# flags as in the results page: PTE < 0.01; '≈' a decision taken on a
+# borderline PolyChord comparison (|ln B - threshold| < 2 errors after the
+# reruns); 'r=0' a model with r = 0 against M_0,r: preferred by a lot (✓✓),
+# by a little (✓, within 2 errors), not preferred by a little (✗)
+PTE_FLAG = 0.01
+UND_BAND = 2.
+
+
+def r0_flag(x, err):
+    """x = ln B(model with r = 0 vs M_0,r)."""
+    if x > 0:
+        return 'r=0 ✓✓' if x >= UND_BAND * err else 'r=0 ✓'
+    return 'r=0 ✗' if x > -UND_BAND * err else None
+
+
+def node_flags(e):
+    """Flags of a comparison node ('pref' or 'prune')."""
+    if 'lnB' not in e or e.get('method'):
+        return []
+    thr = e.get('lnB_preferred', e.get('lnB_prune', 0.))
+    out = ['≈'] if abs(e['lnB'] - thr) < UND_BAND * e['lnB_err'] else []
+    if e['node'] == 'pref' and e['question'].startswith('Is M_1,0'):
+        f = r0_flag(e['lnB'], e['lnB_err'])
+        out += [f] if f else []
+    return out
 
 
 def end_item(e, model, chi=None, where=''):
@@ -254,18 +377,24 @@ def end_item(e, model, chi=None, where=''):
         extra.append(f"undecided: {short(c['chosen'])} over "
                      f"{short(c['other'])} (ln B = {c['lnB']:.2f} ± "
                      f"{c['lnB_err']:.2f})")
+    flags = []
+    if chi is not None and stats.chi2.sf(chi[0], chi[1]) < PTE_FLAG:
+        flags.append('PTE')
+    if e.get('lnB_rfree_vs_r0') is not None:
+        f = r0_flag(-e['lnB_rfree_vs_r0'], e['lnB_err'])
+        flags += [f] if f else []
     if e.get('conclusion') == 'upper_limit':
         r95 = e.get('r_95', e.get('r_95_pl0'))
         return ('blue', ['UPPER LIMIT', model, f"r < {r95:.4f} (95%)"]
-                + extra, None)
+                + extra, None, flags)
     if e.get('conclusion') == 'r_detection':
         med = e.get('r_med', e.get('r_med_pl'))
         lo = e.get('r_lo1', e.get('r_lo1_pl'))
         hi = e.get('r_hi1', e.get('r_hi1_pl'))
         return ('orange', ['r DETECTION', model,
                            f"r = {med:.4f} [{lo:.4f}, {hi:.4f}] (68%)"]
-                + extra, None)
-    return ('grey', [shorten(e['question'])], e['answer'])
+                + extra, None, flags)
+    return ('grey', [shorten(e['question'])], e['answer'], flags)
 
 
 def profile_items(ev, res, ndata=None, tree_ev=()):
@@ -277,15 +406,16 @@ def profile_items(ev, res, ndata=None, tree_ev=()):
     if res:
         cands = '; '.join(fam_left(g, off) for g, off in
                           chain_candidates(list(tree_ev))) or 'none'
-        items.append(('green', [f"M* = {short(res['model_tree'])}",
-                                f"candidates from the last Res_r0: {cands}"],
-                      None))
+        items.append(('pbox', [f"M* = {short(res['model_tree'])}",
+                               f"candidates from the last Res_r0: {cands}"],
+                      None, [], '20'))
     rows = [e for e in ev if e['node'] == 'compare']
     if rows:
         best = max((e for e in rows if 'logZ' in e),
                    key=lambda e: comp.get(e['question'].split()[0], e)
                    ['logZ'], default=None)
-        lines = ['compare, each model at its own r (local evidence)']
+        lines = ['profile in r of each model, then compare each model at its '
+                 'own r* (local evidence)']
         for e in rows:
             lab = e['question'].split()[0]
             if 'logZ' not in e:
@@ -297,19 +427,23 @@ def profile_items(ev, res, ndata=None, tree_ev=()):
             if len(c.get('logZ_runs') or []) > 1:
                 s += f" ({len(c['logZ_runs'])} runs)"
             lines.append(s + ('  <- best' if e is best else ''))
-        items.append(('purple', lines, None))
+        items.append(('pbox', lines, None,
+                      ['≈'] if (res or {}).get('undecided') else [], '21–22'))
     for e in ev:
         n, q, a = e['node'], e['question'], e['answer']
         if n == 'final':
-            items.append(('red', ['final model: ' + short(a)], None))
+            items.append(('pbox', ['winning model: ' + short(a)], None, [],
+                          '22'))
         elif n == 'post':
-            items.append(('purple', ['other parameters: emcee with r fixed '
-                                     'at the minimum of the profile'], None))
+            items.append(('pbox', ['posterior of r from the profile; other '
+                                   'parameters from P(θ | r = r*, data), '
+                                   'emcee with r fixed at r*'], None, [],
+                          '23'))
         elif n == 'r3sigma':
-            items.append(('yellow', ['is r compatible with zero at 3 sigma?',
-                                     '(posterior from the profile)',
-                                     f"99.7%: [{e['r_lo3']:.4f}, "
-                                     f"{e['r_hi3']:.4f}]"], a))
+            items.append(('dia', ['is 0 within the central 3 sigma of P(r)?',
+                                  '(posterior from the profile)',
+                                  f"99.7%: [{e['r_lo3']:.4f}, "
+                                  f"{e['r_hi3']:.4f}]"], a, [], '24'))
         elif n == 'END':
             # chi2 of the final model at the minimum of its profile; free
             # parameters = those of the posterior at fixed r ('post' node)
@@ -318,11 +452,13 @@ def profile_items(ev, res, ndata=None, tree_ev=()):
                 if post else None
             chi = (e['chi2_at_rstar'], ndata - npar) \
                 if ndata and npar and 'chi2_at_rstar' in e else None
-            items.append(end_item(e, short(e.get('model_final')), chi,
-                                  ' at r_min'))
+            col, lines, ans, fl = end_item(e, short(e.get('model_final')),
+                                           chi, ' at r_min')
+            items.append(({'blue': 'ul', 'orange': 'det'}.get(col, col),
+                          lines, ans, fl, '24'))
         elif n != 'compare':
-            items.append(('grey', [shorten(q)], a))
-    return items
+            items.append(('grey', [shorten(q)], a, [], ''))
+    return letters(items)
 
 
 def wrap(lines):
@@ -337,15 +473,21 @@ def wrap(lines):
     return out
 
 
-def draw_column(ax, items, x0, title):
+FLAG_COLORS = {'≈': ('#f2c94c', '#b8901a'), 'PTE': ('#f6b26b', '#b45f06'),
+               'r=0': ('#b4a7d6', '#674ea7')}
+
+
+def draw_column(ax, items, x0, title, num_color='#2a6fdb'):
     """Boxes from the top (y = 0) downwards; returns the boxes (x, y, h)."""
     ax.text(x0 + WIDTH / 2, 1.2, title, ha='center', va='bottom',
             fontsize=11, fontweight='bold')
     y, boxes = 0., []
-    for col, lines, ans in items:
+    for item in items:
+        col, lines, ans = item[:3]
+        flags = item[3] if len(item) > 3 else []
         wl = wrap(lines)
         if ans is not None:
-            wl.append((f"→ {ans}", True))
+            wl += [(t, True) for t, _ in wrap([f"→ {shorten(str(ans))}"])]
         h = len(wl) * LH + 2 * PAD
         edge, face = COLORS[col]
         ax.add_patch(FancyBboxPatch((x0, y - h), WIDTH, h,
@@ -359,6 +501,23 @@ def draw_column(ax, items, x0, title):
             ax.annotate('', xy=(x0 + WIDTH / 2, y),
                         xytext=(x0 + WIDTH / 2, y + GAP),
                         arrowprops=dict(arrowstyle='->', lw=1.1))
+        step = item[4] if len(item) > 4 else ''
+        if step:
+            ax.text(x0, y, step, ha='center', va='center', fontsize=8,
+                    fontweight='bold', color='white', zorder=6,
+                    bbox=dict(boxstyle='round,pad=0.3,rounding_size=0.8',
+                              fc=num_color, ec='none'))
+        xb = x0 + WIDTH - 0.6
+        for fl in reversed(flags):
+            fc, ec = FLAG_COLORS.get(fl.split()[0], FLAG_COLORS['≈'])
+            t = ax.text(xb, y, fl, ha='right', va='center', fontsize=8.5,
+                        fontweight='bold', color='#1b1b1b', zorder=5,
+                        bbox=dict(boxstyle='round,pad=0.25,rounding_size=0.6',
+                                  fc=fc, ec=ec, lw=0.8))
+            # next badge to the left of this one (its width from the renderer)
+            bb = t.get_window_extent(ax.figure.canvas.get_renderer())
+            x_left = ax.transData.inverted().transform((bb.x0, bb.y0))[0]
+            xb = x_left - 0.7
         boxes.append((x0, y, h))
         y -= h + GAP
     return boxes
@@ -387,7 +546,7 @@ def main():
                         'profile scheme'))
 
     def height(items):
-        return sum(len(wrap(ln)) + (ans is not None) for _, ln, ans in items) \
+        return sum(len(wrap(it[1])) + (it[2] is not None) for it in items) \
             * LH + len(items) * (2 * PAD + GAP)
 
     H = max(height(it) for it, _ in columns) + 4
@@ -398,7 +557,8 @@ def main():
     ax.set_ylim(-H + 3, 4)
     ax.axis('off')
 
-    cols = [draw_column(ax, it, i * (WIDTH + 6), t)
+    cols = [draw_column(ax, it, i * (WIDTH + 6), t,
+                        '#2a6fdb' if i == 0 else '#7b4fd6')
             for i, (it, t) in enumerate(columns)]
     if len(cols) == 2:
         # from the conclusion of the tree to the profile scheme
