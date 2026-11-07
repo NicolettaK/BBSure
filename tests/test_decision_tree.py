@@ -50,6 +50,11 @@ class MockFitter:
     def __init__(self, scen):
         self.s = scen
         self.calls = []
+        # penalty of the Res_r0 order: the real one ('bic' unless given)
+        self.residual_test_kind = scen.get('ic', 'bic')
+
+    ic_penalty = dt.Fitter.ic_penalty
+    ic_name = dt.Fitter.ic_name
 
     def _fit(self, model, full=False):
         lab = model.label
@@ -117,22 +122,26 @@ class MockFitter:
 
 
 
-def tree_cfg(runs_dir, seed_max_runs=1, lnB_preferred=2.5):
+def tree_cfg(runs_dir, seed_max_runs=1, lnB_preferred=2.5, approx_skip=None):
     return dict(paths=dict(runs_dir=runs_dir),
                 thresholds=dict(pte_min=0.01, lnB_preferred=lnB_preferred,
-                                seed_band=2.0, seed_max_runs=seed_max_runs),
+                                seed_band=2.0, seed_max_runs=seed_max_runs,
+                                lnB_approx_skip=approx_skip),
                 moments=dict(res_wr=['d', 's'],
                              res_r0=['d', 's', 'dT', 'd2', 's2', 'ds1',
                                      'ds2']),
                 run=dict(max_iterations=6))
 
 
-def run(scen, seed_max_runs=1, lnB_preferred=2.5):
+def run(scen, seed_max_runs=1, lnB_preferred=2.5, approx_skip=None,
+        log_out=None):
     d = tempfile.mkdtemp()
     log = dt.DecisionLog(d, verbose=False)
     F = MockFitter(scen)
-    res = dt.DecisionTree(tree_cfg(d, seed_max_runs, lnB_preferred), F,
-                          log).run()
+    res = dt.DecisionTree(tree_cfg(d, seed_max_runs, lnB_preferred,
+                                   approx_skip), F, log).run()
+    if log_out is not None:
+        log_out.extend(log.events)
     path = [(e['node'], e['answer']) for e in log.events]
     return res, path, F
 
@@ -266,26 +275,29 @@ def main():
           and resid_calls(F, 'M_d_0') == ['s', 'dT', 'd2', 'ds1']
           and ('replace', 'M_d+d2_r') in path)
 
-    # 9. Res_r0: d and s detected; only d (highest evidence) as M_1,r, not
-    #    preferred; M_1,0 = M_d_0 not preferred; nothing in the residuals of
-    #    M_d_0 -> 3 sigma on M_0,r; the chain (d) logged for the profile
+    # 9. Res_r0: d and s detected; each in order (d first) as M_1,r then
+    #    M_1,0, none preferred; next round on the residuals of M_d_0 (the
+    #    first family), nothing there -> 3 sigma on M_0,r; the chain (d)
+    #    logged for the profile
     scen = {'r': {M0: (0.012, 0.003)},
             'resid': {('M_none_0', 'd'): -100., ('M_none_0', 's'): -110.},
             'logZ': {M0: -150., 'M_d_r': -150.5, 'M_d_0': -152.}}
     res, path, F = run(scen)
     ev = log_events(scen)
     chain = [e for e in ev if e['node'] == 'r0chain'][-1]
-    check("Res_r0: only the first family as M_1,r, then M_1,0, then 3 sigma",
+    c = F.calls
+    check("Res_r0: d then s, each as M_1,r then M_1,0, then 3 sigma",
           path[-2][0] == 'r3sigma' and res['model'] == M0
-          and ('full', 'M_d_0') in F.calls
-          and ('screen', 'M_s_r') not in F.calls
-          and resid_calls(F, 'M_d_0') == ['s', 'dT', 'd2', 'ds1'])
+          and c.index(('screen', 'M_d_r')) < c.index(('full', 'M_d_0'))
+          < c.index(('screen', 'M_s_r')) < c.index(('full', 'M_s_0'))
+          and resid_calls(F, 'M_d_0') == ['s', 'd2'])
     check("  chain of families in the log for the profile scheme",
           chain['answer'] == 'No' and chain['families'] == ['d']
           and chain['base'] == M0)
 
-    # 9b. s found in the residuals of M_d_0 -> M_1 = M_d+s (no pruning),
-    #     M_1,0 preferred -> stop; Bayesian result: 3 sigma test on M_0,r
+    # 9b. s found in the residuals of M_d_0 -> M_1,0 = M_d+s,0 (new spectra
+    #     pruned with r = 0), M_1,r not preferred, M_1,0 preferred -> stop;
+    #     Bayesian result: 3 sigma test on M_0,r
     scen['resid'][('M_d_0', 's')] = -105.
     scen['resid_off'] = {('M_d_0', 's'): ['A_s_w00w10']}
     DS0 = 'M_d+s-s_w00w10_0'
@@ -296,9 +308,11 @@ def main():
           ('m10', 'M_d+s-s_w00w10_r') in path
           and path[-2][0] == 'r3sigma' and res['model'] == M0
           and res['conclusion'] == 'r_detection')
-    check("  no pruning in the rounds, chain d, s with the residual "
-          "screening",
-          not any(c[0] == 'screen' and 's' in c[1] for c in F.calls)
+    check("  second round pruned with r = 0, M_1,r compared first, chain "
+          "d, s with the residual screening",
+          ('screen', DS0) in F.calls
+          and ('screen', 'M_d+s-s_w00w10_r') in F.calls
+          and [e[1] for e in path if e[0] == 'pref'][-2:] == ['No', 'Yes']
           and chain['families'] == ['d', 's']
           and chain['pruned'] == [[], ['A_s_w00w10']])
 
@@ -309,13 +323,136 @@ def main():
           ('m10', 'M_d_r') in path and path[-2][0] == 'r3sigma'
           and resid_calls(F, 'M_d_0') == [])
 
-    # 9d. the first family preferred as M_1,r -> adopted, s never tried
+    # 9e. the first family (d) pruned to nothing with r = 0 -> the next one
+    #     (s) is tried; M_s,0 preferred
+    scen = {'r': {M0: (0.012, 0.003)},
+            'resid': {('M_none_0', 'd'): -100., ('M_none_0', 's'): -110.},
+            'logZ': {M0: -150., 'M_s_0': -140.},
+            'amps': {'M_d_0': {'A_d_w00w10': (0.1, 1.), 'A_d_w10w10': (0.1, 1.)}}}
+    res, path, F = run(scen)
+    check("Res_r0: family pruned to nothing with r = 0 -> next family",
+          ('pruned_out', 'rejected') in path and ('full', 'M_d_0') not in F.calls
+          and ('screen', 'M_s_0') in F.calls and ('m10', 'M_s_r') in path)
+
+    # 9f. the case of the flowchart question: M_1,r pruned to nothing with r
+    #     free (r absorbs the moment), but M_1,0 (pruned with r = 0) is
+    #     preferred over M_0,r -> profile scheme
+    scen = {'r': {M0: (0.012, 0.003)},
+            'resid': {('M_none_0', 'd'): -100.},
+            'logZ': {M0: -150., 'M_d_0': -140.},
+            'amps': {'M_d_r': {'A_d_w00w10': (0.1, 1.), 'A_d_w10w10': (0.1, 1.)}}}
+    res, path, F = run(scen)
+    pr = [e for e in path if e[0] in ('pruned_out', 'pref')]
+    check("M_1,r rejected with r free, M_1,0 preferred -> profile scheme",
+          pr == [('pruned_out', 'rejected'), ('pref', 'Yes')]
+          and ('m10', 'M_d_r') in path and path[-2][0] == 'r3sigma')
+
+    # 9g. r = 0 pruning removes one spectrum: M_1,0 and M_1,r without it
+    D0 = 'M_d-d_w00w10_0'
+    scen = {'r': {M0: (0.012, 0.003)},
+            'resid': {('M_none_0', 'd'): -100.},
+            'logZ': {M0: -150., D0: -140.},
+            'amps': {'M_d_0': {'A_d_w00w10': (0.1, 1.)}}}
+    res, path, F = run(scen)
+    check("r = 0 pruning of one spectrum: M_1,0 and M_1,r without it",
+          ('full', D0) in F.calls and ('screen', 'M_d-d_w00w10_r') in F.calls
+          and ('full', 'M_d_0') not in F.calls
+          and ('m10', 'M_d-d_w00w10_r') in path)
+
+    # 9j. M_1,r preferred in Res_r0: no PolyChord of M_1,0 (its evidence
+    #     is needed only for the M_1,0 vs M_0,r comparison)
+    scen = {'r': {M0: (0.012, 0.003)},
+            'resid': {('M_none_0', 'd'): -100.},
+            'logZ': {M0: -150., 'M_d_r': -140.}}
+    res, path, F = run(scen)
+    # (M_d_0 is fitted only at the very end, as the final model with r = 0)
+    c = F.calls
+    check("M_1,r preferred in Res_r0: no PolyChord of M_1,0 (only the final "
+          "model with r = 0 at the end, ln B reported)",
+          ('replace', 'M_d_r') in path and ('screen', 'M_d_0') in c
+          and c.count(('full', 'M_d_0')) == 1
+          and c.index(('full', 'M_d_0')) > c.index(('full', 'M_d_r'))
+          and 'lnB_rfree_vs_r0' in res)
+
+    # 9h. s not detected in the first round of the chain: not tested again
+    #     on the residuals of M_d_0 (even if it would be detected there)
+    scen = {'r': {M0: (0.012, 0.003)},
+            'resid': {('M_none_0', 'd'): -100., ('M_d_0', 's'): -90.},
+            'logZ': {M0: -150., 'M_d_r': -150.5, 'M_d_0': -152.}}
+    res, path, F = run(scen)
+    check("family not detected in a round is not retested in the next ones",
+          {'s', 'dT'} <= set(resid_calls(F, 'M_none_0'))
+          and not {'s', 'dT'} & set(resid_calls(F, 'M_d_0'))
+          and 'd2' in resid_calls(F, 'M_d_0')
+          and path[-2][0] == 'r3sigma')
+
+    # 9i. d pruned to nothing with r = 0 in the first round, s taken
+    #     instead and not preferred: d not tested again on the residuals of
+    #     M_s_0 (even if it would be detected there)
+    scen = {'r': {M0: (0.012, 0.003)},
+            'resid': {('M_none_0', 'd'): -100., ('M_none_0', 's'): -110.,
+                      ('M_s_0', 'd'): -90., ('M_s_0', 'ds1'): -95.},
+            'logZ': {M0: -150., 'M_s_r': -150.5, 'M_s_0': -152.},
+            'amps': {'M_d_0': {'A_d_w00w10': (0.1, 1.), 'A_d_w10w10': (0.1, 1.)}}}
+    res, path, F = run(scen)
+    check("family pruned to nothing with r = 0 is not retested",
+          ('pruned_out', 'rejected') in path and ('screen', 'M_s_0') in F.calls
+          and 'd' not in resid_calls(F, 'M_s_0'))
+
+    # 9d. the first family preferred as M_1,r -> adopted; s only screened
+    #     with r = 0 (for the order), never tried as M_1,r or M_1,0
     scen = {'r': {M0: (0.012, 0.003)},
             'resid': {('M_none_0', 'd'): -100., ('M_none_0', 's'): -110.},
             'logZ': {M0: -150., 'M_d_r': -140.}}
     res, path, F = run(scen)
     check("Res_r0: first family preferred as M_1,r -> adopted",
-          ('replace', 'M_d_r') in path and ('screen', 'M_s_r') not in F.calls)
+          ('replace', 'M_d_r') in path and ('screen', 'M_s_0') in F.calls
+          and ('screen', 'M_s_r') not in F.calls
+          and ('full', 'M_s_0') not in F.calls)
+
+    # 9k. order by Delta BIC after the pruning with r = 0: s (lower chi2 of
+    #     its M_1,0) tried before d, although d comes first in the residuals
+    scen = {'r': {M0: (0.012, 0.003)},
+            'resid': {('M_none_0', 'd'): -100., ('M_none_0', 's'): -110.},
+            'chi2': {'M_s_0': NDATA - 11 - 30.},
+            'logZ': {M0: -150., 'M_s_0': -160.}}
+    res, path, F = run(scen)
+    c = F.calls
+    order = [e for e in log_events(scen) if e['node'] == 'r0order'][0]
+    check("Res_r0: families ordered by Delta BIC after the pruning (s, d)",
+          [o[0] for o in order['order']] == ['s', 'd']
+          and c.index(('screen', 'M_s_r')) < c.index(('screen', 'M_d_r')))
+
+    # 9l. d: M_1,r and M_1,0 not preferred; s (second): M_1,r preferred ->
+    #     adopted
+    scen = {'r': {M0: (0.012, 0.003)},
+            'resid': {('M_none_0', 'd'): -100., ('M_none_0', 's'): -110.},
+            'logZ': {M0: -150., 'M_s_r': -140.}}
+    res, path, F = run(scen)
+    check("second family adopted as M_1,r after the first one lost",
+          ('full', 'M_d_0') in F.calls and ('replace', 'M_s_r') in path)
+
+    # 9m. s (second): M_1,r not preferred, M_1,0 preferred -> profile scheme
+    #     with M_1 = M_s
+    scen = {'r': {M0: (0.012, 0.003)},
+            'resid': {('M_none_0', 'd'): -100., ('M_none_0', 's'): -110.},
+            'logZ': {M0: -150., 'M_s_0': -140.}}
+    res, path, F = run(scen)
+    check("second family: M_1,0 preferred -> profile scheme with M_1 = M_s",
+          ('m10', 'M_s_r') in path and path[-2][0] == 'r3sigma')
+
+    # 9n. ML estimate first: M_1,0 = M_d_0 much worse than M_0,r -> rejected
+    #     without its PolyChord; M_1,r (borderline) still with PolyChord
+    scen = {'r': {M0: (0.012, 0.003)},
+            'resid': {('M_none_0', 'd'): -100.},
+            'chi2': {'M_d_0': NDATA - 8 + 60., 'M_d_r': NDATA - 10 - 15.},
+            'logZ': {M0: -150., 'M_d_r': -151.}}
+    ev = []
+    res, path, F = run(scen, approx_skip=5., log_out=ev)
+    bic = [e for e in ev if e.get('method')]
+    check("ML estimate first: M_1,0 clearly worse -> rejected without PolyChord",
+          ('full', 'M_d_0') not in F.calls and ('full', 'M_d_r') in F.calls
+          and len(bic) == 1 and bic[0]['question'].startswith('Is M_1,0'))
 
     # 13. immediate pruning: A_d_w00w10 not detected in the full fit of
     #     M_d_r -> the pruned model is compared directly, and adopted
@@ -504,11 +641,11 @@ def main():
                       ('M_d+s_0', 's2'): -80., ('M_d+s_0', 'd2'): -85.},
             'logZ': {'M_d_r': GOOD, 'M_d+s_r': GOOD + 1.},
             'r': {'M_d_r': (0.03, 0.005), 'M_d+s_r': (0.03, 0.005)},
-            'unfittable': {'M_d+s+s2_r'}}
+            'unfittable': {'M_d+s+s2_0'}}
     res, path, F = run(scen, lnB_preferred=0.)
     check("Res_r0: unfittable best candidate skipped, next one tried",
           ('unfittable', 'skipped') in path
-          and ('screen', 'M_d+d2+s_r') in F.calls)
+          and ('screen', 'M_d+d2+s_0') in F.calls)
 
     # 24. pruning in the residual test: A_d_w00w10 not detected by the
     #     screening -> the candidate starts without it (no screening of the
@@ -525,10 +662,14 @@ def main():
 
     print("\nLikelihood-ratio residual test:")
     test_lrt()
+    test_bic()
+    test_aic()
     print("\nGenerated BBCompSep configs:")
     test_configs()
     print("\nHPD and detection:")
     test_hpd()
+    print("\nNested ML fits:")
+    test_nested_ml()
     print("\nAll tests passed.")
 
 
@@ -561,6 +702,82 @@ def test_lrt():
     check("  order by log p (dT, Delta chi2 = 10, before d), only ML fits",
           sorted([d, dT], key=lambda x: x.rank)[0].group == 'dT'
           and all(t.endswith('_ML') for t in r.calls))
+
+
+def test_aic():
+    """Fitter with residual_test: aic: detected if Delta chi2 > 2k."""
+    class R:
+        base = load_yaml(os.path.join(REPO, 'configs',
+                                      'base_config_tree.yml'))
+
+        def __init__(self, chi2):
+            self.chi2 = chi2
+
+        def ml(self, model, tag, fixed=None, centers=None):
+            return dt.FitResult(model, tag, ['A'], {'A': 0.5},
+                                self.chi2[tag], NDATA)
+
+    base = dt.FitResult(dt.Model(frozenset(), False), 'b', ['p'], {'p': 0.},
+                        400., NDATA)
+    tag = 'resid_M_none_0_plus_'
+    r = R({tag + 'd_ML': 400. - 3.9, tag + 's_ML': 400. - 4.1})
+    F = dt.Fitter(r, residual_test='aic')
+    d, s_ = (F.residual_test(base, g) for g in ('d', 's'))
+    check("AIC: d (2 amplitudes) with Delta chi2 = 3.9 < 4 -> not detected",
+          not d.detected and abs(d.thr - 4.) < 1e-9)
+    check("  s with Delta chi2 = 4.1 > 4 -> detected", s_.detected)
+    # order by Delta AIC: d2 (3 amplitudes, Delta chi2 = 12 -> -6) before
+    # s (2 amplitudes, Delta chi2 = 8 -> -4); with BIC s would come first
+    base_d = dt.FitResult(dt.Model(frozenset({'d'}), False), 'b', ['p'],
+                          {'p': 0.}, 400., NDATA)
+    tag_d = 'resid_M_d_0_plus_'
+    F2 = dt.Fitter(R({tag_d + 's_ML': 400. - 8., tag_d + 'd2_ML': 400. - 12.}),
+                   residual_test='aic')
+    s2_, d2 = (F2.residual_test(base_d, g) for g in ('s', 'd2'))
+    check("  order by Delta AIC: d2 (-6) before s (-4)",
+          sorted([s2_, d2], key=lambda x: x.rank)[0].group == 'd2'
+          and abs(F2.ic_penalty(3, base_d) - 6.) < 1e-9
+          and F2.ic_name() == 'AIC')
+
+
+def test_bic():
+    """Fitter with residual_test: bic: detected if Delta chi2 > k ln N."""
+    class R:
+        base = load_yaml(os.path.join(REPO, 'configs',
+                                      'base_config_tree.yml'))
+
+        def __init__(self, chi2):
+            self.chi2 = chi2
+
+        def ml(self, model, tag, fixed=None, centers=None):
+            return dt.FitResult(model, tag, ['A'], {'A': 0.5},
+                                self.chi2[tag], NDATA)
+
+    base = dt.FitResult(dt.Model(frozenset(), False), 'b', ['p'], {'p': 0.},
+                        400., NDATA)
+    tag = 'resid_M_none_0_plus_'
+    thr2 = 2 * np.log(NDATA)
+    r = R({tag + 'd_ML': 400. - thr2 + 0.5, tag + 's_ML': 400. - thr2 - 0.5})
+    F = dt.Fitter(r, residual_test='bic')
+    d, s_ = (F.residual_test(base, g) for g in ('d', 's'))
+    check(f"BIC: d (2 amplitudes) with Delta chi2 just below 2 ln N = "
+          f"{thr2:.1f} -> not detected", not d.detected
+          and abs(d.thr - thr2) < 1e-9)
+    check("  s with Delta chi2 just above 2 ln N -> detected", s_.detected)
+    # order by Delta BIC: s (2 amplitudes, Delta chi2 = 2 ln N + 3) before
+    # d2 (3 amplitudes, Delta chi2 = 3 ln N + 1), although d2 has the lower p
+    lnN = np.log(NDATA)
+    base_d = dt.FitResult(dt.Model(frozenset({'d'}), False), 'b', ['p'],
+                          {'p': 0.}, 400., NDATA)
+    tag_d = 'resid_M_d_0_plus_'
+    F2 = dt.Fitter(R({tag_d + 's_ML': 400. - 2 * lnN - 3,
+                      tag_d + 'd2_ML': 400. - 3 * lnN - 1}),
+                   residual_test='bic')
+    s2_, d2 = (F2.residual_test(base_d, g) for g in ('s', 'd2'))
+    check("  order by Delta BIC: s (-3) before d2 (-1), although d2 has "
+          "the lower p", s2_.detected and d2.detected
+          and sorted([d2, s2_], key=lambda x: x.rank)[0].group == 's'
+          and d2.pvalue < s2_.pvalue)
 
 
 def test_configs():
@@ -641,6 +858,41 @@ def test_hpd():
     check("detection: B away from zero -> detected, A alone not",
           dt.detection(names, s, ['A', 'B'], bounds=b)[0]
           and not dt.detection(names, s, ['A'], bounds=b)[0])
+
+
+def test_nested_ml():
+    """A fit worse than the model it contains is redone from its best fit."""
+    small = dt.Model(frozenset({'d'}), True)
+    big = small.plus('s')
+
+    class FakeRunner:
+        def __init__(self):
+            self.tags = []
+
+        def ml(self, model, tag, fixed=None, centers=None):
+            self.tags.append(tag)
+            if model == small:
+                chi2 = 520.
+            elif tag.endswith('_ML'):
+                chi2 = 600.                  # stuck minimizer
+            else:
+                # restart from the best fit of the smaller model
+                chi2 = 515. if centers and centers.get('A_s_w10w10') == 0. else 600.
+            return dt.FitResult(model, tag, ['p'], {'p': 1.}, chi2, NDATA)
+
+    R = FakeRunner()
+    F = dt.Fitter(R)
+    F.ml_fit(small)
+    res = F.ml_fit(big)
+    check("stuck fit of the bigger model redone from the smaller one",
+          res.chi2 == 515. and res.tag.endswith('_MLn1'))
+    R2 = FakeRunner()
+    F2 = dt.Fitter(R2)
+    F2.ml_fit(big)
+    check("  no smaller model fitted: nothing redone", R2.tags == [big.label + '_ML'])
+    check("  contains(): r = 0 model inside the r-free one, not the opposite",
+          dt.contains(big, big.with_r(False)) and not dt.contains(big.with_r(False), big)
+          and dt.contains(big, small) and not dt.contains(small, big))
 
 
 if __name__ == '__main__':

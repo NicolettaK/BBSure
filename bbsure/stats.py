@@ -92,7 +92,11 @@ class ResidualResult:
     dchi2: float = np.nan               # likelihood-ratio test: chi2 gain
     pvalue: float = np.nan              # and its p-value (k = amplitudes)
     rank: float = np.nan                # order of the candidates (lower
-                                        # first): -logZ, or log p of the LRT
+                                        # first): -logZ, log p of the LRT
+                                        # or Delta AIC / BIC
+    thr: float = np.nan                 # Delta chi2 needed for a detection
+                                        # (lrt: chi2 quantile; aic: 2k;
+                                        # bic: k ln N)
 
     def __post_init__(self):
         if not np.isfinite(self.rank):

@@ -1,0 +1,522 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tree step by step</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"
+  onload="renderMathInElement(document.body,{delimiters:[{left:'$',right:'$',display:false}]})"></script>
+<style>
+  :root { --bg:#eef0f3; --ink:#1b1b1b; --muted:#5f6368; --line:#3c4043;
+          --box:#eaf1fc; --boxl:#2a6fdb; --dia:#fff4e0; --dial:#d9822b;
+          --end:#e6f4ea; --endl:#2f9e44; --todo:#f4f4f4; --todol:#9aa0a6;
+          --pbox:#f1eafc; --pboxl:#7b4fd6; }
+  body { margin:0; padding:16px; background:var(--bg); color:var(--ink);
+         font-family:-apple-system, "Helvetica Neue", Arial, sans-serif; }
+  h1 { font-size:16px; font-weight:600; margin:0 auto 8px; max-width:2180px; }
+  svg { width:100%; max-width:2180px; height:auto; display:block; margin:0 auto; }
+  .box  { fill:var(--box); stroke:var(--boxl); stroke-width:1.6; }
+  .pbox { fill:var(--pbox); stroke:var(--pboxl); stroke-width:1.6; }
+  .pnumc { fill:var(--pboxl); }
+  .dia  { fill:var(--dia); stroke:var(--dial); stroke-width:1.6; }
+  .end  { fill:var(--end); stroke:var(--endl); stroke-width:1.6; }
+  .todo { fill:var(--todo); stroke:var(--todol); stroke-width:1.4; stroke-dasharray:5 4; }
+  .lab { fill:var(--ink); font-size:12.5px; font-weight:600; }
+  .num { fill:#fff; font-size:12px; font-weight:700; }
+  .numc { fill:var(--boxl); }
+  .arr { stroke:var(--line); stroke-width:1.5; fill:none; marker-end:url(#ah); }
+  .ln  { stroke:var(--line); stroke-width:1.5; fill:none; }
+  .ahp { fill:var(--line); }
+  /* text inside the shapes (HTML, so that KaTeX can render the math) */
+  .fo { width:100%; height:100%; display:flex; flex-direction:column;
+        justify-content:center; align-items:center; text-align:center;
+        font-size:13.5px; line-height:1.45; color:var(--ink); }
+  .fo.left { align-items:flex-start; text-align:left; justify-content:flex-start; padding:10px 16px; box-sizing:border-box; }
+  .t { font-weight:600; font-size:14px; }
+  .s { color:var(--muted); font-size:12.5px; }
+  .fo .katex { font-size:1.05em; }
+  table.fam { border-collapse:collapse; margin:4px 0 6px 10px; font-size:13px; }
+  table.fam td { padding:3px 22px 3px 0; vertical-align:middle; }
+  .ctr { align-self:center; }
+</style>
+</head>
+<body>
+<h1>Decision tree, step by step</h1>
+<svg viewBox="0 0 2180 2470" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Decision tree steps 1 to 4">
+  <defs>
+    <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+      <path class="ahp" d="M0,0 L10,5 L0,10 z"/>
+    </marker>
+  </defs>
+
+  <!-- 1: fit of M0,r -->
+  <rect class="box" x="210" y="16" width="380" height="96" rx="10"/>
+  <foreignObject x="210" y="16" width="380" height="96"><div xmlns="http://www.w3.org/1999/xhtml" class="fo">
+    <div class="t">Fit of $M_{0,r}$</div>
+    <div class="s">no moments, $r$ free, $A_{\rm lens}=1$</div>
+    <div class="s">ML → best fit, $\chi^2$ &nbsp;·&nbsp; PolyChord → $P(r\,|\,M_{0,r})$, $\ln Z$</div>
+  </div></foreignObject>
+  <circle class="numc" cx="210" cy="16" r="12"/><text class="num" x="210" y="20" text-anchor="middle">1</text>
+
+  <line class="arr" x1="400" y1="112" x2="400" y2="150"/>
+
+  <!-- 2: chi2 good? -->
+  <polygon class="dia" points="400,152 530,212 400,272 270,212"/>
+  <foreignObject x="300" y="180" width="200" height="64"><div xmlns="http://www.w3.org/1999/xhtml" class="fo">
+    <div class="t">$\chi^2$ good?</div>
+    <div class="s">$\mathrm{PTE}(\chi^2_{\rm data})&gt;0.01$</div>
+  </div></foreignObject>
+  <circle class="numc" cx="300" cy="170" r="12"/><text class="num" x="300" y="174" text-anchor="middle">2</text>
+  <foreignObject x="16" y="160" width="240" height="110"><div xmlns="http://www.w3.org/1999/xhtml" class="fo left" style="padding:4px 0">
+    <div class="s">$\chi^2_{\rm data}=\chi^2-\left(\frac{\beta_d-1.54}{0.11}\right)^2-\left(\frac{\beta_s+3.0}{0.3}\right)^2$</div>
+    <div class="s" style="margin-top:4px">BBCompSep's $\chi^2=-2\ln(\text{posterior})$ includes the Gaussian priors on $\beta_d,\beta_s$</div>
+  </div></foreignObject>
+
+  <!-- 2 Yes -> 3 -->
+  <line class="arr" x1="400" y1="272" x2="400" y2="310"/>
+  <text class="lab" x="410" y="296">Yes</text>
+
+  <!-- 3: r compatible with 0 at 1 sigma? -->
+  <polygon class="dia" points="400,312 530,372 400,432 270,372"/>
+  <foreignObject x="300" y="336" width="200" height="72"><div xmlns="http://www.w3.org/1999/xhtml" class="fo">
+    <div class="t">$r$ compatible with 0 at $1\sigma$?</div>
+    <div class="s">$0\in[r_{16\%},\,r_{84\%}]$</div>
+  </div></foreignObject>
+  <circle class="numc" cx="300" cy="330" r="12"/><text class="num" x="300" y="334" text-anchor="middle">3</text>
+
+  <!-- 3 Yes -> fit of M00 -> upper limit -->
+  <line class="arr" x1="270" y1="372" x2="214" y2="372"/>
+  <text class="lab" x="228" y="364">Yes</text>
+  <rect class="box" x="16" y="332" width="196" height="80" rx="10"/>
+  <foreignObject x="16" y="332" width="196" height="80"><div xmlns="http://www.w3.org/1999/xhtml" class="fo">
+    <div class="t">Fit of $M_{0,0}$ ($r=0$)</div>
+    <div class="s">$\ln B(M_{0,r}\ \text{vs}\ M_{0,0})$</div>
+    <div class="s">reported, not a decision</div>
+  </div></foreignObject>
+  <line class="arr" x1="114" y1="412" x2="114" y2="456"/>
+  <rect class="end" x="16" y="458" width="196" height="64" rx="30"/>
+  <foreignObject x="16" y="458" width="196" height="64"><div xmlns="http://www.w3.org/1999/xhtml" class="fo">
+    <div class="t">upper limit</div>
+    <div class="s">$r_{95}$: 95% of $P(r\,|\,M_{0,r})$ with $r\ge0$</div>
+  </div></foreignObject>
+
+  <!-- No branches of 2 and 3 merge and go to step 4 -->
+  <polyline class="ln" points="530,212 680,212 680,372"/>
+  <text class="lab" x="550" y="204">No</text>
+  <line class="ln" x1="530" y1="372" x2="680" y2="372"/>
+  <text class="lab" x="550" y="364">No</text>
+  <line class="arr" x1="680" y1="372" x2="680" y2="556"/>
+
+  <foreignObject x="20" y="600" width="205" height="60"><div xmlns="http://www.w3.org/1999/xhtml" class="fo left" style="padding:0">
+    <div class="s">Res_wr is skipped if $M_{0,r}$ was adopted from Res_r0 (→ straight to Res_r0)</div></div></foreignObject>
+  <!-- 4: Res_wr residual test -->
+  <rect class="box" x="236" y="558" width="570" height="232" rx="10"/>
+  <foreignObject x="236" y="558" width="570" height="232"><div xmlns="http://www.w3.org/1999/xhtml" class="fo left">
+    <div class="t ctr">Res_wr: residual test of $M_{0,r}$ ($r$ fixed at its best fit)</div>
+    <div style="margin-top:6px">For each family $f$ not yet in $M_{0,r}$:</div>
+    <table class="fam">
+      <tr><td><b>$d$</b>: 1st order in $\beta_d$</td>
+          <td>$A_d\times\beta_d$ &nbsp;and&nbsp; $\beta_d\times\beta_d$</td></tr>
+      <tr><td><b>$s$</b>: 1st order in $\beta_s$</td>
+          <td>$A_s\times\beta_s$ &nbsp;and&nbsp; $\beta_s\times\beta_s$</td></tr>
+    </table>
+    <div class="s">each spectrum $C_\ell=A\,(\ell/80)^{\alpha}$: amplitude $A$ (any sign for $A\times\beta$, $\ge0$ for $\beta\times\beta$) and slope $\alpha$</div>
+    <div style="margin-top:8px">ML fit of $M_{0,r}+f$, with $M_{0,r}$ fixed at its best fit ($r$ too);</div>
+    <div>free: the 2 amplitudes $A$, their 2 slopes $\alpha$, and the $\beta$ of $f$</div>
+    <div class="t ctr" style="margin-top:8px">$\Delta\chi^2_f=\chi^2(M_{0,r})-\chi^2(M_{0,r}+f)$</div>
+  </div></foreignObject>
+  <circle class="numc" cx="236" cy="558" r="12"/><text class="num" x="236" y="562" text-anchor="middle">4</text>
+
+  <line class="arr" x1="521" y1="790" x2="521" y2="828"/>
+
+  <!-- 5: family detected? -->
+  <polygon class="dia" points="521,830 671,895 521,960 371,895"/>
+  <foreignObject x="411" y="866" width="220" height="58"><div xmlns="http://www.w3.org/1999/xhtml" class="fo">
+    <div class="t">any family detected?</div>
+    <div class="s">$\Delta\chi^2_f&gt;2k$ (AIC)</div>
+  </div></foreignObject>
+  <foreignObject x="150" y="868" width="215" height="56"><div xmlns="http://www.w3.org/1999/xhtml" class="fo left" style="padding:0">
+    <div class="s">$k$ = number of new amplitudes</div>
+    <div class="s">$k=2$ for $d$ and $s$ → $\Delta\chi^2_f&gt;4$</div>
+  </div></foreignObject>
+  <circle class="numc" cx="421" cy="846" r="12"/><text class="num" x="421" y="850" text-anchor="middle">5</text>
+
+  <polyline class="ln" points="671,895 855,895 855,220"/>
+  <line class="arr" x1="855" y1="220" x2="868" y2="220"/>
+  <text class="lab" x="680" y="887">No</text>
+
+  <line class="arr" x1="521" y1="960" x2="521" y2="996"/>
+  <text class="lab" x="531" y="982">Yes</text>
+
+  <!-- 6: order of the detected families -->
+  <rect class="box" x="331" y="998" width="380" height="84" rx="10"/>
+  <foreignObject x="331" y="998" width="380" height="84"><div xmlns="http://www.w3.org/1999/xhtml" class="fo">
+    <div class="t">Order the detected families</div>
+    <div>$\Delta\mathrm{AIC}_f=2k-\Delta\chi^2_f$, lowest first</div>
+    <div class="s">($d$, $s$: same $k$ → largest $\Delta\chi^2_f$ first)</div>
+  </div></foreignObject>
+  <circle class="numc" cx="331" cy="998" r="12"/><text class="num" x="331" y="1002" text-anchor="middle">6</text>
+
+  <line class="arr" x1="521" y1="1082" x2="521" y2="1142"/>
+
+  <line class="ln" x1="800" y1="1122" x2="800" y2="895"/>
+  <text class="lab" x="792" y="1010" text-anchor="end">no family left</text>
+  <!-- 7: candidate M1,r and screening -->
+  <rect class="box" x="291" y="1144" width="460" height="132" rx="10"/>
+  <foreignObject x="291" y="1144" width="460" height="132"><div xmlns="http://www.w3.org/1999/xhtml" class="fo">
+    <div class="t">Next family $f$: $M_{1,r}=M_{0,r}+f$, all parameters free</div>
+    <div>screening fit: ML + emcee (no PolyChord)</div>
+    <div class="s">new spectra (those of $f$) with $0$ in the 68% HPD of their $A$ → removed;</div>
+    <div class="s">screening redone until all the new spectra left are detected</div>
+  </div></foreignObject>
+  <circle class="numc" cx="291" cy="1144" r="12"/><text class="num" x="291" y="1148" text-anchor="middle">7</text>
+
+  <!-- no new spectrum left -> next family (loop back into 7) -->
+  <polyline class="ln" points="751,1210 800,1210 800,1122 640,1122"/>
+  <line class="arr" x1="640" y1="1122" x2="640" y2="1142"/>
+  <foreignObject x="550" y="1084" width="236" height="36"><div xmlns="http://www.w3.org/1999/xhtml" class="fo" style="align-items:flex-end;text-align:right">
+    <div class="s" style="line-height:1.2">rejected (7, 9: nothing of $f$ left; 8: Yes)<br/>→ next family</div></div></foreignObject>
+
+  <line class="arr" x1="521" y1="1276" x2="521" y2="1310"/>
+
+  <!-- 8: quick estimate of ln B from the ML fits -->
+  <polygon class="dia" points="521,1312 671,1377 521,1442 371,1377"/>
+  <foreignObject x="416" y="1347" width="210" height="60"><div xmlns="http://www.w3.org/1999/xhtml" class="fo">
+    <div class="t">clearly worse?</div>
+    <div class="s">$\ln B_{\rm est}&lt;-5$</div>
+  </div></foreignObject>
+  <circle class="numc" cx="421" cy="1328" r="12"/><text class="num" x="421" y="1332" text-anchor="middle">8</text>
+  <foreignObject x="20" y="1340" width="345" height="80"><div xmlns="http://www.w3.org/1999/xhtml" class="fo left" style="padding:0">
+    <div class="s">$\ln B_{\rm est}=-\tfrac12\left[\chi^2(M_{1,r})-\chi^2(M_{0,r})\right]-\Delta n$</div>
+    <div class="s">$\Delta n$ = extra free parameters of $M_{1,r}$ (ML fits only)</div>
+    <div class="s">used only to reject, never to accept</div>
+  </div></foreignObject>
+
+  <!-- Yes: rejected without PolyChord -> next family (join the loop) -->
+  <polyline class="ln" points="671,1377 800,1377 800,1210"/>
+  <text class="lab" x="690" y="1369">Yes</text>
+
+  <line class="arr" x1="521" y1="1442" x2="521" y2="1478"/>
+  <text class="lab" x="531" y="1464">No</text>
+
+  <!-- 9: full fit and pruning -->
+  <rect class="box" x="271" y="1480" width="500" height="150" rx="10"/>
+  <foreignObject x="271" y="1480" width="500" height="150"><div xmlns="http://www.w3.org/1999/xhtml" class="fo">
+    <div class="t">Full fit of $M_{1,r}$: ML + PolyChord</div>
+    <div>pruning of <b>all</b> the moment spectra (the base-model parameters always stay):</div>
+    <div class="s">spectra with $0$ in the 68% HPD of their $A$ → removed, refit (ML + PolyChord);</div>
+    <div class="s">pruned model kept if $\ln B(\text{pruned vs full})&gt;0$;</div>
+    <div class="s">repeated until all the amplitudes left are detected</div>
+  </div></foreignObject>
+  <circle class="numc" cx="271" cy="1480" r="12"/><text class="num" x="271" y="1484" text-anchor="middle">9</text>
+
+  <!-- no new spectrum of f left -> next family -->
+  <polyline class="ln" points="771,1555 800,1555 800,1377"/>
+  <line class="arr" x1="521" y1="1630" x2="521" y2="1666"/>
+
+  <!-- 10: M1,r preferred over M0,r? -->
+  <polygon class="dia" points="521,1668 681,1738 521,1808 361,1738"/>
+  <foreignObject x="411" y="1706" width="220" height="64"><div xmlns="http://www.w3.org/1999/xhtml" class="fo">
+    <div class="t">$M_{1,r}$ preferred over $M_{0,r}$?</div>
+    <div class="s">$\ln B=\ln Z_{1,r}-\ln Z_{0,r}&gt;0$</div>
+  </div></foreignObject>
+  <circle class="numc" cx="411" cy="1686" r="12"/><text class="num" x="411" y="1690" text-anchor="middle">10</text>
+  <foreignObject x="20" y="1700" width="330" height="76"><div xmlns="http://www.w3.org/1999/xhtml" class="fo left" style="padding:0">
+    <div class="s">PolyChord evidences of the pruned $M_{1,r}$ and of $M_{0,r}$</div>
+    <div class="s">$|\ln B|&lt;2\sigma_{\ln B}$ → PolyChord rerun with other seeds (up to 3 runs per model), decision on the mean</div>
+  </div></foreignObject>
+
+  <!-- No -> next family (join the loop) -->
+  <polyline class="ln" points="681,1738 800,1738 800,1555"/>
+  <text class="lab" x="694" y="1730">No</text>
+
+  <!-- Yes -> 11: M0,r = M1,r, cycle check -->
+  <line class="arr" x1="521" y1="1808" x2="521" y2="1846"/>
+  <text class="lab" x="531" y="1832">Yes</text>
+  <polygon class="dia" points="521,1848 681,1918 521,1988 361,1918"/>
+  <foreignObject x="411" y="1886" width="220" height="64"><div xmlns="http://www.w3.org/1999/xhtml" class="fo">
+    <div class="t">$M_{1,r}$ already used</div>
+    <div class="t">as $M_{0,r}$?</div>
+  </div></foreignObject>
+  <circle class="numc" cx="411" cy="1866" r="12"/><text class="num" x="411" y="1870" text-anchor="middle">11</text>
+  <foreignObject x="20" y="1886" width="330" height="64"><div xmlns="http://www.w3.org/1999/xhtml" class="fo left" style="padding:0">
+    <div class="s">possible because the pruning (9) can also remove spectra already in $M_{0,r}$; avoids an endless loop (never happened in the 200 sets)</div>
+  </div></foreignObject>
+
+  <line class="arr" x1="681" y1="1918" x2="716" y2="1918"/>
+  <text class="lab" x="688" y="1910">Yes</text>
+  <rect class="todo" x="718" y="1895" width="96" height="46" rx="10"/>
+  <foreignObject x="718" y="1895" width="96" height="46"><div xmlns="http://www.w3.org/1999/xhtml" class="fo">
+    <div class="s">$3\sigma$ test</div><div class="s">→ 19</div></div></foreignObject>
+
+  <line class="arr" x1="521" y1="1988" x2="521" y2="2024"/>
+  <text class="lab" x="531" y="2010">No</text>
+  <rect class="box" x="381" y="2026" width="280" height="50" rx="25"/>
+  <foreignObject x="381" y="2026" width="280" height="50"><div xmlns="http://www.w3.org/1999/xhtml" class="fo">
+    <div class="t">$M_{0,r}=M_{1,r}$ → back to step 1</div>
+  </div></foreignObject>
+
+
+  <!-- ───────── Res_r0 column ───────── -->
+  <line x1="840" y1="20" x2="840" y2="2070" style="stroke:var(--todol);stroke-width:1;stroke-dasharray:6 5"/>
+  <foreignObject x="870" y="0" width="600" height="34"><div xmlns="http://www.w3.org/1999/xhtml" style="font-size:16px;font-weight:700;color:var(--ink)">Res_r0: search with $r=0$</div></foreignObject>
+
+  <!-- 13: residual test with r = 0 -->
+  <rect class="box" x="870" y="45" width="610" height="350" rx="10"/>
+  <foreignObject x="870" y="45" width="610" height="350"><div xmlns="http://www.w3.org/1999/xhtml" class="fo left">
+    <div class="t ctr">Residual test of $M_1$ with $r=0$ &nbsp;($M_1=M_{0,r}$ at the first round, then step 18)</div>
+    <div style="margin-top:6px">ML fit of $M_1$ with $r=0$ → its best fit; for each family $f$ not yet in $M_1$, not excluded and whose required families are there: ML fit of $M_1+f$, all fixed at that best fit ($r=0$); free: the new spectra ($A$, $\alpha$) and the spectral parameters of $f$</div>
+    <table class="fam" style="margin-top:6px">
+      <tr><td><b>$d$</b></td><td>$A_d\times\beta_d$, $\beta_d\times\beta_d$</td><td>$k=2$</td><td class="s">free $\beta_d$</td><td></td></tr>
+      <tr><td><b>$s$</b></td><td>$A_s\times\beta_s$, $\beta_s\times\beta_s$</td><td>$k=2$</td><td class="s">free $\beta_s$</td><td></td></tr>
+      <tr><td><b>$dT$</b></td><td>$A_d\times T_d$, $T_d\times T_d$ (+ $\beta_d\times T_d$ with $d$)</td><td>$k=2$–$3$</td><td class="s">free $T_d$</td><td></td></tr>
+      <tr><td><b>$d2$</b></td><td>$A_d\times\beta_d^2$, $\beta_d\times\beta_d^2$, $\beta_d^2\times\beta_d^2$</td><td>$k=3$</td><td class="s">free $\beta_d$</td><td class="s">requires $d$</td></tr>
+      <tr><td><b>$s2$</b></td><td>$A_s\times\beta_s^2$, $\beta_s\times\beta_s^2$, $\beta_s^2\times\beta_s^2$</td><td>$k=3$</td><td class="s">free $\beta_s$</td><td class="s">requires $s$</td></tr>
+      <tr><td><b>$ds1$</b></td><td>$A_d\times\beta_s$, $\beta_d\times A_s$</td><td>$k=2$</td><td class="s">free $\beta_d,\beta_s$</td><td class="s">requires $s$</td></tr>
+      <tr><td><b>$ds2$</b></td><td>$\beta_d\times\beta_s$</td><td>$k=1$</td><td class="s">free $\beta_d,\beta_s$</td><td class="s">requires $d$, $s$</td></tr>
+    </table>
+    <div class="t ctr" style="margin-top:4px">$\Delta\chi^2_f=\chi^2(M_1)-\chi^2(M_1+f)$ &nbsp;(both with $r=0$)</div>
+  </div></foreignObject>
+  <circle class="numc" cx="870" cy="45" r="12"/><text class="num" x="870" y="49" text-anchor="middle">13</text>
+
+  <line class="arr" x1="1175" y1="395" x2="1175" y2="433"/>
+
+  <!-- 14: any family detected with r = 0? -->
+  <polygon class="dia" points="1175,435 1325,500 1175,565 1025,500"/>
+  <foreignObject x="1065" y="470" width="220" height="60"><div xmlns="http://www.w3.org/1999/xhtml" class="fo">
+    <div class="t">any family detected?</div>
+    <div class="s">$\Delta\chi^2_f&gt;2k$ (AIC)</div>
+  </div></foreignObject>
+  <circle class="numc" cx="1075" cy="451" r="12"/><text class="num" x="1075" y="455" text-anchor="middle">14</text>
+  <foreignObject x="1230" y="572" width="250" height="60"><div xmlns="http://www.w3.org/1999/xhtml" class="fo left" style="padding:0">
+    <div class="s">families tested and not detected are not tested again in the next rounds of Res_r0</div></div></foreignObject>
+
+  <line class="arr" x1="1325" y1="500" x2="1378" y2="500"/>
+  <text class="lab" x="1334" y="492">No</text>
+  <rect class="todo" x="1380" y="477" width="104" height="46" rx="10"/>
+  <foreignObject x="1380" y="477" width="104" height="46"><div xmlns="http://www.w3.org/1999/xhtml" class="fo">
+    <div class="s">→ 19; chain → profile</div></div></foreignObject>
+
+  <line class="arr" x1="1175" y1="565" x2="1175" y2="641"/>
+  <text class="lab" x="1185" y="587">Yes</text>
+
+  <!-- 15: detected families pruned with r = 0, ordered -->
+  <rect class="box" x="900" y="643" width="550" height="176" rx="10"/>
+  <foreignObject x="900" y="643" width="550" height="176"><div xmlns="http://www.w3.org/1999/xhtml" class="fo">
+    <div class="t">For every detected $f$: $M_{1,0}(f)=M_1+f$ with $r=0$</div>
+    <div>screening (ML + emcee) of the new spectra, with $r=0$:</div>
+    <div class="s">$0$ in the 68% HPD of $A$ → removed, redone until all detected; nothing of $f$ left → $f$ excluded</div>
+    <div style="margin-top:4px">order the families left by $\Delta\mathrm{AIC}=2k-\left[\chi^2(M_1,\,r=0)-\chi^2(M_{1,0}(f))\right]$</div>
+    <div class="s">$k$ = new spectra left after the pruning; lowest first</div>
+  </div></foreignObject>
+  <circle class="numc" cx="900" cy="643" r="12"/><text class="num" x="900" y="647" text-anchor="middle">15</text>
+
+  <line class="arr" x1="1175" y1="819" x2="1175" y2="855"/>
+
+  <!-- 16: next family with all parameters free -->
+  <rect class="box" x="900" y="857" width="550" height="150" rx="10"/>
+  <foreignObject x="900" y="857" width="550" height="150"><div xmlns="http://www.w3.org/1999/xhtml" class="fo">
+    <div class="t">Next family $f$: $M_{1,r}(f)$ = the spectra of $M_{1,0}(f)$,</div>
+    <div class="t">all parameters free ($r$ too)</div>
+    <div style="margin-top:4px">same as steps 7–10:</div>
+    <div class="s">screening and pruning of the new spectra → quick $\ln B_{\rm est}$ ($&lt;-5$ → no PolyChord)</div>
+    <div class="s">→ full fit (ML + PolyChord) and pruning of all the moment spectra</div>
+    <div class="s">→ $M_{1,r}(f)$ preferred over $M_{0,r}$? ($\ln B&gt;0$)</div>
+  </div></foreignObject>
+  <circle class="numc" cx="900" cy="857" r="12"/><text class="num" x="900" y="861" text-anchor="middle">16</text>
+
+  <!-- Yes: adopted -->
+  <line class="ln" x1="1450" y1="932" x2="1462" y2="932"/>
+  <foreignObject x="1340" y="1150" width="122" height="110"><div xmlns="http://www.w3.org/1999/xhtml" class="fo left" style="padding:0;align-items:flex-end;text-align:right">
+    <div class="lab" style="font-size:12.5px;font-weight:600">Yes:</div>
+    <div class="s">$M_{0,r}=M_{1,r}(f)$ (cycle check, 11) → back to step 1, Res_wr skipped from now on</div></div></foreignObject>
+  <line class="arr" x1="1462" y1="932" x2="1462" y2="1146"/>
+
+  <line class="arr" x1="1175" y1="1007" x2="1175" y2="1043"/>
+  <text class="lab" x="1185" y="1029">No</text>
+
+  <!-- 17: M1,0(f) against M0,r -->
+  <rect class="box" x="900" y="1045" width="550" height="96" rx="10"/>
+  <foreignObject x="900" y="1045" width="550" height="96"><div xmlns="http://www.w3.org/1999/xhtml" class="fo">
+    <div class="t">$M_{1,0}(f)$ against $M_{0,r}$</div>
+    <div class="s">quick $\ln B_{\rm est}(M_{1,0}(f)\ \text{vs}\ M_{0,r})&lt;-5$ → rejected, no PolyChord</div>
+    <div class="s">otherwise full fit (ML + PolyChord, $r=0$, all else free) and pruning of the <b>new</b> spectra only</div>
+  </div></foreignObject>
+  <circle class="numc" cx="900" cy="1045" r="12"/><text class="num" x="900" y="1049" text-anchor="middle">17</text>
+
+  <line class="arr" x1="1175" y1="1141" x2="1175" y2="1173"/>
+  <polygon class="dia" points="1175,1175 1335,1240 1175,1305 1015,1240"/>
+  <foreignObject x="1065" y="1212" width="220" height="56"><div xmlns="http://www.w3.org/1999/xhtml" class="fo">
+    <div class="t">$M_{1,0}(f)$ preferred over $M_{0,r}$?</div>
+    <div class="s">$\ln B&gt;0$</div>
+  </div></foreignObject>
+
+  <!-- Yes: Bayesian stop, to the profile scheme -->
+  <line class="arr" x1="1175" y1="1305" x2="1175" y2="1341"/>
+  <text class="lab" x="1185" y="1327">Yes</text>
+  <rect class="todo" x="1020" y="1343" width="310" height="52" rx="10"/>
+  <foreignObject x="1020" y="1343" width="310" height="52"><div xmlns="http://www.w3.org/1999/xhtml" class="fo">
+    <div class="s">→ 19; $M_{1,0}(f)$ → profile scheme</div></div></foreignObject>
+
+  <!-- No (16 lost and 17 lost / rejected) -> next family: loop back to 16 on the left -->
+  <polyline class="ln" points="1015,1240 880,1240 880,835 1150,835"/>
+  <line class="arr" x1="1150" y1="835" x2="1150" y2="855"/>
+  <text class="lab" x="1000" y="1232" text-anchor="end">No</text>
+  <foreignObject x="884" y="1150" width="110" height="60"><div xmlns="http://www.w3.org/1999/xhtml" class="fo left" style="padding:0">
+    <div class="s" style="line-height:1.2">next family (back to 16)</div></div></foreignObject>
+
+  <!-- 18: next round of Res_r0 (the chain) -->
+  <polyline class="ln" points="880,1240 880,1460"/>
+  <line class="arr" x1="880" y1="1460" x2="898" y2="1460"/>
+  <foreignObject x="886" y="1385" width="120" height="30"><div xmlns="http://www.w3.org/1999/xhtml" class="fo left" style="padding:0">
+    <div class="lab" style="font-size:12.5px;font-weight:600;line-height:1.2">no family left</div></div></foreignObject>
+  <rect class="box" x="900" y="1420" width="550" height="80" rx="10"/>
+  <foreignObject x="900" y="1420" width="550" height="80"><div xmlns="http://www.w3.org/1999/xhtml" class="fo">
+    <div class="t">Next round (the chain): $M_1$ = the $M_{1,0}(f)$ of the <b>first</b> family</div>
+    <div class="s">of the order of step 15 (not excluded) → back to step 13</div>
+  </div></foreignObject>
+  <circle class="numc" cx="900" cy="1420" r="12"/><text class="num" x="900" y="1424" text-anchor="middle">18</text>
+  <polyline class="ln" points="1450,1460 1492,1460 1492,230 1482,230"/>
+  <line class="arr" x1="1492" y1="230" x2="1482" y2="230"/>
+
+  <!-- ───────── 3 sigma test ───────── -->
+  <line x1="20" y1="2120" x2="1480" y2="2120" style="stroke:var(--todol);stroke-width:1;stroke-dasharray:6 5"/>
+  <rect class="box" x="450" y="2150" width="600" height="56" rx="10"/>
+  <foreignObject x="450" y="2150" width="600" height="56"><div xmlns="http://www.w3.org/1999/xhtml" class="fo">
+    <div class="t">$3\sigma$ test on $M_{0,r}$ (all the "→ 19" exits)</div>
+  </div></foreignObject>
+  <circle class="numc" cx="450" cy="2150" r="12"/><text class="num" x="450" y="2154" text-anchor="middle">19</text>
+  <line class="arr" x1="750" y1="2206" x2="750" y2="2238"/>
+  <polygon class="dia" points="750,2240 920,2310 750,2380 580,2310"/>
+  <foreignObject x="630" y="2276" width="240" height="68"><div xmlns="http://www.w3.org/1999/xhtml" class="fo">
+    <div class="t">$r$ of $M_{0,r}$ compatible with 0 at $3\sigma$?</div>
+    <div class="s">$0\in[r_{0.135\%},\,r_{99.865\%}]$</div>
+  </div></foreignObject>
+
+  <line class="arr" x1="580" y1="2310" x2="452" y2="2310"/>
+  <text class="lab" x="540" y="2302">Yes</text>
+  <rect class="end" x="250" y="2280" width="200" height="60" rx="30"/>
+  <foreignObject x="250" y="2280" width="200" height="60"><div xmlns="http://www.w3.org/1999/xhtml" class="fo">
+    <div class="t">upper limit</div><div class="s">$r_{95}$: 95% of $P(r\,|\,M_{0,r})$ with $r\ge0$</div></div></foreignObject>
+
+  <line class="arr" x1="920" y1="2310" x2="1048" y2="2310"/>
+  <text class="lab" x="930" y="2302">No</text>
+  <rect class="end" x="1050" y="2280" width="200" height="60" rx="30" style="fill:#fbe9e7;stroke:#d9534f"/>
+  <foreignObject x="1050" y="2280" width="200" height="60"><div xmlns="http://www.w3.org/1999/xhtml" class="fo">
+    <div class="t">r detection</div><div class="s">median and 68% of $P(r\,|\,M_{0,r})$</div></div></foreignObject>
+
+  <foreignObject x="450" y="2395" width="600" height="40"><div xmlns="http://www.w3.org/1999/xhtml" class="fo">
+    <div class="s">in both cases: fit of $M_{0,0}$ ($r=0$), $\ln B(M_{0,r}\ \text{vs}\ M_{0,0})$ reported, not a decision</div></div></foreignObject>
+
+  <!-- ───────── profile scheme column ───────── -->
+  <line x1="1520" y1="20" x2="1520" y2="2100" style="stroke:var(--todol);stroke-width:1;stroke-dasharray:6 5"/>
+  <foreignObject x="1550" y="0" width="620" height="34"><div xmlns="http://www.w3.org/1999/xhtml" style="font-size:16px;font-weight:700;color:var(--ink)">Profile scheme (after the tree, on every set)</div></foreignObject>
+
+  <!-- 20: candidates -->
+  <rect class="pbox" x="1550" y="60" width="610" height="160" rx="10"/>
+  <foreignObject x="1550" y="60" width="610" height="160"><div xmlns="http://www.w3.org/1999/xhtml" class="fo left">
+    <div class="t ctr">Candidates</div>
+    <ul style="margin:6px 0 0 0;padding-left:18px">
+      <li>$M^*$ = final model of the tree ($M_{0,r}$ of step 19)</li>
+      <li>families of the chain: found in Res_r0 but <b>not adopted</b> by the tree ($M_1$ included)</li>
+      <li>candidates: $M^*$ + every subset of these families respecting their requirements, up to the largest $M^*+f_1+\dots+f_n$</li>
+    </ul>
+    <div class="s" style="margin-top:4px">none found in Res_r0 → only $M^*$</div>
+  </div></foreignObject>
+  <circle class="pnumc" cx="1550" cy="60" r="12"/><text class="num" x="1550" y="64" text-anchor="middle">20</text>
+
+  <line class="arr" x1="1855" y1="220" x2="1855" y2="256"/>
+
+  <!-- 21: profiles in r -->
+  <rect class="pbox" x="1550" y="258" width="610" height="170" rx="10"/>
+  <foreignObject x="1550" y="258" width="610" height="170"><div xmlns="http://www.w3.org/1999/xhtml" class="fo left">
+    <div class="t ctr">Profile in $r$ of $M^*$ and of every candidate</div>
+    <ul style="margin:6px 0 0 0;padding-left:18px">
+      <li>$r$ fixed on a grid of 37 values, from $r_{\rm med}-6\sigma$ to $r_{\rm med}+3\sigma$ (posterior of $r$ of the tree)</li>
+      <li>at each $r$: ML fit with all the other parameters free → $\chi^2(r)$</li>
+      <li>minimum of the profile → $r^*$ of the model</li>
+    </ul>
+    <div class="s" style="margin-top:4px">asymmetric: the moments only move the profile to lower $r$; grid extended if the minimum is near an edge or $\Delta\chi^2&lt;16$ at the edges</div>
+  </div></foreignObject>
+  <circle class="pnumc" cx="1550" cy="258" r="12"/><text class="num" x="1550" y="262" text-anchor="middle">21</text>
+
+  <line class="arr" x1="1855" y1="428" x2="1855" y2="464"/>
+
+  <!-- 22: comparison at each r* -->
+  <rect class="pbox" x="1550" y="466" width="610" height="150" rx="10"/>
+  <foreignObject x="1550" y="466" width="610" height="150"><div xmlns="http://www.w3.org/1999/xhtml" class="fo left">
+    <div class="t ctr">Comparison of the models, each at its own $r^*$</div>
+    <ul style="margin:6px 0 0 0;padding-left:18px">
+      <li>$r$ fixed at $r^*$ of the model</li>
+      <li>local evidence (PolyChord) around the ML best fit at $r^*$; free: its moment spectra ($A$, $\alpha$) and the spectral parameters ($\beta_d$, $\beta_s$; $T_d$ only with $dT$); the rest fixed at the best fit</li>
+      <li>the highest evidence wins; $M^*$ stays if no candidate beats it</li>
+    </ul>
+    <div class="s" style="margin-top:4px">two best within $2\sigma$ → local evidences rerun with other seeds (up to 3 runs each), decision on the mean</div>
+  </div></foreignObject>
+  <circle class="pnumc" cx="1550" cy="466" r="12"/><text class="num" x="1550" y="470" text-anchor="middle">22</text>
+
+  <line class="arr" x1="1855" y1="616" x2="1855" y2="652"/>
+
+  <!-- 23: posterior of r from the profile -->
+  <rect class="pbox" x="1550" y="654" width="610" height="150" rx="10"/>
+  <foreignObject x="1550" y="654" width="610" height="150"><div xmlns="http://www.w3.org/1999/xhtml" class="fo left">
+    <div class="t ctr">Posterior of $r$ from the profile of the winning model</div>
+    <div class="ctr" style="margin:4px 0">$P(r)\propto e^{-\chi^2(r)/2}\times$ prior on $r$</div>
+    <ul style="margin:2px 0 0 0;padding-left:18px">
+      <li>prior of the tree, flat in $[-0.02,\,0.06]$: median, 68%, $\sigma$ (also the pull vs the true $r$ in the validation)</li>
+      <li>prior $r\ge0$: for the upper limit</li>
+    </ul>
+  </div></foreignObject>
+  <circle class="pnumc" cx="1550" cy="654" r="12"/><text class="num" x="1550" y="658" text-anchor="middle">23</text>
+
+  <!-- 24: decision -->
+  <line class="arr" x1="1855" y1="804" x2="1855" y2="836"/>
+  <polygon class="dia" points="1855,838 2025,908 1855,978 1685,908"/>
+  <foreignObject x="1735" y="874" width="240" height="68"><div xmlns="http://www.w3.org/1999/xhtml" class="fo">
+    <div class="t">0 within the central $3\sigma$ of $P(r)$?</div>
+    <div class="s">$0\in[r_{0.135\%},\,r_{99.865\%}]$, prior of the tree</div>
+  </div></foreignObject>
+  <circle class="pnumc" cx="1745" cy="856" r="12"/><text class="num" x="1745" y="860" text-anchor="middle">24</text>
+
+  <line class="arr" x1="1855" y1="978" x2="1855" y2="1014"/>
+  <text class="lab" x="1865" y="1000">Yes</text>
+  <rect class="end" x="1735" y="1016" width="240" height="60" rx="30"/>
+  <foreignObject x="1735" y="1016" width="240" height="60"><div xmlns="http://www.w3.org/1999/xhtml" class="fo">
+    <div class="t">upper limit</div><div class="s">$r_{95}$: 95% of $P(r)$ with $r\ge0$</div></div></foreignObject>
+
+  <line class="arr" x1="2025" y1="908" x2="2060" y2="908"/>
+  <text class="lab" x="2030" y="900">No</text>
+  <rect class="end" x="2062" y="878" width="110" height="60" rx="26" style="fill:#fbe9e7;stroke:#d9534f"/>
+  <foreignObject x="2062" y="878" width="110" height="60"><div xmlns="http://www.w3.org/1999/xhtml" class="fo">
+    <div class="t">r detection</div><div class="s">median, 68%</div></div></foreignObject>
+
+  <foreignObject x="1550" y="1090" width="610" height="80"><div xmlns="http://www.w3.org/1999/xhtml" class="fo">
+    <div class="s">same rule as the tree (step 19); only the posterior of $r$ changes: profile here, PolyChord there</div>
+    <div class="s">also reported: the other parameters $\theta$ from the conditional posterior $P(\theta\,|\,r=r^*,\,\mathrm{data})$ (emcee, $r$ fixed at $r^*$), not a decision</div></div></foreignObject>
+  <!-- flags -->
+  <g><rect x="740" y="1470" width="26" height="20" rx="10" fill="#f2c94c" stroke="#b8901a" stroke-width="1"/><text x="753.0" y="1484" text-anchor="middle" font-size="11.5" font-weight="700" fill="#1b1b1b">≈</text></g>
+  <g><rect x="625" y="1690" width="26" height="20" rx="10" fill="#f2c94c" stroke="#b8901a" stroke-width="1"/><text x="638.0" y="1704" text-anchor="middle" font-size="11.5" font-weight="700" fill="#1b1b1b">≈</text></g>
+  <g><rect x="1418" y="846" width="26" height="20" rx="10" fill="#f2c94c" stroke="#b8901a" stroke-width="1"/><text x="1431.0" y="860" text-anchor="middle" font-size="11.5" font-weight="700" fill="#1b1b1b">≈</text></g>
+  <g><rect x="1236" y="1182" width="26" height="20" rx="10" fill="#f2c94c" stroke="#b8901a" stroke-width="1"/><text x="1249.0" y="1196" text-anchor="middle" font-size="11.5" font-weight="700" fill="#1b1b1b">≈</text></g>
+  <g><rect x="1266" y="1182" width="44" height="20" rx="10" fill="#b4a7d6" stroke="#674ea7" stroke-width="1"/><text x="1288.0" y="1196" text-anchor="middle" font-size="11.5" font-weight="700" fill="#1b1b1b">r=0</text></g>
+  <g><rect x="150" y="322" width="44" height="20" rx="10" fill="#b4a7d6" stroke="#674ea7" stroke-width="1"/><text x="172.0" y="336" text-anchor="middle" font-size="11.5" font-weight="700" fill="#1b1b1b">r=0</text></g>
+  <g><rect x="680" y="2385" width="44" height="20" rx="10" fill="#b4a7d6" stroke="#674ea7" stroke-width="1"/><text x="702.0" y="2399" text-anchor="middle" font-size="11.5" font-weight="700" fill="#1b1b1b">r=0</text></g>
+  <g><rect x="166" y="450" width="44" height="20" rx="10" fill="#f6b26b" stroke="#b45f06" stroke-width="1"/><text x="188.0" y="464" text-anchor="middle" font-size="11.5" font-weight="700" fill="#1b1b1b">PTE</text></g>
+  <g><rect x="404" y="2270" width="44" height="20" rx="10" fill="#f6b26b" stroke="#b45f06" stroke-width="1"/><text x="426.0" y="2284" text-anchor="middle" font-size="11.5" font-weight="700" fill="#1b1b1b">PTE</text></g>
+  <g><rect x="1204" y="2270" width="44" height="20" rx="10" fill="#f6b26b" stroke="#b45f06" stroke-width="1"/><text x="1226.0" y="2284" text-anchor="middle" font-size="11.5" font-weight="700" fill="#1b1b1b">PTE</text></g>
+  <g><rect x="2122" y="456" width="26" height="20" rx="10" fill="#f2c94c" stroke="#b8901a" stroke-width="1"/><text x="2135.0" y="470" text-anchor="middle" font-size="11.5" font-weight="700" fill="#1b1b1b">≈</text></g>
+  <g><rect x="1929" y="1006" width="44" height="20" rx="10" fill="#f6b26b" stroke="#b45f06" stroke-width="1"/><text x="1951.0" y="1020" text-anchor="middle" font-size="11.5" font-weight="700" fill="#1b1b1b">PTE</text></g>
+  <g><rect x="2126" y="868" width="44" height="20" rx="10" fill="#f6b26b" stroke="#b45f06" stroke-width="1"/><text x="2148.0" y="882" text-anchor="middle" font-size="11.5" font-weight="700" fill="#1b1b1b">PTE</text></g>
+  <!-- flags legend -->
+  <rect x="1550" y="1190" width="610" height="200" rx="10" style="fill:none;stroke:#b8901a;stroke-width:1.2;stroke-dasharray:4 3"/>
+  <foreignObject x="1550" y="1190" width="610" height="200"><div xmlns="http://www.w3.org/1999/xhtml" class="fo left">
+    <div class="t">Flags (reported with the result, they do not change it)</div>
+    <div style="margin-top:4px"><b style="background:#f6b26b;color:#1b1b1b;border-radius:8px;padding:0 6px">PTE</b> final model PTE $&lt;0.01$ (tree: $M_{0,r}$; profile scheme: winning model at $r^*$)</div>
+    <div style="margin-top:4px"><b style="background:#f2c94c;color:#1b1b1b;border-radius:8px;padding:0 6px">≈</b> a decision taken on a borderline PolyChord comparison: $|\ln B-\text{threshold}|&lt;2\sigma$ after the reruns (pruning 9, $M_{1,r}$ 10 and 16, $M_{1,0}$ 17, best model 22)</div>
+    <div style="margin-top:4px"><b style="background:#b4a7d6;color:#1b1b1b;border-radius:8px;padding:0 6px">r=0</b> a model with $r=0$ ($M_{1,0}(f)$ at 17, $M_{0,0}$ after 3 and 19) against $M_{0,r}$: ✓✓ preferred by a lot, ✓ preferred by a little, ✗ not preferred by a little (by a little: $|\ln B|&lt;2\sigma$)</div>
+  </div></foreignObject>
+</svg>
+</body>
+</html>

@@ -105,13 +105,14 @@ def fake_tree(d, model, chain=None, replace_after=False, m10=False):
 
 
 def run(scen, model, chain=None, replace_after=False, seed_max_runs=1,
-        m10=False):
+        m10=False, candidates=True):
     tree = tempfile.mkdtemp()
     fake_tree(tree, model, chain, replace_after, m10)
     tc = dict(paths=dict(runs_dir=tree, base_config='unused'),
               thresholds=dict(hpd_frac=0.68, seed_band=2.0,
                               seed_max_runs=seed_max_runs),
-              moments=dict(requires={'ds1': ['s']}))
+              moments=dict(requires={'ds1': ['s']}),
+              profile_scheme=dict(candidates=candidates))
     orig = psm.BBCompSepRunner
     psm.BBCompSepRunner = lambda tc, log: MockRunner(scen)
     try:
@@ -166,6 +167,20 @@ def main():
           ('ml', 'M_d_r', 0.006) in R.calls
           and ('ml', 'M_s_r', 0.004) in R.calls
           and ('ml', 'M_none_r', 0.01) in R.calls)
+
+    # 3b. same candidates with profile_scheme: candidates: false: no
+    #     comparison, only the profile of M*
+    scen_s = dict(scen, logz=dict(scen['logz'], **{'M_s_r': -5.}))
+    res, R = run(scen_s, 'M_none_r', [('d', []), ('s', [])],
+                 candidates=False)
+    check("candidates: false -> only M*, candidates listed as skipped",
+          res['model_final'] == 'M_none_r' and res['candidates'] == []
+          and res['candidates_skipped'] == ['d', 's', 'd+s']
+          and res['start'] == 'candidates not compared'
+          and close(res['r_star_final'], 0.010))
+    check("  no profile or local evidence of the candidates",
+          not any(c[1] in ('M_d_r', 'M_s_r', 'M_d+s_r') for c in R.calls
+                  if len(c) > 1))
 
     # 4. s has the highest evidence -> final M* + s, r from its profile
     scen['logz'] = {'M_none_r': -10., 'M_d_r': -9., 'M_s_r': -8.,
