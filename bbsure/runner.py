@@ -143,9 +143,10 @@ class BBCompSepRunner:
         return self.pc_cfg.get('sampler', 'polychord')
 
     def nautilus_settings(self):
-        """nautilus block of the BBCompSep config (all but procs)."""
+        """nautilus block of the BBCompSep config (all but procs and
+        prior_cache, which do not change the result)."""
         return {k: v for k, v in (self.pc_cfg.get('nautilus') or {}).items()
-                if k != 'procs'}
+                if k not in ('procs', 'prior_cache')}
 
     def nautilus_procs(self):
         """Pool processes of a nautilus run (default: mpi_procs)."""
@@ -233,6 +234,11 @@ class BBCompSepRunner:
         if sampler == 'nautilus':
             # nautilus: one process with a pool (BBPOWER_NPROC)
             env = dict(os.environ, BBPOWER_NPROC=str(self.nautilus_procs()))
+            # allowed prior fraction of the moment constraints, shared by
+            # the same model in every set (see BBPower _prior_fraction_cache)
+            cache = (self.pc_cfg.get('nautilus') or {}).get('prior_cache')
+            if cache:
+                env['BBPOWER_PRIOR_CACHE'] = os.path.abspath(cache)
         if sampler == 'polychord' and nproc > 1:
             procs = f", {nproc} MPI procs"
         elif env:

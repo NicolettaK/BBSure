@@ -104,6 +104,9 @@ polychord:
         n_eff: 5000
         n_prior: 100000
         procs: 8
+        # allowed prior fraction (moment constraints) computed once per
+        # model and shared by all the sets of the run (data independent)
+        prior_cache: "@RUN@/../prior_fraction_cache"
     # PolyChord: nlive and nrepeat proportional to the free parameters of each run:
     #   nlive   = max(nlive_min,   nlive_per_dim   * ndim)
     #   nrepeat = max(nrepeat_min, nrepeat_per_dim * ndim)
