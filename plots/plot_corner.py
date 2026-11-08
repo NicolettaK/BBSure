@@ -25,7 +25,7 @@ import matplotlib.pyplot as plt  # noqa: E402
 import corner  # noqa: E402
 
 from bbsure.config import free_param_names  # noqa: E402
-from bbsure.runner import equal_weights_file  # noqa: E402
+from bbsure.runner import equal_weights_file, evidence_run_dir  # noqa: E402
 
 ap = argparse.ArgumentParser()
 ap.add_argument('tree')
@@ -46,9 +46,10 @@ _c = os.path.join(a.tree, 'conclusion_tree.json')
 concl = json.load(open(_c if os.path.isfile(_c) else
                        os.path.join(a.tree, 'conclusion.json')))
 M0 = concl['model']
-cfg = yaml.safe_load(open(os.path.join(a.tree, f'{M0}_PC', 'config.yml')))
+cfg = yaml.safe_load(open(os.path.join(evidence_run_dir(a.tree, M0),
+                                       'config.yml')))
 names_b = free_param_names(cfg['BBCompSep'])
-samp_b = np.loadtxt(equal_weights_file(os.path.join(a.tree, f'{M0}_PC')),
+samp_b = np.loadtxt(equal_weights_file(evidence_run_dir(a.tree, M0)),
                     ndmin=2)[:, 2:]
 
 # ── profile scheme: emcee at r = r*, profile of r ─────────────────────────

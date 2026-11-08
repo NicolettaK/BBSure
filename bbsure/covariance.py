@@ -37,6 +37,7 @@ import sacc
 import yaml
 
 from .config import free_param_names, iter_param_entries
+from .runner import evidence_run_dir
 
 
 def best_fit(tree_dir):
@@ -56,7 +57,7 @@ def best_fit(tree_dir):
 
 def model_spectra(tree_dir, model, best, cells, fiducial, out):
     """Spectrum of the model at the best fit (BBCompSep predicted_spectra)."""
-    cfg = yaml.safe_load(open(os.path.join(tree_dir, f'{model}_PC',
+    cfg = yaml.safe_load(open(os.path.join(evidence_run_dir(tree_dir, model),
                                            'config.yml')))
     cs = cfg['BBCompSep']
     cs['sampler'] = 'predicted_spectra'
@@ -104,7 +105,7 @@ def bestfit_covariance(tree, cells, fiducial, out):
     print(f"best fit of {model}: r = {best.get('r_tensor', 0.):.4g}")
     f_bf = model_spectra(tree, model, best, cells, fiducial, out)
 
-    cs = yaml.safe_load(open(os.path.join(tree, f'{model}_PC',
+    cs = yaml.safe_load(open(os.path.join(evidence_run_dir(tree, model),
                                           'config.yml')))['BBCompSep']
     lmin, lmax = cs['l_min'], cs['l_max']
 

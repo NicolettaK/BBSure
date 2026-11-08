@@ -20,7 +20,7 @@ import matplotlib.pyplot as plt  # noqa: E402
 import corner  # noqa: E402
 
 from bbsure.config import free_param_names  # noqa: E402
-from bbsure.runner import equal_weights_file  # noqa: E402
+from bbsure.runner import equal_weights_file, evidence_run_dir  # noqa: E402
 
 src, table, out, specs = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4:]
 C_B, C_P, C_X = '#2a6fdb', '#e8590c', '#2f9e44'
@@ -46,8 +46,8 @@ for row, spec in enumerate(specs):
     tree = os.path.join(src, 'runs', f'set_{I}_{kind}', 'tree')
     prof = os.path.join(tree, 'profile')
     c = json.load(open(os.path.join(tree, 'conclusion.json')))
-    nb, sb = pc(os.path.join(tree, f"{c['model']}_PC"))
-    nx, sx = pc(os.path.join(tree, f'{mx}_PC'))
+    nb, sb = pc(evidence_run_dir(tree, c['model']))
+    nx, sx = pc(evidence_run_dir(tree, mx))
     res = json.load(open(os.path.join(prof, 'result.json')))
     pz = np.load(os.path.join(prof, f"profile_{res['model_final']}.npz"))
     fine = np.linspace(pz['r'][0], pz['r'][-1], 2001)

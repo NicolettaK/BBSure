@@ -140,6 +140,29 @@ class Model:
     def amplitudes(self):
         return [amp_name(p, s) for _, p, s in self.spectra()]
 
+    def canonical(self):
+        """
+        The same model without the groups that contribute no spectrum (all
+        their spectra removed by the pruning and none of the cross spectra
+        that need them): same BBCompSep config, hence same likelihood and
+        evidence, e.g. M_s+s2-s_w00w10-s_w00w20-s_w10w20-s_w20w20_r ->
+        M_s-s_w00w10_r, M_s-s_w00w10-s_w10w10_r -> M_none_r. dT is never
+        removed: it frees T_d.
+        """
+        on = set(self.spectra())
+        keep = {g for g in self.moments if g == TEMP_PARAM[1] or any(
+            (MOMENT_GROUPS[g]['comp'], MOMENT_GROUPS[g]['pref'], s) in on
+            for s in MOMENT_GROUPS[g]['spectra'])}
+        # groups needed by the cross spectra that are on
+        for pair, X in MOMENT_CROSS.items():
+            if any((X['comp'], X['pref'], s) in on for s in X['spectra']):
+                keep |= set(pair)
+        off = {amp_name(p, s) for c, p, s in group_spectra(keep)
+               if (c, p, s) not in on}
+        m = Model(frozenset(keep), self.r_free, frozenset(off))
+        assert set(m.spectra()) == on, (self.label, m.label)
+        return m
+
     def n_moment_params(self):
         return 2 * len(self.spectra())
 

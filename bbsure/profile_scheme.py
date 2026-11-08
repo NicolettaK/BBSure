@@ -50,7 +50,7 @@ from .fitter import Fitter, NoValidStart
 from .log import DecisionLog
 from .models import (MOMENT_GROUPS, amp_name,
                      model_from_label, requirements_met, slope_name)
-from .runner import BBCompSepRunner, equal_weights_file
+from .runner import BBCompSepRunner, equal_weights_file, evidence_run_dir
 
 # at the edges the profile must rise at least this much (4 sigma): needed
 # for the 3 sigma intervals of the posterior
@@ -193,11 +193,10 @@ class ProfileScheme:
         self.skipped = [] if self.use_cands else [g for g, _ in self.cands]
         if not self.use_cands:
             self.cands = []
-        cfg = yaml.safe_load(open(os.path.join(tree_dir, f'{M0.label}_PC',
-                                               'config.yml')))
+        pc_dir = evidence_run_dir(tree_dir, M0.label)
+        cfg = yaml.safe_load(open(os.path.join(pc_dir, 'config.yml')))
         names = free_param_names(cfg['BBCompSep'])
-        samp = np.loadtxt(equal_weights_file(
-            os.path.join(tree_dir, f'{M0.label}_PC')), ndmin=2)[:, 2:]
+        samp = np.loadtxt(equal_weights_file(pc_dir), ndmin=2)[:, 2:]
         r_b = samp[:, names.index('r_tensor')]
 
         # Bayesian part (tree): ML best fit and posterior (PolyChord or
