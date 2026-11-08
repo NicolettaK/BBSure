@@ -94,7 +94,7 @@ polychord:
     # 2023: ~7x fewer likelihood calls, ln Z stable to ~0.01 between seeds
     # against ~0.3 for PolyChord). With moment constraints both give the
     # evidence on the prior restricted to the allowed region.
-    sampler: polychord
+    sampler: nautilus
     # nautilus settings: live points, effective posterior samples, prior
     # draws for the allowed fraction of the prior, pool processes. With
     # 2000 / 10000 (nautilus defaults) ln Z is stable to ~0.01, more than the
