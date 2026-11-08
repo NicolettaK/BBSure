@@ -21,17 +21,22 @@ FIRST="$1"; LAST="$2"
 ROOT="${SLURM_SUBMIT_DIR}"
 REPO="$(python -c 'import bbsure, os; print(os.path.dirname(os.path.dirname(bbsure.__file__)))')"
 # trees in parallel (16 on a full node; e.g. NPAR=8 on half a node of the
-# shared queue: sbatch -q shared -c 128 --export=ALL,NPAR=8 ...)
+# shared queue: sbatch -q shared -c 128 --export=ALL,NPAR=8 ...). With
+# nautilus fewer cores per tree pay off, e.g. 32 trees x 4 cores:
+# sbatch --export=ALL,NPAR=32,BBPOWER_NPROC=4,PROFILE_NPROC=4 ...
 NPAR=${NPAR:-16}
 # skies to run (e.g. KINDS=d9s4 for the d9s4 sets only)
 KINDS=${KINDS:-d9s4 rand}
 
-export BBPOWER_NPROC=8           # emcee pool processes per tree
+# emcee (and nautilus) pool processes per tree
+export BBPOWER_NPROC=${BBPOWER_NPROC:-8}
+# nautilus pool processes per tree (overrides polychord: nautilus: procs)
+export BBSURE_NAUTILUS_PROCS=${BBSURE_NAUTILUS_PROCS:-$BBPOWER_NPROC}
 # profile points fitted in parallel per tree (one ML each, one core each)
-export PROFILE_NPROC=8
+export PROFILE_NPROC=${PROFILE_NPROC:-8}
 export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1
 
-echo "job ${SLURM_JOB_ID}: sets ${FIRST}-${LAST} (${KINDS}), ${NPAR} trees at a time, $(date '+%F %T')"
+echo "job ${SLURM_JOB_ID}: sets ${FIRST}-${LAST} (${KINDS}), ${NPAR} trees at a time, ${BBPOWER_NPROC} processes each, $(date '+%F %T')"
 for i in $(seq "$FIRST" "$LAST"); do
     for kind in $KINDS; do
         echo "$i $kind"

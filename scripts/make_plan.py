@@ -48,13 +48,15 @@ sky = rng.choice(SKIES, N)
 
 os.makedirs(os.path.join(root, 'plan'), exist_ok=True)
 os.makedirs(os.path.join(root, 'truth'), exist_ok=True)
+# lines ending with \n only (the csv default \r\n leaves a \r on the last
+# field when the files are read with awk, e.g. the sky name)
 with open(os.path.join(root, 'plan', 'sets.csv'), 'w', newline='') as f:
-    w = csv.writer(f)
+    w = csv.writer(f, lineterminator='\n')
     w.writerow(['index', 'seed', 'sky_rand'])
     for i in range(N):
         w.writerow([i, SEED0 + i, sky[i]])
 with open(os.path.join(root, 'truth', 'r_true.csv'), 'w', newline='') as f:
-    w = csv.writer(f)
+    w = csv.writer(f, lineterminator='\n')
     w.writerow(['index', 'r'])
     for i in range(N):
         w.writerow([i, f'{r[i]:.6e}'])

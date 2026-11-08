@@ -41,14 +41,23 @@ if ! ( set -o noclobber; echo "$ME" > "$LOCK" ) 2> /dev/null; then
 fi
 trap 'rm -f "$LOCK"' EXIT
 
-# seed and sky from the plan; r from the truth file (the tree does not see it)
-read -r SEED SKY_RAND < <(awk -F, -v i="$I" '$1 == i {print $2, $3}' \
-                          "${ROOT}/plan/sets.csv")
-R=$(awk -F, -v i="$I" '$1 == i {print $2}' "${ROOT}/truth/r_true.csv")
+# seed and sky from the plan; r from the truth file (the tree does not see
+# it). \r removed: plans written by the older make_plan.py end their lines
+# with \r\n, which left a \r on the sky name (the PySM cache was never found)
+read -r SEED SKY_RAND < <(tr -d '\r' < "${ROOT}/plan/sets.csv" | \
+                          awk -F, -v i="$I" '$1 == i {print $2, $3}')
+R=$(tr -d '\r' < "${ROOT}/truth/r_true.csv" | \
+    awk -F, -v i="$I" '$1 == i {print $2}')
 SKY=$([[ "$KIND" == d9s4 ]] && echo d9s4 || echo "$SKY_RAND")
 
 {
 echo "==> ${NAME}: sky ${SKY}, seed ${SEED}, started $(date '+%F %T')"
+# spectra made elsewhere (e.g. on a laptop) and copied gzipped
+for f in cells_coadded cells_noise; do
+    if [[ ! -f "${RUN}/output/${f}.fits" && -f "${RUN}/output/${f}.fits.gz" ]]; then
+        gunzip "${RUN}/output/${f}.fits.gz"
+    fi
+done
 if [[ ! -f "${RUN}/output/cells_coadded.fits" ]]; then
     # the output of the generator contains r: it does not go in the log
     # nside 128: PySM (cache in pysm_cache) brought from 512 to 128 in

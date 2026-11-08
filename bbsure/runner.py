@@ -149,7 +149,11 @@ class BBCompSepRunner:
                 if k not in ('procs', 'prior_cache')}
 
     def nautilus_procs(self):
-        """Pool processes of a nautilus run (default: mpi_procs)."""
+        """Pool processes of a nautilus run: BBSURE_NAUTILUS_PROCS (set by
+        the NERSC job), else polychord: nautilus: procs, else mpi_procs."""
+        env = os.environ.get('BBSURE_NAUTILUS_PROCS')
+        if env:
+            return int(env)
         return int((self.pc_cfg.get('nautilus') or {}).get(
             'procs', self.pc_cfg.get('mpi_procs', 1)))
 
