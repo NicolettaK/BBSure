@@ -1,6 +1,7 @@
 """
-Running BBCompSep: maximum likelihood, PolyChord (optionally with MPI),
-emcee and single_point, with a generated config. Each run has its own
+Running BBCompSep: maximum likelihood, evidence and posterior (PolyChord,
+optionally with MPI, or nautilus), emcee and single_point, with a generated
+config. Each run has its own
 directory (config.yml, config.md5, stdout.log, output); runs with the same
 config are reused.
 """
@@ -27,7 +28,8 @@ class NoValidStart(RuntimeError):
 
 
 class NoLivePoints(NoValidStart):
-    """PolyChord could not generate its live points: the region of the
+    """PolyChord could not generate its live points (nautilus: allowed
+    prior fraction below 1e-3): the region of the
     prior allowed by the moment constraints is too small."""
 
 # ── BBCompSep in the same process (fast fits) ────────────────────────────
@@ -77,7 +79,7 @@ def _run_inproc(args, log_path):
 # a starting point: PolyChord samples the prior between the edges, emcee
 # starts its walkers there): a run with the same config up to the centres
 # is reused
-CENTRE_FREE_SAMPLERS = ('polychord', 'emcee')
+CENTRE_FREE_SAMPLERS = ('polychord', 'nautilus', 'emcee')
 
 
 def without_centres(cfg):
@@ -87,6 +89,15 @@ def without_centres(cfg):
         if len(p) > 2 and str(p[1]).lower() == 'tophat':
             p[2][1] = None
     return cfg
+
+
+def equal_weights_file(run_dir):
+    """Equal-weight posterior of an evidence run (the `<model>_PC` runs,
+    PolyChord or nautilus): columns 1, -2 ln L, parameters."""
+    f = os.path.join(run_dir, 'nautilus', 'equal_weights.txt')
+    if os.path.isfile(f):
+        return f
+    return os.path.join(run_dir, 'polychord', 'pch_equal_weights.txt')
 
 
 def parse_polychord_stats(fname):
@@ -125,6 +136,21 @@ class BBCompSepRunner:
         return dict(nlive=max(c['nlive_min'], c['nlive_per_dim'] * ndim),
                     nrepeat=max(c['nrepeat_min'],
                                 c['nrepeat_per_dim'] * ndim))
+
+    @property
+    def evidence_sampler(self):
+        """Sampler of the evidence runs: polychord (default) or nautilus."""
+        return self.pc_cfg.get('sampler', 'polychord')
+
+    def nautilus_settings(self):
+        """nautilus block of the BBCompSep config (all but procs)."""
+        return {k: v for k, v in (self.pc_cfg.get('nautilus') or {}).items()
+                if k != 'procs'}
+
+    def nautilus_procs(self):
+        """Pool processes of a nautilus run (default: mpi_procs)."""
+        return int((self.pc_cfg.get('nautilus') or {}).get(
+            'procs', self.pc_cfg.get('mpi_procs', 1)))
 
     # ── low level ─────────────────────────────────────────────────────────
     def _run(self, tag, cfg, result_file):
@@ -203,12 +229,21 @@ class BBCompSepRunner:
                                     'mpirun'), '-np', str(nproc)]
             nlaunch = len(pre)
             cmd = pre + cmd
-        self.log.info(f"    [run] {tag} ({sampler}"
-                      f"{f', {nproc} MPI procs' if sampler == 'polychord' and nproc > 1 else ''})")
+        env = None
+        if sampler == 'nautilus':
+            # nautilus: one process with a pool (BBPOWER_NPROC)
+            env = dict(os.environ, BBPOWER_NPROC=str(self.nautilus_procs()))
+        if sampler == 'polychord' and nproc > 1:
+            procs = f", {nproc} MPI procs"
+        elif env:
+            procs = f", {self.nautilus_procs()} procs"
+        else:
+            procs = ''
+        self.log.info(f"    [run] {tag} ({sampler}{procs})")
         t0 = time.time()
         log_path = os.path.join(d, 'stdout.log')
         stuck = os.path.join(d, 'no_live_points')
-        if sampler == 'polychord' and os.path.isfile(stuck) \
+        if sampler in ('polychord', 'nautilus') and os.path.isfile(stuck) \
                 and open(stuck).read() == h:
             raise NoLivePoints(f"{tag}: no live points (already found)")
         with open(log_path, 'w') as out:
@@ -216,7 +251,14 @@ class BBCompSepRunner:
                 ret = self._polychord_proc(cmd, out, log_path)
             else:
                 ret = subprocess.run(cmd, stdout=out,
-                                     stderr=subprocess.STDOUT)
+                                     stderr=subprocess.STDOUT, env=env)
+        if (sampler == 'nautilus' and ret.returncode != 0 and
+                'allowed prior fraction too small' in open(log_path).read()):
+            # the analogue of PolyChord without live points
+            with open(stuck, 'w') as f:
+                f.write(h)
+            raise NoLivePoints(f"{tag}: allowed prior fraction below 1e-3 "
+                               "(moment constraints)")
         if ret is None:
             # the live points were never all generated: the prior volume
             # allowed by the moment constraints is too small
@@ -294,20 +336,28 @@ class BBCompSepRunner:
     def polychord(self, model, tag, fixed=None, centers=None,
                   free_temp=False):
         """
-        Evidence and posterior (equal weights) with PolyChord (random seed:
-        a different tag, e.g. _rep2, gives an independent run).
+        Evidence and posterior (equal weights) with PolyChord, or nautilus
+        with polychord: sampler: nautilus (random seed: a different tag,
+        e.g. _rep2, gives an independent run). With moment constraints the
+        evidence is on the prior restricted to the allowed region (both).
         free_temp: T_d free also without the dT moments.
         Returns logZ, logZerr, names, samples [nsamp, npar], -2lnL.
         """
-        cfg = build_config(self.base, model, 'polychord', fixed, centers,
+        sampler = self.evidence_sampler
+        cfg = build_config(self.base, model, sampler, fixed, centers,
                            free_temp=free_temp)
         names = free_param_names(cfg['BBCompSep'])
-        cfg['BBCompSep'].update(self.pc_settings(len(names)))
-        d = self._run(tag, cfg, os.path.join('polychord', 'pch.stats'))
-        logZ, logZerr = parse_polychord_stats(
-            os.path.join(d, 'polychord', 'pch.stats'))
-        samp = np.loadtxt(os.path.join(d, 'polychord',
-                                       'pch_equal_weights.txt'), ndmin=2)
+        if sampler == 'nautilus':
+            cfg['BBCompSep']['nautilus'] = self.nautilus_settings()
+            d = self._run(tag, cfg, os.path.join('nautilus', 'results.npz'))
+            z = np.load(os.path.join(d, 'nautilus', 'results.npz'))
+            logZ, logZerr = float(z['log_z']), float(z['log_z_err'])
+        else:
+            cfg['BBCompSep'].update(self.pc_settings(len(names)))
+            d = self._run(tag, cfg, os.path.join('polychord', 'pch.stats'))
+            logZ, logZerr = parse_polychord_stats(
+                os.path.join(d, 'polychord', 'pch.stats'))
+        samp = np.loadtxt(equal_weights_file(d), ndmin=2)
         # columns: weight, -2lnL, parameters
         return logZ, logZerr, names, samp[:, 2:], samp[:, 1]
 

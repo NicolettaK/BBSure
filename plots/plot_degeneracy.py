@@ -20,6 +20,7 @@ import matplotlib.pyplot as plt  # noqa: E402
 import corner  # noqa: E402
 
 from bbsure.config import free_param_names  # noqa: E402
+from bbsure.runner import equal_weights_file  # noqa: E402
 
 src, table, out, specs = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4:]
 C_B, C_P, C_X = '#2a6fdb', '#e8590c', '#2f9e44'
@@ -31,8 +32,7 @@ truth = {r['index'] + r['kind']: (float(r['r_true']), r['sky']) for r in
 def pc(d):
     cfg = yaml.safe_load(open(os.path.join(d, 'config.yml')))
     names = free_param_names(cfg['BBCompSep'])
-    s = np.loadtxt(os.path.join(d, 'polychord', 'pch_equal_weights.txt'),
-                   ndmin=2)[:, 2:]
+    s = np.loadtxt(equal_weights_file(d), ndmin=2)[:, 2:]
     return names, s
 
 

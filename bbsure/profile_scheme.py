@@ -50,7 +50,7 @@ from .fitter import Fitter, NoValidStart
 from .log import DecisionLog
 from .models import (MOMENT_GROUPS, amp_name,
                      model_from_label, requirements_met, slope_name)
-from .runner import BBCompSepRunner
+from .runner import BBCompSepRunner, equal_weights_file
 
 # at the edges the profile must rise at least this much (4 sigma): needed
 # for the 3 sigma intervals of the posterior
@@ -161,6 +161,8 @@ class ProfileScheme:
         # close comparisons: |ln B| < seed_band * error between the two best
         # models -> more PolyChord runs (other seeds), up to seed_max_runs
         self.seed_band = th.get('seed_band', 2.0)
+        # the two best within lnB_flag (inconclusive evidence): flagged
+        self.lnB_flag = th.get('lnB_flag', 1.0)
         self.seed_max_runs = th.get('seed_max_runs', 1)
         # final model with PTE < pte_flag (at r = r_min): flagged
         self.pte_flag = th.get('pte_flag', 0.05)
@@ -194,12 +196,12 @@ class ProfileScheme:
         cfg = yaml.safe_load(open(os.path.join(tree_dir, f'{M0.label}_PC',
                                                'config.yml')))
         names = free_param_names(cfg['BBCompSep'])
-        samp = np.loadtxt(os.path.join(tree_dir, f'{M0.label}_PC',
-                                       'polychord', 'pch_equal_weights.txt'),
-                          ndmin=2)[:, 2:]
+        samp = np.loadtxt(equal_weights_file(
+            os.path.join(tree_dir, f'{M0.label}_PC')), ndmin=2)[:, 2:]
         r_b = samp[:, names.index('r_tensor')]
 
-        # Bayesian part (tree): ML best fit and posterior (PolyChord) of M_0,r
+        # Bayesian part (tree): ML best fit and posterior (PolyChord or
+        # nautilus) of M_0,r
         z = np.load(os.path.join(tree_dir, f'{M0.label}_ML', 'chi2.npz'))
         self.bayes = dict(model=M0.label,
                           conclusion=concl.get('conclusion'),
@@ -454,15 +456,16 @@ class ProfileScheme:
                 logZ_runs=list(lzs))
 
     def close_pair(self, comparison):
-        """The two best models still within seed_band errors (after the
-        repetitions): [dict(chosen, other, lnB, lnB_err)] or []."""
+        """The two best models within lnB_flag (inconclusive evidence) or
+        still within seed_band errors (after the repetitions):
+        [dict(chosen, other, lnB, lnB_err)] or []."""
         if len(comparison) < 2:
             return []
         top = sorted(comparison, key=lambda k: -comparison[k]['logZ'])[:2]
         a, b = comparison[top[0]], comparison[top[1]]
         lb = a['logZ'] - b['logZ']
         err = float(np.hypot(a['logZerr'], b['logZerr']))
-        if lb >= self.seed_band * err:
+        if lb >= max(self.lnB_flag, self.seed_band * err):
             return []
         self.log.info(f"    [undecided] {top[0]} chosen over {top[1]} with "
                       f"ln B = {lb:.2f} +- {err:.2f}")

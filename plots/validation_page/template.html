@@ -221,8 +221,8 @@ details.more summary { cursor: pointer; color: var(--accent); font-size: .9rem; 
     </div>
     <div class="legend" style="margin:10px 0">
       <span><span class="chip c-pte">PTE</span>final model PTE &lt; 0.01</span>
-      <span><span class="chip c-und">≈</span>a decision taken on a borderline PolyChord comparison: |ln B − threshold| &lt; 2σ after the reruns</span>
-      <span>model with r = 0 against M₀,r: <span class="chip c-m10">r=0 ✓✓</span>preferred by a lot <span class="chip c-m10">r=0 ✓</span>preferred by a little (&lt; 2σ) <span class="chip c-m10">r=0 ✗</span>not preferred, by a little (&lt; 2σ)</span>
+      <span><span class="chip c-und">≈</span>a decision taken on inconclusive evidence: |ln B − threshold| &lt; 1 (Jeffreys scale, Trotta 2008), or &lt; 2σ of PolyChord after the reruns</span>
+      <span>model with r = 0 against M₀,r: <span class="chip c-m10">r=0 ✓✓</span>preferred by a lot <span class="chip c-m10">r=0 ✓</span>preferred by a little <span class="chip c-m10">r=0 ✗</span>not preferred, by a little (a little: |ln B| &lt; 1, or &lt; 2σ of PolyChord)</span>
       <span><span class="chip c-pte">det</span>yellow cells: detection with true r &lt; 3×10⁻³</span>
       <span><span class="wrong">UL ✗ / det ✗</span> red cells: wrong conclusion: true r above the 95% upper limit, or detection with true r = 0</span>
     </div>
@@ -341,11 +341,11 @@ function detail(r) {
     'no candidates: only the profile of the tree model']);
   const u = x.und.map(c => `<div><span class="chip c-und">≈</span>${KINDL[c.k] || c.k}: kept ${r0txt(c.c, c.c0)} over ${r0txt(c.o, c.o0)}, ln B = ${c.b.toFixed(2)} ± ${c.e.toFixed(2)}</div>`)
     .concat(x.pund.map(c => `<div><span class="chip c-und">≈</span>Profile scheme, best model: ${mx(c.c)} beat ${mx(c.o)}, ln B = ${c.b.toFixed(2)} ± ${c.e.toFixed(2)}</div>`));
-  items.push(['Borderline decisions (≈)', u.length ? u.join('') + '<div class="ul">ln B within 2σ of the threshold (0) even after repeating PolyChord with other seeds: the choice could have gone the other way</div>' : 'none']);
+  items.push(['Borderline decisions (≈)', u.length ? u.join('') + '<div class="ul">|ln B − threshold| &lt; 1 (inconclusive on the Jeffreys scale), or within 2σ of the threshold even after repeating PolyChord with other seeds: the choice could have gone the other way</div>' : 'none']);
   const pt = (v, l) => `${l} <span class="${v < PTE_FLAG ? 'p2' : ''}">${v.toFixed(3)}</span>`;
   const GR = { '✓✓': 'preferred by a lot', '✓': 'preferred by a little', '✗': 'not preferred, by a little', '': 'not preferred' };
   if (x.r0c && x.r0c.length) items.push(['Models with r = 0 (r=0 flag)', x.r0c.map(c => `<div>${c.g ? `<span class="chip c-m10">r=0 ${c.g}</span>` : ''}${c.w === 'M₀,₀' ? 'final model with r = 0, M₀,₀' : 'M₁,₀ of Res<sub>r0</sub>'} = ${mx(c.m) || 'no moments'}: ln B(r = 0 vs M₀,r) = ${c.x.toFixed(2)} ± ${c.e.toFixed(2)}, ${GR[c.g]}</div>`).join('') +
-    '<div class="ul">by a lot / by a little: |ln B| above / below 2σ of PolyChord. M₁,₀ preferred stops the Bayesian search (3σ test on M₀,r); M₀,₀ is only reported</div>']);
+    '<div class="ul">by a lot / by a little: |ln B| above / below max(1, 2σ of PolyChord). M₁,₀ preferred stops the Bayesian search (3σ test on M₀,r); M₀,₀ is only reported</div>']);
   items.push(['Goodness of fit', `PTE of the final model: ${pt(r.tpte, 'tree')}, ${pt(r.ppte, 'profile scheme')}`]);
   const nv = (v, n) => v == null ? '<span class="ul">–</span>' : (Math.abs(v) >= 100 ? v.toFixed(1) : Math.abs(v) >= 1 ? v.toFixed(3) : Math.abs(v) >= 1e-3 ? v.toPrecision(3) : v.toExponential(2));
   const ms = (m, lo, hi) => m == null ? '<span class="ul">–</span>' : lo == null ? nv(m) : ae(m, lo, hi, nv);

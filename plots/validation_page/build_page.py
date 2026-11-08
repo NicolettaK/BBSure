@@ -95,13 +95,15 @@ RANK = {'': 0, '✗': 1, '✓': 2, '✓✓': 3}
 
 def r0grade(x, e):
     """x = ln B(model with r = 0 vs M_0,r): preferred by a lot (✓✓), by a
-    little (✓, within 2 sigma of PolyChord), not preferred by a little (✗),
-    otherwise nothing."""
+    little (✓, |ln B| < max(1, 2 sigma): inconclusive on the Jeffreys scale
+    of Trotta 2008, or within the numerical error), not preferred by a
+    little (✗), otherwise nothing."""
     if x is None or e is None:
         return ''
+    b = max(1., 2 * e if e == e else 0.)
     if x > 0:
-        return '✓✓' if x >= 2 * e else '✓'
-    return '✗' if x > -2 * e else ''
+        return '✓✓' if x >= b else '✓'
+    return '✗' if x > -b else ''
 
 
 def details(name):

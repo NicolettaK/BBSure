@@ -34,6 +34,10 @@ thresholds:
     # seed_max_runs runs per fit
     seed_band: 2.0
     seed_max_runs: 3
+    # A choice is flagged as undecided (≈) if |ln B - threshold| < lnB_flag
+    # (1 = inconclusive on the Jeffreys scale of Trotta 2008) or still within
+    # seed_band errors after the repetitions
+    lnB_flag: 1.0
     # Comparison of a candidate with M_0,r first from the ML fits:
     # ln B ~ -Delta chi2 / 2 - occam_per_param * Delta k; below
     # lnB_preferred - lnB_approx_skip -> rejected without PolyChord (never
@@ -85,7 +89,22 @@ profile_scheme:
     candidates: true
 
 polychord:
-    # nlive and nrepeat proportional to the free parameters of each run:
+    # Sampler of the evidence runs (the <model>_PC directories): polychord
+    # or nautilus (importance nested sampling with neural networks, Lange
+    # 2023: ~7x fewer likelihood calls, ln Z stable to ~0.01 between seeds
+    # against ~0.3 for PolyChord). With moment constraints both give the
+    # evidence on the prior restricted to the allowed region.
+    sampler: polychord
+    # nautilus settings: live points, effective posterior samples, prior
+    # draws for the allowed fraction of the prior, pool processes. With
+    # 2000 / 10000 (nautilus defaults) ln Z is stable to ~0.01, more than the
+    # decisions need (flag at |ln B| < 1): half of them, about half the time
+    nautilus:
+        n_live: 1000
+        n_eff: 5000
+        n_prior: 100000
+        procs: 8
+    # PolyChord: nlive and nrepeat proportional to the free parameters of each run:
     #   nlive   = max(nlive_min,   nlive_per_dim   * ndim)
     #   nrepeat = max(nrepeat_min, nrepeat_per_dim * ndim)
     # e.g. residuals (2D): 100 / 10;  M_none_r (7D): 105 / 21

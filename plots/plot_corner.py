@@ -25,6 +25,7 @@ import matplotlib.pyplot as plt  # noqa: E402
 import corner  # noqa: E402
 
 from bbsure.config import free_param_names  # noqa: E402
+from bbsure.runner import equal_weights_file  # noqa: E402
 
 ap = argparse.ArgumentParser()
 ap.add_argument('tree')
@@ -47,8 +48,8 @@ concl = json.load(open(_c if os.path.isfile(_c) else
 M0 = concl['model']
 cfg = yaml.safe_load(open(os.path.join(a.tree, f'{M0}_PC', 'config.yml')))
 names_b = free_param_names(cfg['BBCompSep'])
-samp_b = np.loadtxt(os.path.join(a.tree, f'{M0}_PC', 'polychord',
-                                 'pch_equal_weights.txt'), ndmin=2)[:, 2:]
+samp_b = np.loadtxt(equal_weights_file(os.path.join(a.tree, f'{M0}_PC')),
+                    ndmin=2)[:, 2:]
 
 # ── profile scheme: emcee at r = r*, profile of r ─────────────────────────
 res = json.load(open(os.path.join(a.prof, 'result.json')))
@@ -70,8 +71,7 @@ if a.extra_pc:
     MX = os.path.basename(os.path.normpath(a.extra_pc))[:-3]
     cx = yaml.safe_load(open(os.path.join(a.extra_pc, 'config.yml')))
     names_x = free_param_names(cx['BBCompSep'])
-    samp_x = np.loadtxt(os.path.join(a.extra_pc, 'polychord',
-                                     'pch_equal_weights.txt'), ndmin=2)[:, 2:]
+    samp_x = np.loadtxt(equal_weights_file(a.extra_pc), ndmin=2)[:, 2:]
 
 
 def label(n):

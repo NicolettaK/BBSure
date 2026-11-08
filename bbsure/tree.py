@@ -85,7 +85,9 @@ Flowchart
  Borderline comparisons: if |ln B - threshold| < seed_band * error, the two
  PolyChord fits are repeated with another (random) seed and ln Z averaged,
  up to seed_max_runs runs per fit. This only reduces the numerical error,
- not the fluctuation of the realization.
+ not the fluctuation of the realization. A choice is flagged as undecided if
+ |ln B - threshold| < lnB_flag (1: inconclusive on the Jeffreys scale of
+ Trotta 2008) or still < seed_band * error after the repetitions.
 
 Output (in runs_dir)
 --------------------
@@ -122,6 +124,9 @@ class DecisionTree:
         # more PolyChord runs (different seeds), up to seed_max_runs per fit
         self.seed_band = th.get('seed_band', 2.0)
         self.seed_max_runs = th.get('seed_max_runs', 1)
+        # choices with |ln B - threshold| < lnB_flag are flagged as
+        # undecided (inconclusive evidence), whatever the numerical error
+        self.lnB_flag = th.get('lnB_flag', 1.0)
         # comparisons of a candidate with M_0,r first with the ML fits:
         # ln B ~ -Delta chi2 / 2 - occam_per_param * Delta k; below the
         # threshold - lnB_approx_skip -> rejected without PolyChord;
@@ -274,9 +279,10 @@ class DecisionTree:
         return lb, lberr
 
     def note_undecided(self, kind, chosen, other, lb, lberr, threshold):
-        """Records a choice taken with ln B within seed_band errors of the
-        threshold (also after the repetitions): flagged in the results."""
-        if abs(lb - threshold) >= self.seed_band * lberr:
+        """Records a choice taken with |ln B - threshold| < lnB_flag
+        (inconclusive evidence) or within seed_band errors of the threshold
+        (also after the repetitions): flagged in the results."""
+        if abs(lb - threshold) >= max(self.lnB_flag, self.seed_band * lberr):
             return
         d = dict(kind=kind, chosen=chosen, other=other, lnB=lb,
                  lnB_err=lberr, threshold=threshold)

@@ -337,16 +337,25 @@ def tree_items(ev):
 # flags as in the results page: PTE < 0.01; '≈' a decision taken on a
 # borderline PolyChord comparison (|ln B - threshold| < 2 errors after the
 # reruns); 'r=0' a model with r = 0 against M_0,r: preferred by a lot (✓✓),
-# by a little (✓, within 2 errors), not preferred by a little (✗)
+# by a little (✓, |ln B| < max(LNB_FLAG, 2 errors)), not preferred by a
+# little (✗); ≈ = choice with |ln B - threshold| < max(LNB_FLAG, 2 errors)
+# (LNB_FLAG = 1: inconclusive on the Jeffreys scale of Trotta 2008, the
+# lnB_flag of the tree)
 PTE_FLAG = 0.01
 UND_BAND = 2.
+LNB_FLAG = 1.
+
+
+def band(err):
+    """Half width of the 'by a little' band around a threshold."""
+    return max(LNB_FLAG, UND_BAND * (err if err == err else 0.))
 
 
 def r0_flag(x, err):
     """x = ln B(model with r = 0 vs M_0,r)."""
     if x > 0:
-        return 'r=0 ✓✓' if x >= UND_BAND * err else 'r=0 ✓'
-    return 'r=0 ✗' if x > -UND_BAND * err else None
+        return 'r=0 ✓✓' if x >= band(err) else 'r=0 ✓'
+    return 'r=0 ✗' if x > -band(err) else None
 
 
 def node_flags(e):
@@ -354,7 +363,7 @@ def node_flags(e):
     if 'lnB' not in e or e.get('method'):
         return []
     thr = e.get('lnB_preferred', e.get('lnB_prune', 0.))
-    out = ['≈'] if abs(e['lnB'] - thr) < UND_BAND * e['lnB_err'] else []
+    out = ['≈'] if abs(e['lnB'] - thr) < band(e['lnB_err']) else []
     if e['node'] == 'pref' and e['question'].startswith('Is M_1,0'):
         f = r0_flag(e['lnB'], e['lnB_err'])
         out += [f] if f else []
@@ -372,7 +381,8 @@ def end_item(e, model, chi=None, where=''):
         extra.append(f"ln B(r free vs r = 0) = {e['lnB_rfree_vs_r0']:.2f} ± "
                      f"{e['lnB_err']:.2f}  (same model with r = 0; not used "
                      "for the decision)")
-    # choices taken with ln B within 2 errors (also after the repetitions)
+    # choices taken with |ln B| < max(1, 2 errors) (also after the
+    # repetitions)
     for c in e.get('undecided_choices') or []:
         extra.append(f"undecided: {short(c['chosen'])} over "
                      f"{short(c['other'])} (ln B = {c['lnB']:.2f} ± "
