@@ -3,3 +3,4 @@ __pycache__/
 .DS_Store
 data/pysm_cache/
 notebooks/tutorial_run/
+plots/validation_page/runs/

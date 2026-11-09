@@ -7,7 +7,7 @@
 #   bash plots/validation_page/make_page.sh <root> <run text> <out dir>
 #
 # <run text>: title, byline, setup and main results of the run (see
-# runs/aic_2026-11.html). Writes <out dir>/index.html (standalone page) with
+# run_text_example.html). Writes <out dir>/index.html (standalone page) with
 # flowchart.png, figures/, paths/ and corners/ next to it, ready for a web
 # server (e.g. the NERSC portal). Run from anywhere, in the bbpower env.
 set -euo pipefail

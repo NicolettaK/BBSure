@@ -6,7 +6,7 @@ Results page of a validation run (HTML, one file plus the images next to it).
 
 <root>: the run, after tables.py (final_table.csv, profile_results.csv,
 results_unblinded.csv, runs/set_*/tree/...). <run text>: the text of the run
-(title, byline and setup, main results), as runs/aic_2026-11.html.
+(title, byline and setup, main results), as run_text_example.html.
 The page expects flowchart.png, figures/, paths/ and corners/ next to it
 (make_page.sh puts them there). --standalone: a complete HTML document (for a
 web server, e.g. the NERSC portal) instead of the fragment of a claude.ai

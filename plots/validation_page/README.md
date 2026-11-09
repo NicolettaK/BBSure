@@ -18,12 +18,12 @@ The root of the run, copied from NERSC (only the small files are needed):
 ```
 
 and a text file with what changes from run to run: the title, the byline and
-setup bullets, and the main results (see `runs/aic_2026-11.html`).
+setup bullets, and the main results (template: `run_text_example.html`; keep the filled copy with the results of the run, not in the repository).
 
 ## Usage
 
 ```bash
-bash plots/validation_page/make_page.sh <root> plots/validation_page/runs/<run>.html <out dir>
+bash plots/validation_page/make_page.sh <root> <root>/page_text.html <out dir>
 ```
 
 writes `<out dir>/index.html` with `flowchart.png`, `figures/`, `paths/` and
