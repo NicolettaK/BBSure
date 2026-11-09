@@ -29,6 +29,9 @@ BBPowerSummarizer:
 BBCompSep:
     sampler: 'maximum_likelihood'
     likelihood_type: 'h&l'  # Hamimeche-Lewis, fiducial = mean of the covariance sims
+    # Hartlap correction of the inverse covariance, estimated from 500 sims
+    # (BBPower >= Bsure-hartlap): h = (500 - 21 - 2) / 499 = 0.956
+    hartlap_nsims: 500
     r_init: 1.e-3
     pol_channels: ['B']
     l_min: 30
