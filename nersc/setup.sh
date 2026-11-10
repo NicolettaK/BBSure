@@ -5,8 +5,10 @@
 #
 # 1. extracts the spectra of the covariance sims in <root>/cov
 #    (cells_all_splits_sim*.fits, from run_spectra.sh --cov-maps)
-# 2. checks the PySM maps of the 9 skies at nside 128 (computed from 512 with
-#    the harmonic downgrade, in $BBSURE_DATA/pysm_cache: PySM is not run here)
+# 2. checks the PySM maps of the 9 skies at nside 128 without E modes
+#    (<sky>_nside128_from512_noE.npy, harmonic downgrade from 512 with E
+#    removed, in $BBSURE_DATA/pysm_cache: PySM is not run here; make them
+#    with scripts/make_pysm_cache.py)
 # 3. creates the plan (plan/sets.csv) and the true r (truth/r_true.csv)
 # The environment (conda, BBPower and BBSure importable) must be active.
 set -euo pipefail
@@ -22,10 +24,10 @@ tar -xf "$COV_TAR" -C "${ROOT}/cov"
 ls "${ROOT}"/cov/cells_all_splits_sim*.fits | sort -V > "${ROOT}/cov/cells_all_sims.txt"
 echo "    $(wc -l < "${ROOT}/cov/cells_all_sims.txt") sims"
 
-echo "==> [2/3] PySM maps of the 9 skies (nside 128 from 512, in ${DATA}/pysm_cache)"
+echo "==> [2/3] PySM maps of the 9 skies (nside 128 from 512, no E, in ${DATA}/pysm_cache)"
 for d in d9 d10 d12; do
     for s in s4 s5 s7; do
-        f="${DATA}/pysm_cache/${d}${s}_nside128_from512.npy"
+        f="${DATA}/pysm_cache/${d}${s}_nside128_from512_noE.npy"
         [[ -f "$f" ]] || { echo "Missing $f"; exit 1; }
     done
 done
