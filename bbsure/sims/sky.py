@@ -315,11 +315,49 @@ def harmonic_downgrade_qu(Q, U, nside, no_e=False):
     return hp.alm2map(alm, nside, lmax=lmax, pol=True)[1:]
 
 
+FOOTPRINT_HITS = os.path.join(DATA_DIR, 'masks',
+                              'norm_nHits_SA_35FOV_G_nside128.fits')
+
+
+def sat_footprint(nside):
+    """SO SAT footprint (Galactic coordinates): normalized hits > 1e-3,
+    as for the noise in generate_maps."""
+    h = hp.ud_grade(hp.read_map(FOOTPRINT_HITS), nside)
+    return h / h.max() > 1e-3
+
+
+def scale_dust_beta(preset, nside, x):
+    """
+    PySM dust preset with the spatial dispersion of beta_d scaled by x, as
+    the beta_d-Spatial skies of Liu et al. 2025 (arXiv:2508.00073, eq. 3):
+        beta_d(n) -> (beta_d(n) - <beta_d>) x + <beta_d>,
+    with T_d fixed at its mean (as they fix the parameter that is not
+    scaled); means over the SAT footprint. Only single-MBB presets
+    (e.g. d10, used as 'd10x2' in the sky name).
+    """
+    import pysm3
+    import pysm3.units as u
+    if preset == 'd12':
+        raise ValueError("beta_d scaling only for single-MBB dust presets")
+    comp = pysm3.Sky(nside=nside, preset_strings=[preset]).components[0]
+    fp = sat_footprint(nside)
+    b = np.asarray(comp.mbb_index.value, dtype=np.float64)
+    t = np.asarray(comp.mbb_temperature.value, dtype=np.float64)
+    bm, tm = b[fp].mean(), t[fp].mean()
+    print(f"  PySM: {preset} with beta_d dispersion x {x:g} around "
+          f"<beta_d> = {bm:.4f} (std in the footprint {b[fp].std():.4f} -> "
+          f"{x * b[fp].std():.4f}), T_d fixed at {tm:.3f} K")
+    comp.mbb_index = u.Quantity((b - bm) * x + bm, unit='')
+    comp.mbb_temperature = u.Quantity(np.full_like(t, tm), unit=u.K)
+    return comp
+
+
 def get_pysm_fg(model, nside, nside_in=0, no_e=False):
     """
     Foreground Q, U per band from PySM [nfreq, 2, npix] in uK_CMB, integrated
     over the SO bandpasses (same convention as BBPower). model is a string
-    of presets, e.g. 'd1s1'. The maps are deterministic: saved in
+    of presets, e.g. 'd1s1' ('d10x2s5': d10 with the beta_d dispersion
+    scaled by 2, see scale_dust_beta). The maps are deterministic: saved in
     DATA_DIR/pysm_cache/ and reused.
 
     nside_in = 0: PySM directly at nside (PySM brings the templates to nside
@@ -356,8 +394,15 @@ def get_pysm_fg(model, nside, nside_in=0, no_e=False):
 
     import pysm3
     import pysm3.units as u
-    presets = re.findall(r'[a-z]+\d+', model)
+    presets = re.findall(r'[a-z]+\d+(?:x[\d.]+)?', model)
     print(f"  PySM: building {presets} at nside={nside} (cached in {fname})")
+    # dust presets with the spatial dispersion of beta_d scaled, e.g. d10x2
+    scaled = []
+    for p in list(presets):
+        m = re.fullmatch(r'(d\d+)x([\d.]+)', p)
+        if m:
+            presets.remove(p)
+            scaled.append((m.group(1), float(m.group(2))))
     # d12 (MKD, 6 layers): the preset only points to the nside 2048 files
     # (~5.8 GB); the same layers exist at nside 512 (~360 MB), enough here.
     extra = []
@@ -370,6 +415,8 @@ def get_pysm_fg(model, nside, nside_in=0, no_e=False):
             map_mbb_temperature='mkd_dust/512/thermaldust_temp{layer}.fits',
             nside=nside, num_layers=6, color_correction=0.911,
             unit_layers='MJy/sr', unit_mbb_temperature='K'))
+    for name, x in scaled:
+        extra.append(scale_dust_beta(name, nside, x))
     sky = pysm3.Sky(nside=nside, preset_strings=presets or None,
                     component_objects=extra or None)
     fg = np.zeros([len(BAND_NAMES), 2, hp.nside2npix(nside)])
