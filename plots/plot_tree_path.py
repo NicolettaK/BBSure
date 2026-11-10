@@ -126,6 +126,8 @@ def short(lab):
 
 
 def shorten(text):
+    # logs written before the wording was unified ('not disfavoured w.r.t.')
+    text = text.replace('not disfavoured w.r.t.', 'preferred over')
     return LABEL.sub(lambda m: short(m.group(0)), text)
 
 
@@ -151,7 +153,7 @@ def tree_step(e, phase, early):
             return '17'
         return '3' if early else ('9' if wr else '16')
     if n == 'prune':
-        ref = q.split('w.r.t.')[-1].strip(' ?')
+        ref = re.split(r'w\.r\.t\.|preferred over', q)[-1].strip(' ?')
         return '17' if ref.endswith('_0') else ('9' if wr else '16')
     if n == 'pref':
         if q.startswith('Is M_1,0'):
@@ -283,10 +285,10 @@ def tree_items(ev):
                     # screening (ML + emcee): removed right away
                     head, tail = 'removed (0 in their 68% HPD)', 'left: '
                 else:
-                    # full fit: removed only if the pruned model is not
-                    # disfavoured (next box)
+                    # full fit: removed only if the pruned model is
+                    # preferred (next box)
                     head, tail = ('full fit, 0 in their 68% HPD (removed if '
-                                  'not disfavoured)'), 'pruned model: '
+                                  'preferred)'), 'pruned model: '
                 items.append(('purple', [f'pruning{r0}: {head}',
                                          ', '.join(amp_tex(x) for x in
                                                    e['undetected']),

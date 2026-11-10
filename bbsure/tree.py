@@ -598,7 +598,7 @@ class DecisionTree:
         """
         Removes from the final model the undetected moment spectra (zero
         inside the HPD of their amplitude in the posterior of the full fit),
-        refits and keeps the pruned model if it is not disfavoured
+        refits and keeps the pruned model if it is preferred
         (ln B > lnB_prune). Repeated until only detected amplitudes are left.
         The amplitudes in keep_amps are never removed.
         """
@@ -623,8 +623,8 @@ class DecisionTree:
             self.note_undecided('pruning', M1.label if keep else M0.label,
                                 M0.label if keep else M1.label, lb, lberr,
                                 self.lnB_prune)
-            self.log.node('prune', f'Is the pruned model {M1.label} not '
-                          f'disfavoured w.r.t. {M0.label}?',
+            self.log.node('prune', f'Is the pruned model {M1.label} preferred '
+                          f'over {M0.label}?',
                           'Yes' if keep else 'No', lnB=lb, lnB_err=lberr,
                           pc_runs=[len(fit1.logZ_runs),
                                    len(fit0.logZ_runs)],
