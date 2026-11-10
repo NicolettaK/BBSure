@@ -68,8 +68,23 @@ if [[ ! -f "${RUN}/output/cells_coadded.fits" ]]; then
         --noise pessimistic_goal --no-kludge \
         --output-dir "${RUN}/maps" > /dev/null
     echo "maps done"
-    bash "${REPO}/scripts/run_spectra.sh" --maps "${RUN}/maps" \
-        --out "${RUN}/output" --cov-cells "${ROOT}/cov/cells_all_sims.txt"
+    if [[ -d "${ROOT}/mcm_cache" && -d "${ROOT}/cov_ref" ]]; then
+        # what does not depend on the data, computed once (as on the laptop,
+        # PySM_tests/BBSure_s9000/make_set.sh): the NaMaster coupling
+        # matrices (reused by BBPowerSpecter) and the covariance of the 500
+        # sims (scripts/fix_cov.py save); the Summarizer reads only 2 sims
+        mkdir -p "${RUN}/output"
+        cp "${ROOT}"/mcm_cache/mcm_*.fits "${RUN}/output/"
+        head -2 "${ROOT}/cov/cells_all_sims.txt" > "${RUN}/output/cells_2sims.txt"
+        bash "${REPO}/scripts/run_spectra.sh" --maps "${RUN}/maps" \
+            --out "${RUN}/output" --cov-cells "${RUN}/output/cells_2sims.txt"
+        python "${REPO}/scripts/fix_cov.py" put "${ROOT}/cov_ref" \
+            "${RUN}/output/cells_coadded.fits" "${RUN}/output/cells_noise.fits"
+    else
+        bash "${REPO}/scripts/run_spectra.sh" --maps "${RUN}/maps" \
+            --out "${RUN}/output" --cov-cells "${ROOT}/cov/cells_all_sims.txt"
+    fi
+    echo "spectra done"
     rm -rf "${RUN}/maps"
 fi
 sed -e "s#@REPO@#${REPO}#g" -e "s#@DATA@#${DATA}#g" -e "s#@RUN@#${RUN}#g" \
