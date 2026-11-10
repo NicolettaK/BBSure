@@ -354,11 +354,11 @@ function detail(r) {
     x.pars.map(p => `<tr><td>${mx(p.t)}</td><td class="n">${nv(p.tb)}</td><td class="n">${ms(p.tm, p.tl, p.th)}</td><td class="n">${nv(p.pb)}</td><td class="n">${ms(p.pm, p.pl, p.ph)}</td></tr>`).join('') +
     '</tbody></table></div><div class="ul">profile scheme: r* = minimum of the profile, r posterior from the profile likelihood; the other parameters from the conditional posterior P(θ | r = r*, data), emcee with r fixed at r*</div>';
   items.push(['Best fit and posterior', ptab]);
-  const img = `paths/${r.s}.png`;
+  const img = `paths/${r.s}.png?v=${BUILD}`;
   items.push(['Decision path', `<details class="path"><summary>show the diagram of the path followed (tree on the left, profile scheme on the right)</summary>
     <img data-lb src="${img}" loading="lazy" alt="decision path of ${r.s}">
     <div class="ul">click the image to zoom (scroll or drag to move, + / − to zoom, Esc to close)</div></details>`]);
-  const cimg = `corners/${r.s}.png`;
+  const cimg = `corners/${r.s}.png?v=${BUILD}`;
   items.push(['Corner plot', `<details class="path"><summary>show the corner plot (blue: evidence run (PolyChord or nautilus) of the tree model; orange: profile scheme, emcee at r = r*, r from the profile)</summary>
     <img data-lb src="${cimg}" loading="lazy" alt="corner plot of ${r.s}">
     <div class="ul">black line: true r; dashed orange: r = r*; contours 68% and 95%. Click the image to zoom</div></details>`]);

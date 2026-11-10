@@ -12,7 +12,7 @@ The page expects flowchart.png, figures/, paths/ and corners/ next to it
 web server, e.g. the NERSC portal) instead of the fragment of a claude.ai
 artifact.
 """
-import json, os, sys, math
+import json, os, re, sys, math, time
 import pandas as pd, numpy as np
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -203,6 +203,13 @@ html = (html.replace('<!--TITLE-->', block(run, 'TITLE').strip())
         .replace('/*DATA*/[]', json.dumps(rows, separators=(',', ':')))
         .replace('/*SUMMARY*/{}', json.dumps(summary(TABLE, ROOT),
                                              separators=(',', ':'))))
+# build tag on every image URL (?v=...): a rebuilt page does not show the
+# images of the previous build kept in the browser cache
+build = time.strftime('%Y%m%d%H%M%S')
+html = re.sub(r'src="((?:figures/[^"?]+|flowchart)\.png)"',
+              rf'src="\1?v={build}"', html)
+html = html.replace('<script>', f"<script>const BUILD = '{build}';", 1) \
+    if '<script>' in html else html
 if '--standalone' in sys.argv:
     html = html.replace('<meta name="claude:viewport-fit-sides" '
                         'content="cover">\n', '')
