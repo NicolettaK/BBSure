@@ -51,7 +51,9 @@ C_DET, C_UL, C_TRUE, INK = '#2a6fdb', '#d9822b', '#1b1b1b', '#5a5a5a'
 plt.rcParams.update({'font.family': 'DejaVu Sans', 'font.size': 10,
                      'axes.edgecolor': INK, 'axes.labelcolor': INK,
                      'xtick.color': INK, 'ytick.color': INK})
-fig, ax = plt.subplots(figsize=(15, 5.2))
+# width grows with the number of sets (room for the sky labels; the legend
+# stays within the axes)
+fig, ax = plt.subplots(figsize=(max(15, 0.11 * len(rows)), 5.2))
 ax.axhline(0, color='#bbbbbb', lw=0.8, zorder=0)
 ax.grid(axis='y', color='#e6e6e6', lw=0.6, zorder=0)
 

@@ -76,10 +76,8 @@ for ax, (concl, lab, col, dark) in zip(axes, [
                 f'{cnt[k]}\n({e})', ha='center', va='bottom', fontsize=7.5,
                 color='#1b1b1b', linespacing=1.0)
     err = b1.std(ddof=1) / np.sqrt(len(b1))
-    d = b1 - b0
     ax.set_title(f'{a.kind}, {lab}: {len(sel)} sets — bias {b0.mean():+.2f} '
-                 f'→ {b1.mean():+.2f} $\\pm$ {err:.2f} (paired '
-                 f'{d.mean():+.2f} $\\pm$ {d.std(ddof=1) / np.sqrt(len(d)):.2f})',
+                 f'→ {b1.mean():+.2f} $\\pm$ {err:.2f}',
                  fontsize=10, color='#1b1b1b', loc='left')
     ax.set_xlabel(r'bias = $(r_{\rm med} - r_{\rm true})\,/\,\sigma(r)$')
     ax.set_xlim(-4, 4)

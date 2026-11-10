@@ -31,9 +31,14 @@ plt.rcParams.update({'font.family': 'DejaVu Sans', 'font.size': 10,
 kinds = [k for k in ('d9s4', 'rand') if any(r['kind'] == k for r in rows)]
 fig, axes = plt.subplots(len(kinds), 2, figsize=(12, 5.2 * len(kinds)),
                          squeeze=False, sharex=True, sharey=True)
-lim = 1e3 * max(max(float(r['r_true']) for r in rows),
-                max(float(r['r_med_bayes']) + float(r['r_std_bayes'])
-                    for r in rows)) * 1.05
+# x up to the largest true r, y over the estimates (+- sigma) of both
+# methods: no empty corner when the estimates go above the true r
+xmax = 1e3 * max(float(r['r_true']) for r in rows) * 1.05 + 1
+est = [(float(r[f'r_med_{t}']), float(r[f'r_std_{t}']))
+       for r in rows for t in ('bayes', 'profile')]
+ymin = min(-2., 1e3 * min(m - s for m, s in est) - 1)
+ymax = 1e3 * max(m + s for m, s in est) * 1.03 + 1
+lim = max(xmax, ymax)
 for i, kind in enumerate(kinds):
     sel = [r for r in rows if r['kind'] == kind]
     t = 1e3 * np.array([float(r['r_true']) for r in sel])
@@ -63,8 +68,8 @@ for i, kind in enumerate(kinds):
         ax.set_title(f'{kind}, {lab}: {len(sel)} sets — bias '
                      f'{bias.mean():+.2f} ± {bias.std(ddof=1) / np.sqrt(len(bias)):.2f}',
                      fontsize=10.5, color='#1b1b1b', loc='left')
-        ax.set_xlim(-1, lim)
-        ax.set_ylim(-12, lim)
+        ax.set_xlim(-1, xmax)
+        ax.set_ylim(ymin, ymax)
         ax.grid(color='#e6e6e6', lw=0.6)
         ax.set_axisbelow(True)
         for sp in ('top', 'right'):
