@@ -13,6 +13,8 @@ profile_results.csv. Writes in <root>:
                       also for the upper limits
   profile_as_tree.csv profile_results.csv with the columns of the tree
                       (r_med, r_std, r_lo1, r_hi1, r_95), for plot_r_sets.py
+  first_fit.csv       r of the first fit of the tree (M_none_r, no moments)
+                      of every set, the reference of plot_r_sets.py --ref
 and fills pte_rstar in profile_results.csv (PTE at r = r* of the final
 model, from each result.json).
 """
@@ -69,6 +71,16 @@ def main(R):
                 R, setname(a['index'], a.kind), a.r_med)
     tf.to_csv(f'{R}/tree_full.csv', index=False)
 
+    # first fit of the tree (M_none_r, no moments), done in every set
+    ff = []
+    for _, a in t.iterrows():
+        f = f"{R}/runs/{setname(a['index'], a.kind)}/tree/decision_log.json"
+        e = json.load(open(f))[0] if a.status == 'done' else {}
+        ff.append(dict(index=a['index'], kind=a.kind, status=a.status,
+                       model=e.get('model', ''), r_med=e.get('r_med', np.nan),
+                       r_std=e.get('r_std', np.nan)))
+    pd.DataFrame(ff).to_csv(f'{R}/first_fit.csv', index=False)
+
     # profile scheme with the column names of the tree
     pa = p.merge(t[['index', 'kind', 'sky', 'r_true']], on=['index', 'kind'])
     pa = pa.rename(columns={'r_med_pl': 'r_med', 'r_std_pl': 'r_std',
@@ -118,7 +130,7 @@ def main(R):
                      | (d.u_prune > 0) | d.p_lowpte | d.p_und)
     d.to_csv(f'{R}/final_table.csv', index=False)
     print(f"{len(d)} sets -> {R}/final_table.csv, tree_full.csv, "
-          "profile_as_tree.csv")
+          "profile_as_tree.csv, first_fit.csv")
 
 
 if __name__ == '__main__':

@@ -3,7 +3,8 @@ r set by set in a validation run: true r (star), median and 68% interval
 (detections: filled, upper limits: open) and the 95% upper limit (bar with a
 downward arrow). Red circle and band: wrong conclusion (true r above r_95, or
 detection with true r = 0); yellow: detection with true r < 3e-3. With --ref
-also the d9s4 median of the same set (same CMB + noise).
+(first_fit.csv of tables.py) also the d9s4 median of the same set (same
+CMB + noise) from the first fit of the tree, without moments (M_none_r).
 
   python plots/validation_page/plot_r_sets.py <root>/tree_full.csv \
       --kind d9s4 --label "Bayesian (tree)" --out r_sets_d9s4_tree.pdf
@@ -22,7 +23,8 @@ ap.add_argument('--kind', default='d9s4')
 ap.add_argument('--out', required=True)
 ap.add_argument('--title', default=None)
 ap.add_argument('--label', default='')
-ap.add_argument('--ref', default=None, help='csv whose d9s4 median is shown next to the true r')
+ap.add_argument('--ref', default=None, help='csv whose d9s4 median is shown next to the true r '
+                '(first_fit.csv: fit without moments)')
 a = ap.parse_args()
 
 rows = sorted((r for r in csv.DictReader(open(a.csv))
@@ -38,7 +40,7 @@ hi = np.array([f(r, 'r_hi1') for r in rows]) * 1e3
 r95 = np.array([f(r, 'r_95') for r in rows]) * 1e3
 det = np.array([r['conclusion'] == 'r_detection' for r in rows])
 STAR = 'true r'
-REFL = 'd9s4 of the same set (same CMB + noise): median'
+REFL = 'd9s4 of the same set (same CMB + noise), fit without moments: median'
 rd = None
 if a.ref:
     ref = {int(r['index']): float(r['r_med']) for r in csv.DictReader(open(a.ref))
@@ -106,7 +108,8 @@ n_cov = np.sum(det & (rt >= lo) & (rt <= hi)), np.sum(ul & (rt <= r95))
 extra = ''
 if rd is not None:
     pp = (rm - rd) / sd
-    extra = f"; paired bias $(r - r_{{\\rm d9s4}})/\\sigma$ {np.nanmean(pp):+.2f}"
+    extra = (f"; paired bias $(r - r_{{\\rm d9s4,\\,M_{{0,r}}}})/\\sigma$ "
+             f"{np.nanmean(pp):+.2f}")
 ax.set_title(a.title or
              f"{a.kind}, {a.label}: {len(rows)} sets — {det.sum()} detections "
              f"(true r in 68%: {n_cov[0]}/{det.sum()}), {ul.sum()} upper "

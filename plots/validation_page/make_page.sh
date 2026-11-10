@@ -36,8 +36,8 @@ echo "==> r set by set"
 P="$HERE/plot_r_sets.py"
 python "$P" "$ROOT/tree_full.csv" --kind d9s4 --label "Bayesian (tree)" --out "$TMP/r_sets_d9s4_tree.pdf" > /dev/null
 python "$P" "$ROOT/profile_as_tree.csv" --kind d9s4 --label "profile scheme" --out "$TMP/r_sets_d9s4_profile.pdf" > /dev/null
-python "$P" "$ROOT/tree_full.csv" --kind rand --ref "$ROOT/tree_full.csv" --label "Bayesian (tree)" --out "$TMP/r_sets_rand_vs_d9s4_tree.pdf" > /dev/null
-python "$P" "$ROOT/profile_as_tree.csv" --kind rand --ref "$ROOT/profile_as_tree.csv" --label "profile scheme" --out "$TMP/r_sets_rand_vs_d9s4_profile.pdf" > /dev/null
+python "$P" "$ROOT/tree_full.csv" --kind rand --ref "$ROOT/first_fit.csv" --label "Bayesian (tree)" --out "$TMP/r_sets_rand_vs_d9s4_tree.pdf" > /dev/null
+python "$P" "$ROOT/profile_as_tree.csv" --kind rand --ref "$ROOT/first_fit.csv" --label "profile scheme" --out "$TMP/r_sets_rand_vs_d9s4_profile.pdf" > /dev/null
 cp "$TMP"/r_sets_*.png "$OUT/figures/"
 
 echo "==> path of every set"
