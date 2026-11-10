@@ -48,6 +48,13 @@ def generate_maps(seed, nside, output_dir, nsplits=4, r=0.,
     / 0 pessimistic; kludge: V3 factor for the non-uniform hits (to remove
     when the noise already follows the hits map, hits_noise, otherwise it
     counts twice). no_ee: test, signal (CMB + foregrounds) without E modes.
+    The E modes are never generated: EE = 0 in the synfast spectra (the B
+    modes and all the following random numbers stay those of the case with
+    E) and the PySM maps lose their E at nside_in, in the harmonic downgrade.
+    Removing E from the maps at nside (map2alm up to 3 nside - 1) left part
+    of it in B (~0.3% of the CMB BB at ell ~ 80, r ~ +4e-4). Only with the
+    delta-beta / delta-u maps (products in pixel space, which make E from B)
+    the E modes are still removed at the end, with that approximation.
     """
     np.random.seed(seed)
     lmax = 3 * nside - 1
@@ -59,6 +66,8 @@ def generate_maps(seed, nside, output_dir, nsplits=4, r=0.,
 
     clee_cmb, clbb_cmb = get_cmb_spectra(lmax, r=r)
     cldee, cldbb, clsee, clsbb = get_fg_spectra(lmax)
+    if no_ee:
+        clee_cmb, cldee, clsee = cl0, cl0, cl0
 
     _, Qcmb, Ucmb = hp.synfast([cl0, clee_cmb, clbb_cmb, cl0, cl0, cl0],
                                nside, new=True)
@@ -82,7 +91,8 @@ def generate_maps(seed, nside, output_dir, nsplits=4, r=0.,
             raise ValueError("moments cannot be combined with --pysm")
         # CMB (SED = 1 in uK_CMB) + PySM foregrounds
         map_freq = map_comp[0][None, :, :] + get_pysm_fg(pysm, nside,
-                                                         pysm_nside_in)
+                                                         pysm_nside_in,
+                                                         no_e=no_ee)
         print(f"  foregrounds: PySM {pysm}")
 
     # delta-beta maps: (component, amp, gamma, seed, derivatives, file)
@@ -185,15 +195,21 @@ def generate_maps(seed, nside, output_dir, nsplits=4, r=0.,
               f"{np.mean(h):.4f}, sigma/sigma_0 in "
               f"[{noise_scale[good].min():.2f}, {noise_scale[good].max():.1f}]")
 
-    if no_ee:
+    if no_ee and (amp_beta > 0 or amp_beta_s > 0 or amp_u > 0):
         # Test: signal (CMB + foregrounds) without E modes, to exclude the
-        # E -> B leakage of the mask. The noise stays as it is.
+        # E -> B leakage of the mask. The noise stays as it is. The E modes
+        # are not generated (see above); here only those made from B by the
+        # delta-beta / delta-u products, removed at nside (approximate).
         for i_f in range(nfreq):
             alm = hp.map2alm([np.zeros(npix), map_freq[i_f, 0],
                               map_freq[i_f, 1]], lmax=lmax, pol=True)
             alm[1] *= 0.
             map_freq[i_f] = hp.alm2map(alm, nside, lmax=lmax, pol=True)[1:]
-        print("  signal E modes removed (--no-ee)")
+        print("  E modes of the delta-beta / delta-u terms removed at "
+              "nside (--no-ee)")
+    elif no_ee:
+        print("  signal without E modes (--no-ee: EE = 0 in the input, "
+              "PySM E removed at nside_in)")
 
     os.makedirs(output_dir, exist_ok=True)
 

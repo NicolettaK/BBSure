@@ -298,20 +298,24 @@ def get_fg_spectra(lmax):
 # PySM foregrounds
 # ═══════════════════════════════════════════════════════════════════════════
 
-def harmonic_downgrade_qu(Q, U, nside):
+def harmonic_downgrade_qu(Q, U, nside, no_e=False):
     """Q, U at a higher nside -> nside in harmonic space: alm up to
     3 nside - 1, divided by the pixel window of the input nside, then a map
-    at nside without window (band-limited like the synfast CMB and noise)."""
+    at nside without window (band-limited like the synfast CMB and noise).
+    no_e: E modes removed here, where map2alm (input nside >= 2 x nside) is
+    accurate up to 3 nside - 1."""
     lmax = 3 * nside - 1
     pw = hp.pixwin(hp.get_nside(Q), pol=True, lmax=lmax)[1]   # E/B
     pw[:2] = 1.
     alm = hp.map2alm([np.zeros_like(Q), Q, U], lmax=lmax, pol=True)
+    if no_e:
+        alm[1] *= 0.
     for a in alm[1:]:
         hp.almxfl(a, 1. / pw, inplace=True)
     return hp.alm2map(alm, nside, lmax=lmax, pol=True)[1:]
 
 
-def get_pysm_fg(model, nside, nside_in=0):
+def get_pysm_fg(model, nside, nside_in=0, no_e=False):
     """
     Foreground Q, U per band from PySM [nfreq, 2, npix] in uK_CMB, integrated
     over the SO bandpasses (same convention as BBPower). model is a string
@@ -323,17 +327,26 @@ def get_pysm_fg(model, nside, nside_in=0):
     window and aliasing, unlike the synfast CMB and noise).
     nside_in > nside: PySM at nside_in, then harmonic downgrade (see
     harmonic_downgrade_qu), band-limited like the other components.
+    no_e: without E modes, removed in the harmonic downgrade (needs
+    nside_in >= 2 nside).
     """
     cache_dir = os.path.join(DATA_DIR, 'pysm_cache')
+    if no_e and nside_in < 2 * nside:
+        raise ValueError("no_e needs the harmonic downgrade from "
+                         "nside_in >= 2 nside (E removed where map2alm is "
+                         "accurate)")
     if nside_in:
+        tag = '_noE' if no_e else ''
         fname = os.path.join(cache_dir,
-                             f'{model}_nside{nside}_from{nside_in}.npy')
+                             f'{model}_nside{nside}_from{nside_in}{tag}.npy')
         if os.path.isfile(fname):
             return np.load(fname)
         hi = get_pysm_fg(model, nside_in)
         print(f"  PySM: harmonic downgrade nside {nside_in} -> {nside} "
-              f"(lmax {3 * nside - 1}, pixel window of {nside_in} removed)")
-        fg = np.array([harmonic_downgrade_qu(hi[i, 0], hi[i, 1], nside)
+              f"(lmax {3 * nside - 1}, pixel window of {nside_in} removed"
+              f"{', E modes removed' if no_e else ''})")
+        fg = np.array([harmonic_downgrade_qu(hi[i, 0], hi[i, 1], nside,
+                                             no_e=no_e)
                        for i in range(len(BAND_NAMES))])
         np.save(fname, fg)
         return fg
