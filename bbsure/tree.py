@@ -145,7 +145,9 @@ class DecisionTree:
         # already been judged with r free; with r = 0 they look detected but
         # refitted with r free they are undetected again (d10s5 seed 6002)
         self.restore = mc.get('res_r0_restore', False)
-        self.max_it = tc['run']['max_iterations']
+        # optional cap on the iterations (none by default: the cycle check
+        # below ends the loop, the models are finite)
+        self.max_it = tc['run'].get('max_iterations')
         # comparisons still within seed_band errors of the threshold after
         # the PolyChord repetitions: reported in the conclusion
         self.undecided = []
@@ -164,7 +166,9 @@ class DecisionTree:
         use_wr = True       # False after a replacement coming from Res_r0
         visited = set()     # models already used as M_0,r
         self.log.info(f"==> Initial model M_0,r = {M0.label}")
-        for it in range(1, self.max_it + 1):
+        it = 0
+        while self.max_it is None or it < self.max_it:
+            it += 1
             self.log.info(f"\n==> Iteration {it}: M_0,r = {M0.label}")
             visited.add(M0)
             fit0 = self.F.full_fit(M0)

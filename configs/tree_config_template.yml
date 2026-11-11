@@ -130,9 +130,10 @@ polychord:
     mpi_launcher: "srun -n {n} -c 2 --exact --cpu-bind=cores"
 
 run:
-    # Maximum iterations of the loop (every time a more complex model is
-    # adopted the tree restarts from "is chi2 good?")
-    max_iterations: 5
+    # No cap on the iterations of the loop (every time a more complex model
+    # is adopted the tree restarts from "is chi2 good?"): it ends at a model
+    # already used as M_0,r (cycle) or with a conclusion. A cap can be set
+    # with max_iterations: <n>
     # Profile scheme after the tree: the families detected in the last
     # Res_r0 are compared at their own r (false: the tree alone)
     profile_scheme: true
