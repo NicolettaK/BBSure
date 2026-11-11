@@ -44,13 +44,16 @@ for ax, (concl, lab, col, dark) in zip(axes, [
         ax.set_title(f'{a.kind}, {lab}: {len(sel)} sets', loc='left')
         continue
     b0 = np.array([float(r['bias_bayes']) for r in sel])
+    b0 = b0[np.isfinite(b0)]   # no r of the tree at max_iterations
     b1 = np.array([float(r['bias_profile']) for r in sel])
     ax.hist(b1, bins=bins, color=col, edgecolor='white', lw=1.5,
             label=f'profile scheme: mean {b1.mean():+.2f}, '
                   f'std {b1.std(ddof=1):.2f}')
     ax.hist(b0, bins=bins, histtype='step', color='#1b1b1b', lw=1.4,
             label=f'Bayesian (tree): mean {b0.mean():+.2f}, '
-                  f'std {b0.std(ddof=1):.2f}')
+                  f'std {b0.std(ddof=1):.2f}'
+                  + (f' ({len(sel) - len(b0)} without r)'
+                     if len(b0) < len(sel) else ''))
     norm = len(sel) * (bins[1] - bins[0])
     ax.plot(x, norm * stats.norm.pdf(x), color='#1b1b1b', lw=2,
             label=r'$\mathcal{N}(0, 1)$')

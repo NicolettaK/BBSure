@@ -26,13 +26,15 @@ def summary(table, root):
         v = d[d.kind == g]
         row = {'n': len(v)}
         for k in ('t', 'p'):
-            pull = v[f'{k}_pull']; det = v[f'{k}_concl'] == 'r_detection'; ul = ~det
+            # trees stopped at max_iterations: neither (no pull, no r)
+            pull = v[f'{k}_pull']; det = v[f'{k}_concl'] == 'r_detection'
+            ul = v[f'{k}_concl'] == 'upper_limit'
             low = v.r_true < 3e-3; hi = v.r_true >= 0.01
             chi2 = v.chi2 if k == 't' else v.chi2_at_rstar
             dof = v.t_dof if k == 't' else v.dof_rstar
             pte = v[f'{k}_pte']
             row[k] = dict(
-                bias=round(pull.mean(), 2), bias_err=round(pull.std(ddof=1) / np.sqrt(len(v)), 2),
+                bias=round(pull.mean(), 2), bias_err=round(pull.std(ddof=1) / np.sqrt(pull.count()), 2),
                 width=round(pull.std(ddof=1), 2),
                 in68=int(((v.r_true >= v[f'{k}_lo']) & (v.r_true <= v[f'{k}_hi'])).sum()),
                 false_det=int((det & low).sum()), n_low=int(low.sum()),

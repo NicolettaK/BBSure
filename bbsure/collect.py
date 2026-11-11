@@ -92,7 +92,8 @@ def collect_tree(root, unblind=False, tree='tree'):
         for r in done:
             rt = truth[r['index']]
             r['r_true'] = rt
-            if r.get('r_std'):
+            # no r when the tree stops at max_iterations
+            if r.get('r_std') and r.get('r_med') is not None:
                 r['pull'] = (r['r_med'] - rt) / r['r_std']
             if r.get('r_lo1') is not None:
                 r['in_1sigma'] = int(r['r_lo1'] <= rt <= r['r_hi1'])

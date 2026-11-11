@@ -62,7 +62,9 @@ ax.errorbar(i[det], rm[det], yerr=[rm[det] - lo[det], hi[det] - rm[det]],
             fmt='o', ms=4, color=C_DET, ecolor=C_DET, elinewidth=1.2,
             capsize=0, zorder=3, label='r detection: median, 68% interval')
 # upper limit: median, 68% interval and r_95
-ul = ~det
+ul = np.array([r['conclusion'] == 'upper_limit' for r in rows])
+# trees stopped without a conclusion (max_iterations): no r
+stop = ~det & ~ul
 ax.errorbar(i[ul], rm[ul], yerr=[rm[ul] - lo[ul], hi[ul] - rm[ul]], fmt='o', ms=4, mfc='white',
             color=C_UL, ecolor=C_UL, elinewidth=1.2, capsize=0, zorder=3,
             label='upper limit: median, 68% interval')
@@ -115,8 +117,9 @@ if rd is not None:
 ax.set_title(a.title or
              f"{a.kind}, {a.label}: {len(rows)} sets — {det.sum()} detections "
              f"(true r in 68%: {n_cov[0]}/{det.sum()}), {ul.sum()} upper "
-             f"limits (true r < r$_{{95}}$: {n_cov[1]}/{ul.sum()}) — "
-             f"bias {np.nanmean(pull):+.2f} $\\pm$ {np.nanstd(pull):.2f}" + extra,
+             f"limits (true r < r$_{{95}}$: {n_cov[1]}/{ul.sum()})"
+             + (f", {stop.sum()} stopped at max_iterations (no r)" if stop.any() else '')
+             + f" — bias {np.nanmean(pull):+.2f} $\\pm$ {np.nanstd(pull):.2f}" + extra,
              fontsize=11, color='#1b1b1b', loc='left', pad=48)
 for s in ('top', 'right'):
     ax.spines[s].set_visible(False)

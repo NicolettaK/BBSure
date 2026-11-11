@@ -255,15 +255,15 @@ const fm = m => {
 };
 const pv = p => p == null ? '' : `<span class="${Math.abs(p) > 2 ? 'p2' : Math.abs(p) > 1 ? 'p1' : ''}">${p > 0 ? '+' : ''}${p.toFixed(2)}</span>`;
 const ae = (m, lo, hi, fm) => `${fm(m)}<span class="ae"><sup>+${fm(hi - m)}</sup><sub>−${fm(m - lo)}</sub></span>`;
-const rv = (c, r, lo, hi, u) => ae(r, lo, hi, v => v.toFixed(1)) + (c === 'upper_limit' ? ` <span class="ul">(&lt; ${u.toFixed(1)})</span>` : '');
-const cv = (c, w) => { const t = c === 'upper_limit' ? 'UL' : 'det';
+const rv = (c, r, lo, hi, u) => r == null ? '<span class="ul">–</span>' : ae(r, lo, hi, v => v.toFixed(1)) + (c === 'upper_limit' ? ` <span class="ul">(&lt; ${u.toFixed(1)})</span>` : '');
+const cv = (c, w) => { const t = c === 'upper_limit' ? 'UL' : c === 'r_detection' ? 'det' : `<span class="wrong" title="tree stopped without a conclusion (${c})">stop</span>`;
   return w ? `<span class="wrong" title="${c === 'upper_limit' ? 'wrong: true r above the 95% upper limit' : 'wrong: detection with true r = 0'}">${t} ✗</span>` : t; };
 const tflags = r => (r.tlow ? '<span class="chip c-pte">PTE</span>' : '') + (r.tund ? '<span class="chip c-und">≈</span>' : '') +
   (r.r0g ? `<span class="chip c-m10">r=0 ${r.r0g}</span>` : '');
 const pflags = r => (r.plow ? '<span class="chip c-pte">PTE</span>' : '') + (r.pu ? '<span class="chip c-und">≈</span>' : '');
 const PTE_FLAG = 0.01;
 D.forEach(r => { r.tlow = r.tpte < PTE_FLAG; r.plow = r.ppte < PTE_FLAG; });
-D.forEach(r => { r.tb = r.x.tbr * 1e3; r.pb = r.x.pbr * 1e3; });
+D.forEach(r => { r.tb = r.x.tbr == null ? null : r.x.tbr * 1e3; r.pb = r.x.pbr * 1e3; });
 D.forEach(r => { r.tund = !!(r.um || r.ur || r.up); r.any = r.tlow || r.plow || r.tund || r.pu || !!r.r0g; r.grp = r.k === 'd9s4' ? 'd9s4' : 'rand'; });
 
 // summary
@@ -280,7 +280,7 @@ const stats = [
 ];
 if ($('stats')) $('stats').innerHTML = stats.map(([v, l]) => `<div class="stat"><b>${v}</b><span>${l}</span></div>`).join('');
 
-const mean = a => a.length ? a.reduce((x, y) => x + y, 0) / a.length : NaN;
+const mean = a => { a = a.filter(x => x != null); return a.length ? a.reduce((x, y) => x + y, 0) / a.length : NaN; };
 const fmt = x => isNaN(x) ? '–' : (x > 0 ? '+' : '') + x.toFixed(2);
 const groups = [['d9s4', r => r.k === 'd9s4'], ['all rand', r => r.k === 'rand']]
   .concat([...new Set(D.filter(r => r.k === 'rand').map(r => r.sky))].sort().map(s => [s, r => r.k === 'rand' && r.sky === s]));
@@ -309,7 +309,7 @@ function render() {
       const w = r.tw || r.pw, bt = r.tw ? ' badc' : (lt ? ' lowc' : ''), bp = r.pw ? ' badc' : (lp ? ' lowc' : '');
       const ba = w ? ' badc' : (lt || lp ? ' lowc' : '');
       return `<tr data-s="${r.s}"><td class="id${ba}">${r.s.replace('set_', '')}</td><td class="${ba}">${r.sky}</td><td class="n${ba}">${r.rt.toFixed(1)}</td>
-      <td>${mx(r.tmx)}</td><td class="${bt}">${cv(r.tc, r.tw)}</td><td class="n${bt}">${rv(r.tc, r.tr, r.tlo, r.thi, r.t95)}</td><td class="n">${r.tb.toFixed(1)}</td><td class="n">${pv(r.tp)}</td><td class="n">${r.tpte.toFixed(3)}</td><td>${tflags(r)}</td>
+      <td>${mx(r.tmx)}</td><td class="${bt}">${cv(r.tc, r.tw)}</td><td class="n${bt}">${rv(r.tc, r.tr, r.tlo, r.thi, r.t95)}</td><td class="n">${r.tb == null ? '–' : r.tb.toFixed(1)}</td><td class="n">${pv(r.tp)}</td><td class="n">${r.tpte.toFixed(3)}</td><td>${tflags(r)}</td>
       <td>${mx(r.pmx)}</td><td class="${bp}">${cv(r.pc, r.pw)}</td><td class="n${bp}">${rv(r.pc, r.pr, r.plo, r.phi, r.p95)}</td><td class="n">${r.pb.toFixed(1)}</td><td class="n">${pv(r.pp)}</td><td>${pflags(r)}</td></tr>`; }).join('') + '</tbody>';
 }
 const FAM = { d: 'first order in β<sub>d</sub>', s: 'first order in β<sub>s</sub>', dT: 'first order in T<sub>d</sub>',
@@ -438,13 +438,13 @@ document.querySelectorAll('span.tex').forEach(e => { e.innerHTML = mx(e.textCont
   $('sumgof').innerHTML = `<thead><tr><th>PTE</th>${bins.map(b => `<th class="n">${b}</th>`).join('')}<th class="n">mean χ²/dof</th></tr></thead><tbody>` +
     gl.map(([l, b, c]) => `<tr><td>${l}</td>${b.map(x => `<td class="n">${x}</td>`).join('')}<td class="n">${c}</td></tr>`).join('') + '</tbody>';
   const pgrid = (id, key) => {
-    const st = v => { const n = v.length, m = v.reduce((a, b) => a + b, 0) / n;
+    const st = v => { v = v.filter(x => x != null); const n = v.length, m = v.reduce((a, b) => a + b, 0) / n;
       const sd = Math.sqrt(v.reduce((a, b) => a + (b - m) ** 2, 0) / Math.max(n - 1, 1)); return { m, e: sd / Math.sqrt(n), n }; };
-    const c = v => { if (!v.length) return '—'; const s = st(v);
+    const c = v => { if (!v.filter(x => x != null).length) return '—'; const s = st(v);
       return `<div>${sg(s.m)} <span class="ul">± ${s.e.toFixed(2)}</span></div><div class="ul pc">${s.n} sets</div>`; };
     const by = sky => D.filter(r => r.sky === sky).map(r => r[key]);
     $(id).innerHTML = `<thead><tr><th>dust \\ synch</th><th class="n">s4</th><th class="n">s5</th><th class="n">s7</th></tr></thead><tbody>` +
-      ['d9', 'd10', 'd12'].map(dd => `<tr><td><b>${dd}</b></td>${['s4', 's5', 's7'].map(ss => `<td class="n">${c(by(dd + ss))}</td>`).join('')}</tr>`).join('') +
+      [...new Set(D.map(r => r.sky.replace(/s\d+$/, '')))].sort((a, b) => a.localeCompare(b, 'en', { numeric: true })).map(dd => `<tr><td><b>${dd}</b></td>${['s4', 's5', 's7'].map(ss => `<td class="n">${c(by(dd + ss))}</td>`).join('')}</tr>`).join('') +
       `<tr><td><b>random</b></td><td class="n" colspan="3">${c(D.filter(r => r.k !== 'd9s4').map(r => r[key]))}</td></tr>` +
       `<tr><td><b>all</b></td><td class="n" colspan="3">${c(D.map(r => r[key]))}</td></tr></tbody>`;
   };

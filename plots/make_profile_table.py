@@ -82,6 +82,8 @@ def model_label(m):
 
 
 def r_text(med, sd):
+    if not np.isfinite(med):
+        return '–'
     return f'{med * 1e3:.1f} ± {sd * 1e3:.1f}'
 
 
@@ -115,7 +117,13 @@ def dof_tree(T, P):
 
 
 def ok(concl, t, r95):
+    if concl not in ('upper_limit', 'r_detection'):   # e.g. max_iterations
+        return False
     return t <= r95 if concl == 'upper_limit' else t > 0
+
+
+def concl_text(concl):
+    return {'upper_limit': 'UL', 'r_detection': 'det.'}.get(concl, 'stop')
 
 
 tree = {(r['index'], r['kind']): r for r in csv.DictReader(open(a.tree_csv))
@@ -139,13 +147,16 @@ for k in keys:
     T = tree[k]
     t = float(T['r_true'])
     ct = T['conclusion']
-    mt, st = float(T['r_med']), float(T['r_std'])
+    # no r of the tree when it stopped at max_iterations: NaN (the set
+    # keeps its profile scheme result)
+    mt = float(T['r_med']) if T['r_med'] else np.nan
+    st = float(T['r_std'])
     rt95 = float(T['r_95']) if T['r_95'] else np.nan
     bt = (mt - t) / st
     if k not in prof:
         rows.append([k[0], T['sky'], f'{t * 1e3:.1f}', model_label(T['model']),
-                     'UL' if ct == 'upper_limit' else 'det.', r_text(mt, st),
-                     ul_text(ct, rt95), f'{bt:+.1f}',
+                     concl_text(ct), r_text(mt, st),
+                     ul_text(ct, rt95), f'{bt:+.1f}' if np.isfinite(bt) else '–',
                      chi2_text(T.get('chi2'), dof_tree(T, None), T.get('pte')),
                      'not concluded',
                      '', '', '', '', '', ''])
@@ -159,11 +170,10 @@ for k in keys:
     okt, okp = ok(ct, t, rt95), ok(cp, t, rp95)
     same = P['model_final'] == T['model']
     rows.append([k[0], T['sky'], f'{t * 1e3:.1f}',
-                 model_label(T['model']), 'UL' if ct == 'upper_limit'
-                 else 'det.', r_text(mt, st), ul_text(ct, rt95), f'{bt:+.1f}',
+                 model_label(T['model']), concl_text(ct), r_text(mt, st), ul_text(ct, rt95), f'{bt:+.1f}' if np.isfinite(bt) else '–',
                  chi2_text(T.get('chi2'), dof_tree(T, P), T.get('pte')),
                  '=' if same else model_label(P['model_final']),
-                 'UL' if cp == 'upper_limit' else 'det.',
+                 concl_text(cp),
                  r_text(mp, sp), ul_text(cp, rp95), f'{bp:+.1f}',
                  chi2_text(P.get('chi2_at_rstar'), P.get('dof_rstar'),
                            P.get('pte_rstar')),
@@ -197,10 +207,13 @@ for kind in sorted({r['kind'] for r in recs}):
     sem = (lambda x: x.std(ddof=1) / np.sqrt(n)) if n > 1 else (lambda x: 0.)
     bb = np.array([r['bias_bayes'] for r in R])
     bp = np.array([r['bias_profile'] for r in R])
-    s = (f"{kind}: N = {n}; Bayesian bias {bb.mean():+.2f} ± "
-         f"{sem(bb):.2f}, profile {bp.mean():+.2f} ± "
+    nb = np.isfinite(bb).sum()
+    semb = bb[np.isfinite(bb)].std(ddof=1) / np.sqrt(nb) if nb > 1 else 0.
+    s = (f"{kind}: N = {n}; Bayesian bias {np.nanmean(bb):+.2f} ± "
+         f"{semb:.2f}{f' ({n - nb} without r)' if nb < n else ''}, "
+         f"profile {bp.mean():+.2f} ± "
          f"{sem(bp):.2f} (paired "
-         f"{(bp - bb).mean():+.2f}); wrong conclusions "
+         f"{np.nanmean(bp - bb):+.2f}); wrong conclusions "
          f"{sum(not r['ok_bayes'] for r in R)} -> "
          f"{sum(not r['ok_profile'] for r in R)}; conclusion changed in "
          f"{sum(r['concl_bayes'] != r['concl_profile'] for r in R)}, "
