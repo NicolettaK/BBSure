@@ -7,6 +7,9 @@
 #   bash nersc/run_fgonly.sh <root of a validation run> <sky, e.g. d10s5>
 # Output in <root>/fgonly/<sky>/ (output/: spectra, tree/: fits and
 # conclusion). Interrupted runs restart reusing the fits already done.
+# The noise spectra (the offset of the H&L likelihood) are the mean of the
+# sets of the run, <root>/fgonly/cells_noise_mean.fits (made by
+# job_fgonly.slurm): the maps have no noise, their own estimate is ~0.
 set -euo pipefail
 ROOT="$1"; SKY="$2"
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
@@ -37,6 +40,14 @@ if [[ ! -f "${RUN}/output/cells_coadded.fits" ]]; then
     python "${REPO}/scripts/add_lensing.py" "${RUN}/output/cells_coadded.fits"
     echo "spectra done"
     rm -rf "${RUN}/maps"
+fi
+if [[ ! -f "${RUN}/output/.noise_mean" ]]; then
+    # mean noise of the run (also for spectra made before this fix: their
+    # fits used the noise estimated from the maps, ~0, and are redone)
+    cp "${ROOT}/fgonly/cells_noise_mean.fits" "${RUN}/output/cells_noise.fits"
+    rm -rf "${RUN}/tree"
+    touch "${RUN}/output/.noise_mean"
+    echo "noise: mean of the sets of the run"
 fi
 sed -e "s#@REPO@#${REPO}#g" -e "s#@DATA@#${DATA}#g" -e "s#@RUN@#${RUN}#g" \
     "${REPO}/configs/tree_config_template.yml" > "${RUN}/tree_config.yml"

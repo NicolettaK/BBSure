@@ -27,6 +27,15 @@ export BBSURE_NAUTILUS_PROCS=${BBSURE_NAUTILUS_PROCS:-$BBPOWER_NPROC}
 export PROFILE_NPROC=${PROFILE_NPROC:-14}
 export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1
 
+# mean noise spectra of 50 sets of the run (H&L offset), made once
+NM="${ROOT}/fgonly/cells_noise_mean.fits"
+if [[ ! -f "$NM" ]]; then
+    mkdir -p "${ROOT}/fgonly"
+    ls "${ROOT}"/runs/set_*/output/cells_noise.fits | head -50 > "${ROOT}/fgonly/noise_list.txt"
+    cp "$(head -1 "${ROOT}/fgonly/noise_list.txt")" "${NM}.tmp"
+    python "${REPO}/scripts/mean_noise.py" "${NM}.tmp" $(cat "${ROOT}/fgonly/noise_list.txt") \
+        && mv "${NM}.tmp" "$NM" || { echo "mean noise FAILED"; exit 1; }
+fi
 echo "job ${SLURM_JOB_ID}: fgonly ${SKIES}, ${BBPOWER_NPROC} processes each, $(date '+%F %T')"
 for sky in $SKIES; do echo "$sky"; done | xargs -P "$NPAR" -n 1 bash -c \
     'bash "'"$REPO"'/nersc/run_fgonly.sh" "'"$ROOT"'" "$0" \
