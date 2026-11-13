@@ -1,0 +1,147 @@
+# Tree config of the validation, SINGLE MOMENTS variant (template: @REPO@, @DATA@ and @RUN@ are
+# filled in by nersc/run_one.sh). HL likelihood, hierarchical moment bound
+# (k = 10), lnB_preferred = 0, immediate pruning, emcee screening, profile
+# scheme after the tree.
+# Usage: python scripts/run_tree.py --config tree_config.yml
+
+paths:
+    # BBPower base config (all the fits are variants of it)
+    base_config:   "@REPO@/configs/base_config_tree.yml"
+    # Data vector: produced once by scripts/run_spectra.sh
+    cells_coadded: "@RUN@/output/cells_coadded.fits"
+    cells_noise:   "@RUN@/output/cells_noise.fits"
+    cells_fiducial: "@DATA@/cls_fid_d1s1_hits_pg_n128.fits"
+    # Directory of the fits (one subdirectory per run) and of the logs
+    runs_dir:      "@RUN@/tree"
+
+thresholds:
+    # "Is chi2 good?"  ->  PTE > pte_min
+    pte_min: 0.01
+    # final model with PTE < pte_flag: flagged in the results (the best
+    # model available does not describe the data well)
+    pte_flag: 0.05
+    # "Is model X preferred over Y?"  ->  ln B = lnZ_X - lnZ_Y > lnB_preferred
+    # (Jeffreys/Trotta scale: 1 weak, 2.5 moderate, 5 strong)
+    lnB_preferred: 0.0
+    # Pruning: the model without the undetected moment amplitudes is kept if
+    # ln B(pruned vs full) > lnB_prune
+    lnB_prune: 0.0
+    # Moment detected in the residuals: zero outside the HPD interval
+    # (fraction hpd_frac) of at least one amplitude of the group's spectra
+    hpd_frac: 0.68
+    # Borderline comparisons: if |ln B - threshold| < seed_band * error,
+    # PolyChord is repeated with other seeds (mean of ln Z), up to
+    # seed_max_runs runs per fit
+    seed_band: 2.0
+    seed_max_runs: 3
+    # A choice is flagged as undecided (≈) if |ln B - threshold| < lnB_flag
+    # (1 = inconclusive on the Jeffreys scale of Trotta 2008) or still within
+    # seed_band errors after the repetitions
+    lnB_flag: 1.0
+    # Comparison of a candidate with M_0,r first from the ML fits:
+    # ln B ~ -Delta chi2 / 2 - occam_per_param * Delta k; below
+    # lnB_preferred - lnB_approx_skip -> rejected without PolyChord (never
+    # used to accept, not used for the pruning). occam_per_param = 1.0
+    # calibrated on the seed-8000 validation (BIC: ln N / 2 ~ 3, too strong)
+    lnB_approx_skip: 5.0
+    occam_per_param: 1.0
+
+moments:
+    # Moment groups tested in the residuals (see MOMENT_GROUPS in
+    # bbsure/models.py): Res_wr with everything fixed at the best fit of
+    # M_0,r, Res_r0 on the residuals of M_0,0 (r = 0). d2 / s2 only if d / s
+    # are already there; ds1 = dust-synch cross terms at first order,
+    # ds2 = w1^beta_d x w1^beta_s (only with d and s).
+    # SINGLE MOMENTS: one spectrum per group (k = 1 in the residual test),
+    # added one at a time; d11 = w10 x w10, d01 = w00 x w10 (only with d11),
+    # d22 / d12 / d02 second order, dT11 / dT01 in 1/T_d, ds01 / ds10 / ds11
+    # dust-synch cross (requirements in MOMENT_GROUPS)
+    res_wr: ['d11', 's11', 'd01', 's01']
+    res_r0: ['d11', 's11', 'dT11', 'd01', 's01', 'dT01', 'd22', 's22',
+             'd12', 's12', 'd02', 's02', 'ds01', 'ds10', 'ds11']
+    requires: {}
+    # Residual test: two ML fits, with and without the group (k = its
+    # amplitudes), no pruning of single spectra:
+    #   aic = detected if Delta chi2 > 2k (the AIC decreases); ordered by
+    #         Delta AIC = 2k - Delta chi2
+    #   bic = detected if Delta chi2 > k ln N (N = size of the data vector:
+    #         the BIC decreases; ~6.1 per amplitude at nside 128); ordered
+    #         by Delta BIC = k ln N - Delta chi2
+    #   lrt = detected if p < lrt_p (chi2 with k degrees of freedom; 0.3173
+    #         = 1 sigma, the analogue of zero outside the 68% HPD); ordered
+    #         by p
+    # bayes = emcee (zero outside the 68% HPD of an amplitude) confirmed by
+    # PolyChord, ordered by the residual evidence (~3x slower)
+    residual_test: aic
+    lrt_p: 0.3173
+
+emcee:
+    # Detection screening in the residual tests
+    nwalkers: 32
+    n_iters: 2000
+    burn_frac: 0.5
+
+profile_scheme:
+    # points of the initial grid of the profiles in r (see
+    # bbsure/profile_scheme.py)
+    n: 37
+    # true: compare the final model of the tree with the candidates of the
+    # Res_r0 chain, each at its own r; false: only the profile of the final
+    # model (the posterior of r and the decision); in the AIC validation run
+    # no candidate ever won
+    candidates: true
+
+polychord:
+    # Sampler of the evidence runs (the <model>_PC directories): polychord
+    # or nautilus (importance nested sampling with neural networks, Lange
+    # 2023: ~7x fewer likelihood calls, ln Z stable to ~0.01 between seeds
+    # against ~0.3 for PolyChord). With moment constraints both give the
+    # evidence on the prior restricted to the allowed region.
+    sampler: nautilus
+    # nautilus settings: live points, effective posterior samples, prior
+    # draws for the allowed fraction of the prior, pool processes. With
+    # 2000 / 10000 (nautilus defaults) ln Z is stable to ~0.01, more than the
+    # decisions need (flag at |ln B| < 1): half of them, about half the time
+    nautilus:
+        n_live: 1000
+        n_eff: 5000
+        n_prior: 100000
+        procs: 8
+        # allowed prior fraction (moment constraints) computed once per
+        # model and shared by all the sets of the run (data independent)
+        prior_cache: "@RUN@/../prior_fraction_cache"
+    # PolyChord: nlive and nrepeat proportional to the free parameters of each run:
+    #   nlive   = max(nlive_min,   nlive_per_dim   * ndim)
+    #   nrepeat = max(nrepeat_min, nrepeat_per_dim * ndim)
+    # e.g. residuals (2D): 100 / 10;  M_none_r (7D): 105 / 21
+    # Without the *_per_dim keys the fixed values nlive / nrepeat are used.
+    nlive_per_dim: 15
+    nlive_min: 100
+    nrepeat_per_dim: 3
+    nrepeat_min: 10
+    nlive: 300
+    nrepeat: 20
+    # MPI processes per PolyChord run (mpirun -np): 1 master + the rest for
+    # the likelihood, so the maximum gain is ~mpi_procs-1. 1 = serial. Not in
+    # the BBCompSep config (the runs stay reusable).
+    mpi_procs: 8
+    # PolyChord is stopped if its live points are not all generated within
+    # start_timeout seconds (moment constraints leaving almost no valid
+    # prior volume): the family is skipped as unfittable
+    start_timeout: 1800
+    # on Perlmutter: one srun step inside the job (16 trees per node)
+    mpi_launcher: "srun -n {n} -c 2 --exact --cpu-bind=cores"
+
+run:
+    # Maximum iterations of the loop (every time a more complex model is
+    # adopted the tree restarts from "is chi2 good?")
+    max_iterations: 5
+    # Profile scheme after the tree: the families detected in the last
+    # Res_r0 are compared at their own r (false: the tree alone)
+    profile_scheme: true
+    # Reuse the fits already done (same config) instead of rerunning them
+    reuse_runs: true
+    # Full fit (ML + PolyChord) of M_0,0 (the final model with r = 0) at the
+    # end, only to report ln B(final model with r free vs r = 0) in the
+    # conclusion: no decision uses it
+    fit_r0_at_end: true

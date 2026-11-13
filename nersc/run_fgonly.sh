@@ -10,36 +10,57 @@
 # The noise spectra (the offset of the H&L likelihood) are the mean of the
 # sets of the run, <root>/fgonly/cells_noise_mean.fits (made by
 # job_fgonly.slurm): the maps have no noise, their own estimate is ~0.
+# Variants (environment):
+#   FG_TEMPLATE  tree config template in configs/ (default
+#                tree_config_template.yml; e.g. tree_config_single.yml)
+#   FG_R         r of the Asimov data (default 0: + r x tensor spectrum)
+#   FG_DIR       output directory in <root> (default fgonly); a variant
+#                reuses the foreground spectra of <root>/fgonly/<sky>
 set -euo pipefail
 ROOT="$1"; SKY="$2"
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
 DATA="${BBSURE_DATA:-${REPO}/data}"
-RUN="${ROOT}/fgonly/${SKY}"
-LOG="${ROOT}/logs/fgonly_${SKY}.log"
+TEMPLATE="${FG_TEMPLATE:-tree_config_template.yml}"
+R="${FG_R:-0}"
+DIR="${FG_DIR:-fgonly}"
+RUN="${ROOT}/${DIR}/${SKY}"
+SRC="${ROOT}/fgonly/${SKY}/output"
+LOG="${ROOT}/logs/${DIR}_${SKY}.log"
 mkdir -p "$RUN" "${ROOT}/logs"
 if [[ -f "${RUN}/tree/conclusion.json" ]]; then
-    echo "fgonly ${SKY}: already concluded"
+    echo "${DIR} ${SKY}: already concluded"
     exit 0
 fi
 {
-echo "==> fgonly ${SKY}: started $(date '+%F %T')"
+echo "==> ${DIR} ${SKY}: started $(date '+%F %T') (template ${TEMPLATE}, r = ${R})"
 if [[ ! -f "${RUN}/output/cells_coadded.fits" ]]; then
-    python "${REPO}/scripts/generate_maps.py" --seed 1 --nside 128 --r 0 \
-        --pysm "$SKY" --pysm-nside-in 512 --no-ee --no-cmb --no-noise \
-        --hits-noise "${DATA}/masks/norm_nHits_SA_35FOV_G_nside128.fits" \
-        --noise pessimistic_goal --no-kludge \
-        --output-dir "${RUN}/maps" > /dev/null
-    echo "maps done"
     mkdir -p "${RUN}/output"
-    cp "${ROOT}"/mcm_cache/mcm_*.fits "${RUN}/output/"
-    head -2 "${ROOT}/cov/cells_all_sims.txt" > "${RUN}/output/cells_2sims.txt"
-    bash "${REPO}/scripts/run_spectra.sh" --maps "${RUN}/maps" \
-        --out "${RUN}/output" --cov-cells "${RUN}/output/cells_2sims.txt"
-    python "${REPO}/scripts/fix_cov.py" put "${ROOT}/cov_ref" \
-        "${RUN}/output/cells_coadded.fits" "${RUN}/output/cells_noise.fits"
-    python "${REPO}/scripts/add_lensing.py" "${RUN}/output/cells_coadded.fits"
-    echo "spectra done"
-    rm -rf "${RUN}/maps"
+    if [[ "$RUN/output" != "$SRC" && -f "${SRC}/cells_coadded.fits" ]]; then
+        # foreground (+ lensing) spectra of the base run
+        cp "${SRC}/cells_coadded.fits" "${RUN}/output/cells_coadded.fits.tmp"
+        mv "${RUN}/output/cells_coadded.fits.tmp" "${RUN}/output/cells_coadded.fits"
+        echo "spectra copied from ${SRC}"
+    else
+        python "${REPO}/scripts/generate_maps.py" --seed 1 --nside 128 --r 0 \
+            --pysm "$SKY" --pysm-nside-in 512 --no-ee --no-cmb --no-noise \
+            --hits-noise "${DATA}/masks/norm_nHits_SA_35FOV_G_nside128.fits" \
+            --noise pessimistic_goal --no-kludge \
+            --output-dir "${RUN}/maps" > /dev/null
+        echo "maps done"
+        cp "${ROOT}"/mcm_cache/mcm_*.fits "${RUN}/output/"
+        head -2 "${ROOT}/cov/cells_all_sims.txt" > "${RUN}/output/cells_2sims.txt"
+        bash "${REPO}/scripts/run_spectra.sh" --maps "${RUN}/maps" \
+            --out "${RUN}/output" --cov-cells "${RUN}/output/cells_2sims.txt"
+        python "${REPO}/scripts/fix_cov.py" put "${ROOT}/cov_ref" \
+            "${RUN}/output/cells_coadded.fits" "${RUN}/output/cells_noise.fits"
+        python "${REPO}/scripts/add_lensing.py" "${RUN}/output/cells_coadded.fits"
+        echo "spectra done"
+        rm -rf "${RUN}/maps"
+    fi
+    if [[ "$R" != "0" ]]; then
+        python "${REPO}/scripts/add_lensing.py" \
+            "${RUN}/output/cells_coadded.fits" --tensor-r "$R"
+    fi
 fi
 if [[ ! -f "${RUN}/output/.noise_mean" ]]; then
     # mean noise of the run (also for spectra made before this fix: their
@@ -50,7 +71,7 @@ if [[ ! -f "${RUN}/output/.noise_mean" ]]; then
     echo "noise: mean of the sets of the run"
 fi
 sed -e "s#@REPO@#${REPO}#g" -e "s#@DATA@#${DATA}#g" -e "s#@RUN@#${RUN}#g" \
-    "${REPO}/configs/tree_config_template.yml" > "${RUN}/tree_config.yml"
+    "${REPO}/configs/${TEMPLATE}" > "${RUN}/tree_config.yml"
 python "${REPO}/scripts/run_tree.py" --config "${RUN}/tree_config.yml"
-echo "==> fgonly ${SKY}: finished $(date '+%F %T')"
+echo "==> ${DIR} ${SKY}: finished $(date '+%F %T')"
 } > "$LOG" 2>&1

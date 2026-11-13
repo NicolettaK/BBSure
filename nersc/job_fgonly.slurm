@@ -9,6 +9,10 @@
 #
 # Skies already concluded are skipped, interrupted ones restart reusing the
 # fits already done: if the job runs out of time, just resubmit it.
+# Variants (see run_fgonly.sh), e.g. single moments and r = 0.01:
+#   sbatch -A <project> --export=ALL,FG_TEMPLATE=tree_config_single.yml,FG_DIR=fgonly_single <repo>/nersc/job_fgonly.slurm
+#   sbatch -A <project> --export=ALL,FG_R=0.01,FG_DIR=fgonly_r0.01 <repo>/nersc/job_fgonly.slurm d9s4 d9s7
+# (a variant needs the spectra of the base run, <root>/fgonly/<sky>/output)
 #SBATCH -C cpu
 #SBATCH -q debug
 #SBATCH -N 1
@@ -36,8 +40,8 @@ if [[ ! -f "$NM" ]]; then
     python "${REPO}/scripts/mean_noise.py" "${NM}.tmp" $(cat "${ROOT}/fgonly/noise_list.txt") \
         && mv "${NM}.tmp" "$NM" || { echo "mean noise FAILED"; exit 1; }
 fi
-echo "job ${SLURM_JOB_ID}: fgonly ${SKIES}, ${BBPOWER_NPROC} processes each, $(date '+%F %T')"
+echo "job ${SLURM_JOB_ID}: ${FG_DIR:-fgonly} (${FG_TEMPLATE:-tree_config_template.yml}, r = ${FG_R:-0}) ${SKIES}, ${BBPOWER_NPROC} processes each, $(date '+%F %T')"
 for sky in $SKIES; do echo "$sky"; done | xargs -P "$NPAR" -n 1 bash -c \
     'bash "'"$REPO"'/nersc/run_fgonly.sh" "'"$ROOT"'" "$0" \
-     && echo "fgonly $0: done" || echo "fgonly $0: FAILED (see logs)"'
+     && echo "$0: done" || echo "$0: FAILED (see logs)"'
 echo "job ${SLURM_JOB_ID}: finished $(date '+%F %T')"

@@ -13,6 +13,8 @@ Moment groups (MOMENT_GROUPS)
     ds1  dust-synch cross: A_d x w1^beta_s, w1^beta_d x A_s
                                                     (beta_d and beta_s free)
     ds2  cross w1^beta_d x w1^beta_s                      (only with d and s)
+Single moments, one spectrum per group (e.g. d11 = w10 x w10, d01 = w00 x
+w10 only with d11): the tree can add one spectrum at a time.
 
 Labels: M_<groups>[-<pruned spectra>]_<r|0>, e.g. M_none_r, M_d+s_0,
 M_d+s-d_w00w10_r.
@@ -45,13 +47,48 @@ MOMENT_GROUPS = {
                 free=['beta_d', 'beta_s'], requires=['d', 's']),
 }
 
+# One spectrum per group ("single moments": the tree adds one spectrum at a
+# time, k = 1 in the residual test). <c><i><j>: spectrum w<i>0 x w<j>0 of
+# component c (dT: w0<i> x w0<j>; ds: dust-synch cross). Requirements from
+# the moment constraints: a cross spectrum needs both auto-spectra
+# (positivity; w00 x w00 is always there), a second-order auto-spectrum
+# needs the first-order one (hierarchical bound).
+for _c, _comp, _free in (('d', 'component_1', ['beta_d']),
+                         ('s', 'component_2', ['beta_s'])):
+    MOMENT_GROUPS.update({
+        f'{_c}11': dict(comp=_comp, pref=_c, spectra=['w10w10'], free=_free),
+        f'{_c}01': dict(comp=_comp, pref=_c, spectra=['w00w10'], free=_free,
+                        requires=f'{_c}11'),
+        f'{_c}22': dict(comp=_comp, pref=_c, spectra=['w20w20'], free=_free,
+                        requires=f'{_c}11'),
+        f'{_c}12': dict(comp=_comp, pref=_c, spectra=['w10w20'], free=_free,
+                        requires=[f'{_c}11', f'{_c}22']),
+        f'{_c}02': dict(comp=_comp, pref=_c, spectra=['w00w20'], free=_free,
+                        requires=f'{_c}22'),
+    })
+MOMENT_GROUPS.update({
+    'dT11': dict(comp='component_1', pref='d', spectra=['w01w01'],
+                 free=['temp_d']),
+    'dT01': dict(comp='component_1', pref='d', spectra=['w00w01'],
+                 free=['temp_d'], requires='dT11'),
+    # A_d x w1^beta_s, w1^beta_d x A_s, w1^beta_d x w1^beta_s
+    'ds01': dict(comp='component_1', pref='ds', spectra=['w00w10'],
+                 free=['beta_d', 'beta_s'], requires='s11'),
+    'ds10': dict(comp='component_1', pref='ds', spectra=['w10w00'],
+                 free=['beta_d', 'beta_s'], requires='d11'),
+    'ds11': dict(comp='component_1', pref='ds', spectra=['w10w10'],
+                 free=['beta_d', 'beta_s'], requires=['d11', 's11']),
+})
+
 # cross spectra between two groups: on only if both are there
 MOMENT_CROSS = {('d', 'dT'): dict(comp='component_1', pref='d',
-                                  spectra=['w10w01'])}
+                                  spectra=['w10w01']),
+                ('d11', 'dT11'): dict(comp='component_1', pref='d',
+                                      spectra=['w10w01'])}
 
-# dust temperature: free only with the dT group, otherwise fixed to the
+# dust temperature: free only with a dT group, otherwise fixed to the
 # central value of the base config
-TEMP_PARAM = ('temp_d', 'dT')
+TEMP_PARAM = ('temp_d', ('dT', 'dT11', 'dT01'))
 
 # Res_r0 candidates that switch back on spectra removed by the pruning
 RESTORE = 'restore-'
@@ -150,7 +187,7 @@ class Model:
         removed: it frees T_d.
         """
         on = set(self.spectra())
-        keep = {g for g in self.moments if g == TEMP_PARAM[1] or any(
+        keep = {g for g in self.moments if g in TEMP_PARAM[1] or any(
             (MOMENT_GROUPS[g]['comp'], MOMENT_GROUPS[g]['pref'], s) in on
             for s in MOMENT_GROUPS[g]['spectra'])}
         # groups needed by the cross spectra that are on

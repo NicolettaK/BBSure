@@ -107,7 +107,7 @@ def build_config(base, model: Model, sampler, fixed=None, centers=None,
             entries[al][1:] = ['fixed', [_center(entries[al])]]
 
     tname, tgroup = TEMP_PARAM
-    if tname in entries and tgroup not in model.moments and not free_temp:
+    if tname in entries and not set(tgroup) & model.moments and not free_temp:
         entries[tname][1:] = ['fixed', [_center(entries[tname])]]
 
     if not model.r_free:
