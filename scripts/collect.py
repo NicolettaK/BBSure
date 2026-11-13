@@ -28,7 +28,7 @@ def main():
     else:
         if not a.out:
             ap.error('profile needs --out')
-        collect_profile(a.root, a.out)
+        collect_profile(a.root, a.out, tree=a.tree)
 
 
 if __name__ == '__main__':

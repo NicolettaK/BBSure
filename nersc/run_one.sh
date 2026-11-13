@@ -5,6 +5,10 @@
 # Output in <root>/runs/set_<index>_<kind>/ (only the index in the name: r
 # stays hidden). If the tree is already concluded it does nothing; if it had
 # stopped, it restarts reusing the fits already done.
+# Variant (environment), e.g. the single-moment tree on the same spectra:
+#   TREE_TEMPLATE  tree config template in configs/ (default
+#                  tree_config_template.yml; e.g. tree_config_single.yml)
+#   TREE_DIR       tree directory in the set (default tree; e.g. tree_single)
 set -euo pipefail
 
 ROOT="$1"; I="$2"; KIND="$3"
@@ -12,18 +16,21 @@ REPO="$(cd "$(dirname "$0")/.." && pwd)"
 DATA="${BBSURE_DATA:-${REPO}/data}"
 NAME=$(printf "set_%03d_%s" "$I" "$KIND")
 RUN="${ROOT}/runs/${NAME}"
-LOG="${ROOT}/logs/${NAME}.log"
+TEMPLATE="${TREE_TEMPLATE:-tree_config_template.yml}"
+TDIR="${TREE_DIR:-tree}"
+SFX=$([[ "$TDIR" == tree ]] && echo "" || echo "_${TDIR}")
+LOG="${ROOT}/logs/${NAME}${SFX}.log"
 mkdir -p "$RUN" "${ROOT}/logs"
 
-if [[ -f "${RUN}/tree/conclusion.json" ]]; then
-    echo "${NAME}: already concluded"
+if [[ -f "${RUN}/${TDIR}/conclusion.json" ]]; then
+    echo "${NAME}${SFX}: already concluded"
     exit 0
 fi
 
 # Lock: the same set must not run in two jobs at once (they would write in
 # the same runs, e.g. the same emcee checkpoint). The file holds the ID of
 # the owner job; if that job is no longer in the queue the set is taken over.
-LOCK="${RUN}/.lock"
+LOCK="${RUN}/.lock${SFX}"
 ME="${SLURM_JOB_ID:-pid$$}"
 if ! ( set -o noclobber; echo "$ME" > "$LOCK" ) 2> /dev/null; then
     OWNER=$(cat "$LOCK" 2> /dev/null || true)
@@ -51,7 +58,7 @@ R=$(tr -d '\r' < "${ROOT}/truth/r_true.csv" | \
 SKY=$([[ "$KIND" == d9s4 ]] && echo d9s4 || echo "$SKY_RAND")
 
 {
-echo "==> ${NAME}: sky ${SKY}, seed ${SEED}, started $(date '+%F %T')"
+echo "==> ${NAME}${SFX}: sky ${SKY}, seed ${SEED}, template ${TEMPLATE}, started $(date '+%F %T')"
 # spectra made elsewhere (e.g. on a laptop) and copied gzipped
 for f in cells_coadded cells_noise; do
     if [[ ! -f "${RUN}/output/${f}.fits" && -f "${RUN}/output/${f}.fits.gz" ]]; then
@@ -88,7 +95,8 @@ if [[ ! -f "${RUN}/output/cells_coadded.fits" ]]; then
     rm -rf "${RUN}/maps"
 fi
 sed -e "s#@REPO@#${REPO}#g" -e "s#@DATA@#${DATA}#g" -e "s#@RUN@#${RUN}#g" \
-    "${REPO}/configs/tree_config_template.yml" > "${RUN}/tree_config.yml"
-python "${REPO}/scripts/run_tree.py" --config "${RUN}/tree_config.yml"
-echo "==> ${NAME}: finished $(date '+%F %T')"
+    -e "s#runs_dir: .*#runs_dir:      \"${RUN}/${TDIR}\"#" \
+    "${REPO}/configs/${TEMPLATE}" > "${RUN}/tree_config${SFX}.yml"
+python "${REPO}/scripts/run_tree.py" --config "${RUN}/tree_config${SFX}.yml"
+echo "==> ${NAME}${SFX}: finished $(date '+%F %T')"
 } > "$LOG" 2>&1

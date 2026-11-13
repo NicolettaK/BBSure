@@ -118,7 +118,7 @@ def collect_tree(root, unblind=False, tree='tree'):
     return out
 
 
-def collect_profile(root, out):
+def collect_profile(root, out, tree='tree'):
     """
     One row per set of the profile scheme (see the module docstring): model
     of the tree and final model, Bayesian r of the tree, posterior of r from
@@ -138,7 +138,7 @@ def collect_profile(root, out):
         for d in dirs:
             _, i, kind = os.path.basename(d).split('_', 2)
             if os.path.isdir(runs):
-                d = os.path.join(d, 'tree', 'profile')
+                d = os.path.join(d, tree, 'profile')
             f = os.path.join(d, 'result.json')
             if not os.path.isfile(f):
                 w.writerow([int(i), kind, 'missing']

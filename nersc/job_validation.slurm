@@ -9,6 +9,8 @@
 #
 # Sets already concluded are skipped, interrupted ones restart reusing the
 # fits already done: if the job runs out of time, just resubmit it.
+# Single-moment tree on the spectra already made (runs/set_*/tree_single/):
+#   sbatch -A <project> --export=ALL,TREE_TEMPLATE=tree_config_single.yml,TREE_DIR=tree_single <repo>/nersc/job_validation.slurm 0 49
 #SBATCH -C cpu
 #SBATCH -q regular
 #SBATCH -N 1
@@ -36,7 +38,7 @@ export BBSURE_NAUTILUS_PROCS=${BBSURE_NAUTILUS_PROCS:-$BBPOWER_NPROC}
 export PROFILE_NPROC=${PROFILE_NPROC:-8}
 export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1
 
-echo "job ${SLURM_JOB_ID}: sets ${FIRST}-${LAST} (${KINDS}), ${NPAR} trees at a time, ${BBPOWER_NPROC} processes each, $(date '+%F %T')"
+echo "job ${SLURM_JOB_ID}: sets ${FIRST}-${LAST} (${KINDS}), ${TREE_DIR:-tree} (${TREE_TEMPLATE:-tree_config_template.yml}), ${NPAR} trees at a time, ${BBPOWER_NPROC} processes each, $(date '+%F %T')"
 for i in $(seq "$FIRST" "$LAST"); do
     for kind in $KINDS; do
         echo "$i $kind"
