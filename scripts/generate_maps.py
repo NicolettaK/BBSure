@@ -77,6 +77,10 @@ def main():
     grp3.add_argument('--no-ee', action='store_true',
                       help='remove the E modes of the signal (CMB + '
                            'foregrounds) before adding noise')
+    grp3.add_argument('--no-cmb', action='store_true',
+                      help='test: maps without CMB')
+    grp3.add_argument('--no-noise', action='store_true',
+                      help='test: maps without noise')
 
     args = parser.parse_args()
     if args.fg_params:
@@ -105,6 +109,8 @@ def main():
         one_over_f    = 0 if args.noise == 'pessimistic_goal' else 1,
         kludge        = not args.no_kludge,
         no_ee         = args.no_ee,
+        no_cmb        = args.no_cmb,
+        no_noise      = args.no_noise,
     )
 
 

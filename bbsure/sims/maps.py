@@ -19,7 +19,7 @@ def generate_maps(seed, nside, output_dir, nsplits=4, r=0.,
                   amp_beta_s=0., gamma_beta_s=-3., beta_seed_s=None,
                   amp_u=0., gamma_u=-3., u_seed=None, pysm=None, pysm_nside_in=0,
                   hits_noise=None, rho_bu=0., sens_mode=1, one_over_f=1,
-                  kludge=True, no_ee=False):
+                  kludge=True, no_ee=False, no_cmb=False, no_noise=False):
     """
     Generates and saves the observed maps of all the splits
     (obs_split<i>of<nsplits>.fits.gz in output_dir).
@@ -55,6 +55,9 @@ def generate_maps(seed, nside, output_dir, nsplits=4, r=0.,
     of it in B (~0.3% of the CMB BB at ell ~ 80, r ~ +4e-4). Only with the
     delta-beta / delta-u maps (products in pixel space, which make E from B)
     the E modes are still removed at the end, with that approximation.
+
+    no_cmb / no_noise: test, maps without CMB / without noise (the random
+    numbers are drawn anyway, so the other components do not change).
     """
     np.random.seed(seed)
     lmax = 3 * nside - 1
@@ -71,6 +74,9 @@ def generate_maps(seed, nside, output_dir, nsplits=4, r=0.,
 
     _, Qcmb, Ucmb = hp.synfast([cl0, clee_cmb, clbb_cmb, cl0, cl0, cl0],
                                nside, new=True)
+    if no_cmb:
+        Qcmb, Ucmb = 0. * Qcmb, 0. * Ucmb
+        print("  no CMB (--no-cmb)")
     _, Qdust, Udust = hp.synfast([cl0, cldee, cldbb, cl0, cl0, cl0],
                                  nside, new=True)
     _, Qsynch, Usynch = hp.synfast([cl0, clsee, clsbb, cl0, cl0, cl0],
@@ -221,6 +227,8 @@ def generate_maps(seed, nside, output_dir, nsplits=4, r=0.,
                 nside, new=True)
             map_noise[i_f, 0, :] = mpq * np.sqrt(nsplits) * noise_scale
             map_noise[i_f, 1, :] = mpu * np.sqrt(nsplits) * noise_scale
+        if no_noise:
+            map_noise[:] = 0.
 
         obs = (map_freq + map_noise).reshape([nfreq * 2, npix])
         fname = os.path.join(output_dir,
