@@ -4,6 +4,7 @@ numbers, in decision_log.json and in readable form in decision_log.txt.
 """
 import json
 import os
+import threading
 
 import numpy as np
 
@@ -33,21 +34,25 @@ class DecisionLog:
         self.txt_path = os.path.join(runs_dir, 'decision_log.txt')
         self.verbose = verbose
         self._lines = []
+        # phase 0 runs its two halves in threads that share this log
+        self._lock = threading.RLock()
 
     def info(self, msg):
-        if self.verbose:
-            print(msg, flush=True)
-        self._lines.append(msg)
-        self._flush()
+        with self._lock:
+            if self.verbose:
+                print(msg, flush=True)
+            self._lines.append(msg)
+            self._flush()
 
     def node(self, node, question, answer, **numbers):
-        ev = dict(step=len(self.events) + 1, node=node, question=question,
-                  answer=answer, **numbers)
-        self.events.append(ev)
-        nums = ', '.join(f"{k}={fmt(v)}" for k, v in numbers.items()
-                         if not isinstance(v, (dict, list)))
-        self.info(f"[{ev['step']:02d}] {node}: {question} -> {answer}"
-                  + (f"   ({nums})" if nums else ''))
+        with self._lock:
+            ev = dict(step=len(self.events) + 1, node=node,
+                      question=question, answer=answer, **numbers)
+            self.events.append(ev)
+            nums = ', '.join(f"{k}={fmt(v)}" for k, v in numbers.items()
+                             if not isinstance(v, (dict, list)))
+            self.info(f"[{ev['step']:02d}] {node}: {question} -> {answer}"
+                      + (f"   ({nums})" if nums else ''))
 
     def _flush(self):
         try:

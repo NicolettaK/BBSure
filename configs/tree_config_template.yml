@@ -75,16 +75,22 @@ phase0:
     # Frequency-split screening before the tree (bbsure/phase0.py; also
     # with scripts/run_tree.py --phase0): synchrotron moments searched on
     # LF+MF only, dust moments on MF+UHF only, r free, one group at a time
-    # by evidence (ln B > lnB_preferred, no residual test); the tree on the
-    # full data starts from the union of what the two halves keep
+    # by evidence (ln B > lnB_preferred, no residual test; candidates
+    # clearly rejected by the ML estimate get no evidence run); the tree on
+    # the full data starts from the union of what the two halves keep.
+    # First order only (higher orders: the tree on the full data); no T_d
+    # on MF+UHF, where it is degenerate with beta_d (T_d x T_d was picked
+    # over beta_d x beta_d in all the d10 / d12 skies)
     enabled: false
+    # the two halves at the same time, each with half of the processes
+    parallel: true
     splits:
         - name: LFMF
           bands: [band1, band2, band3, band4]
-          groups: [s11, s01, s22, s12, s02]
+          groups: [s11, s01]
         - name: MFUHF
           bands: [band3, band4, band5, band6]
-          groups: [d11, d01, dT11, dT01, d22, d12, d02]
+          groups: [d11, d01]
 
 profile_scheme:
     # points of the initial grid of the profiles in r (see
