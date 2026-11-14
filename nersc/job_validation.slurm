@@ -11,6 +11,8 @@
 # fits already done: if the job runs out of time, just resubmit it.
 # Another tree config on the spectra already made (runs/set_*/<TREE_DIR>/):
 #   sbatch -A <project> --export=ALL,TREE_TEMPLATE=<config>,TREE_DIR=tree_v2 <repo>/nersc/job_validation.slurm 0 99
+# Phase 0 check after the analysis (fits of an existing TREE_DIR reused):
+#   sbatch -A <project> --export=ALL,TREE_DIR=tree_v2,TREE_PHASE0=1 <repo>/nersc/job_validation.slurm 0 99
 #SBATCH -C cpu
 #SBATCH -q regular
 #SBATCH -N 1
@@ -38,7 +40,7 @@ export BBSURE_NAUTILUS_PROCS=${BBSURE_NAUTILUS_PROCS:-$BBPOWER_NPROC}
 export PROFILE_NPROC=${PROFILE_NPROC:-8}
 export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1
 
-echo "job ${SLURM_JOB_ID}: sets ${FIRST}-${LAST} (${KINDS}), ${TREE_DIR:-tree} (${TREE_TEMPLATE:-tree_config_template.yml}), ${NPAR} trees at a time, ${BBPOWER_NPROC} processes each, $(date '+%F %T')"
+echo "job ${SLURM_JOB_ID}: sets ${FIRST}-${LAST} (${KINDS}), ${TREE_DIR:-tree} (${TREE_TEMPLATE:-tree_config_template.yml}, phase 0: ${TREE_PHASE0:-0}), ${NPAR} trees at a time, ${BBPOWER_NPROC} processes each, $(date '+%F %T')"
 for i in $(seq "$FIRST" "$LAST"); do
     for kind in $KINDS; do
         echo "$i $kind"

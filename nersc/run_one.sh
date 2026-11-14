@@ -9,6 +9,10 @@
 #   TREE_TEMPLATE  tree config template in configs/ (default
 #                  tree_config_template.yml)
 #   TREE_DIR       tree directory in the set (default tree; e.g. tree_v2)
+#   TREE_PHASE0    1: run_tree.py --phase0 (analysis A, frequency-split
+#                  phase 0, analysis B in <TREE_DIR>_p0 if it finds more);
+#                  with an existing TREE_DIR the fits of A are reused. Done
+#                  when <TREE_DIR>/.phase0_done exists.
 set -euo pipefail
 
 ROOT="$1"; I="$2"; KIND="$3"
@@ -19,10 +23,14 @@ RUN="${ROOT}/runs/${NAME}"
 TEMPLATE="${TREE_TEMPLATE:-tree_config_template.yml}"
 TDIR="${TREE_DIR:-tree}"
 SFX=$([[ "$TDIR" == tree ]] && echo "" || echo "_${TDIR}")
+P0="${TREE_PHASE0:-0}"
+[[ "$P0" == 1 ]] && SFX="${SFX}_p0"
+DONE="${RUN}/${TDIR}/conclusion.json"
+[[ "$P0" == 1 ]] && DONE="${RUN}/${TDIR}/.phase0_done"
 LOG="${ROOT}/logs/${NAME}${SFX}.log"
 mkdir -p "$RUN" "${ROOT}/logs"
 
-if [[ -f "${RUN}/${TDIR}/conclusion.json" ]]; then
+if [[ -f "$DONE" ]]; then
     echo "${NAME}${SFX}: already concluded"
     exit 0
 fi
@@ -97,6 +105,11 @@ fi
 sed -e "s#@REPO@#${REPO}#g" -e "s#@DATA@#${DATA}#g" -e "s#@RUN@#${RUN}#g" \
     -e "s#runs_dir: .*#runs_dir:      \"${RUN}/${TDIR}\"#" \
     "${REPO}/configs/${TEMPLATE}" > "${RUN}/tree_config${SFX}.yml"
-python "${REPO}/scripts/run_tree.py" --config "${RUN}/tree_config${SFX}.yml"
+if [[ "$P0" == 1 ]]; then
+    python "${REPO}/scripts/run_tree.py" --config "${RUN}/tree_config${SFX}.yml" \
+        --phase0 && touch "$DONE"
+else
+    python "${REPO}/scripts/run_tree.py" --config "${RUN}/tree_config${SFX}.yml"
+fi
 echo "==> ${NAME}${SFX}: finished $(date '+%F %T')"
 } > "$LOG" 2>&1
