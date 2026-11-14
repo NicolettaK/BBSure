@@ -79,67 +79,21 @@ class FitResult:
 
 @dataclass
 class ResidualResult:
-    """Residual test of a moment group."""
+    """Residual test of a moment group (two ML fits)."""
     group: str
     detected: bool
-    hpd: Dict[str, tuple]               # amplitude -> HPD interval
-    logZ: float = np.nan                # only if detected (PolyChord)
-    logZerr: float = np.nan
-    best: Dict[str, float] = field(default_factory=dict)  # max likelihood
-    stage: str = ''                     # 'emcee', 'polychord' or 'lrt'
-    off: tuple = ()                     # spectra of the group not detected
-                                        # by the screening, removed before PC
-    dchi2: float = np.nan               # likelihood-ratio test: chi2 gain
-    pvalue: float = np.nan              # and its p-value (k = amplitudes)
+    best: Dict[str, float] = field(default_factory=dict)  # ML with the group
+    dchi2: float = np.nan               # chi2 gain of the group
+    pvalue: float = np.nan              # its p-value (k = new amplitudes)
     rank: float = np.nan                # order of the candidates (lower
-                                        # first): -logZ, log p of the LRT
-                                        # or Delta AIC / BIC
+                                        # first): log p of the LRT or
+                                        # Delta AIC / BIC
     thr: float = np.nan                 # Delta chi2 needed for a detection
                                         # (lrt: chi2 quantile; aic: 2k;
                                         # bic: k ln N)
-
-    def __post_init__(self):
-        if not np.isfinite(self.rank):
-            self.rank = -self.logZ
+    stage: str = 'lrt'
 
 
 def lnB(a: FitResult, b: FitResult):
     """ln B_ab = lnZ_a - lnZ_b, with error."""
     return a.logZ - b.logZ, float(np.hypot(a.logZerr, b.logZerr))
-
-
-def hpd_interval(x, frac=0.68, bounds=None):
-    """
-    Highest density (shortest) interval containing frac.
-    If less than 1% of the samples are left below (above) the interval and
-    the extreme sample is closer to the prior edge than 5% of the width of
-    the interval, the posterior is squeezed against the edge: with
-    bounds = (lo, hi) the interval is extended to the edge (the samples never
-    touch the edge exactly, e.g. an amplitude >= 0 compatible with zero, and
-    the sample noise shifts the start of the interval slightly).
-    """
-    xs = np.sort(np.asarray(x))
-    n = len(xs)
-    k = max(int(np.ceil(frac * n)), 1)
-    widths = xs[k - 1:] - xs[:n - k + 1]
-    i = int(np.argmin(widths))
-    lo, hi = float(xs[i]), float(xs[i + k - 1])
-    if bounds is not None:
-        edge, tol = 0.01 * n, 0.05 * (hi - lo)
-        if i < edge and xs[0] - bounds[0] < tol:
-            lo = float(bounds[0])
-        if n - (i + k) < edge and bounds[1] - xs[-1] < tol:
-            hi = float(bounds[1])
-    return lo, hi
-
-
-def detection(names, samples, amps, frac=0.68, bounds=None):
-    """
-    HPD of each amplitude in `amps`; detected if zero is outside the HPD of
-    at least one. bounds: {amplitude: (lo, hi)} of the prior.
-    """
-    bounds = bounds or {}
-    hpd = {a: hpd_interval(samples[:, names.index(a)], frac, bounds.get(a))
-           for a in amps}
-    det = any(not (lo <= 0.0 <= hi) for lo, hi in hpd.values())
-    return det, hpd

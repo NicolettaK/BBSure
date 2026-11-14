@@ -9,9 +9,9 @@
 #
 # Skies already concluded are skipped, interrupted ones restart reusing the
 # fits already done: if the job runs out of time, just resubmit it.
-# Variants (see run_fgonly.sh), e.g. single moments and r = 0.01:
-#   sbatch -A <project> --export=ALL,FG_TEMPLATE=tree_config_single.yml,FG_DIR=fgonly_single <repo>/nersc/job_fgonly.slurm
+# Variants (see run_fgonly.sh), e.g. r = 0.01 or another tree config:
 #   sbatch -A <project> --export=ALL,FG_R=0.01,FG_DIR=fgonly_r0.01 <repo>/nersc/job_fgonly.slurm d9s4 d9s7
+#   sbatch -A <project> --export=ALL,FG_TEMPLATE=<config>,FG_DIR=fgonly_v2 <repo>/nersc/job_fgonly.slurm
 # (a variant needs the spectra of the base run, <root>/fgonly/<sky>/output)
 #SBATCH -C cpu
 #SBATCH -q debug

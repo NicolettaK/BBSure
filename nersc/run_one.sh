@@ -5,10 +5,10 @@
 # Output in <root>/runs/set_<index>_<kind>/ (only the index in the name: r
 # stays hidden). If the tree is already concluded it does nothing; if it had
 # stopped, it restarts reusing the fits already done.
-# Variant (environment), e.g. the single-moment tree on the same spectra:
+# Variant (environment), e.g. another tree config on the same spectra:
 #   TREE_TEMPLATE  tree config template in configs/ (default
-#                  tree_config_template.yml; e.g. tree_config_single.yml)
-#   TREE_DIR       tree directory in the set (default tree; e.g. tree_single)
+#                  tree_config_template.yml)
+#   TREE_DIR       tree directory in the set (default tree; e.g. tree_v2)
 set -euo pipefail
 
 ROOT="$1"; I="$2"; KIND="$3"

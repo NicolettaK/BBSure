@@ -15,77 +15,52 @@ Notation
     M_{1,0}   the same with r fixed to 0
     M*_{.,r}  profile likelihood in r of the model
 
-Moment groups: see models.py.
+Moment groups: see models.py (one spectrum each).
 
 Flowchart
 ---------
  1. Fit of M_0,r. Good chi2 (PTE > pte_min) and r compatible with 0 at 1
     sigma -> upper limit.
  2. Res_wr: residual test with everything fixed at the best fit of M_0,r, r
-    included; candidates are the res_wr groups (d, s) not yet in the model,
-    each with its spectral parameter free. moments: residual_test: lrt,
-    aic or bic: two ML fits (with and without the group), k = amplitudes of
-    the group; lrt: detected if p < lrt_p (chi2 with k degrees of freedom;
-    0.3173 = 1 sigma); aic / bic: detected if Delta chi2 > 2k / k ln N
-    (N = size of the data vector: the AIC / BIC decreases); candidates
-    ordered by p (lrt) or by Delta AIC / BIC = penalty - Delta chi2. With
-    residual_test: bayes: detected = zero outside the 68% HPD interval of
-    at least one amplitude (screening with emcee, then
-    PolyChord on the detected ones: confirmation and evidence, which sets
-    the order).
+    included; candidates are the res_wr groups (e.g. d11, s11, d01, s01)
+    not yet in the model whose required groups are there, each with its
+    spectral parameter free. Two ML fits (with and without the group),
+    k = new amplitudes (1, 2 with the beta_d x T_d cross spectrum):
+    aic / bic: detected if Delta chi2 > 2k / k ln N (N = size of the data
+    vector); lrt: if p < lrt_p (chi2 with k degrees of freedom); ordered by
+    Delta AIC / BIC = penalty - Delta chi2 (lrt: by p).
       - none detected -> 3.
-      - in order of significance: full fit of M_0,r + group and comparison with
-        M_0,r (ln B > lnB_preferred). The first one that passes becomes
-        M_0,r -> 1.
-      - none passes -> 3 (with r = 0, families not detected or not
-        preferred with r free can be).
- Pruning before every comparison with M_0,r: (a) screening (ML + emcee):
- the new spectra not detected (zero inside the 68% HPD of their amplitude)
- are removed and the screening is redone; (b) full fit (ML + PolyChord) of
- the screened model and pruning of ALL its moment spectra, old and new
- (point 4); only this pruned model is compared with M_0,r, and the
- candidate is rejected if nothing new is left. The removed spectra do not
- come back as candidates in Res_r0 (restore-<group> only with moments:
- res_r0_restore: true).
- 3. Res_r0: like Res_wr but on the residuals of M_0,0 (r = 0), candidates
-    the res_r0 groups (d, s, dT, d2, s2, ds1, ds2). None detected -> 3 sigma
-    test. Each round (M_1 = M_0,r at the first one):
-      a) every detected family added to M_1 with r = 0 and its new spectra
-         pruned with r = 0 by the screening (ML + emcee; the spectra
-         already in M_1 stay); a family pruned to nothing is not tested
-         again; the others ordered by Delta AIC / BIC = penalty - (chi2 of M_1
-         with r = 0 - chi2 of M_1,0), k = new spectra left;
-      b) for each family in this order: M_1,r = M_1,0 with r free, pruned
-         as in Res_wr (r free), against M_0,r: preferred -> replaces M_0,r,
-         back to 1; otherwise M_1,0 with the full pruning with r = 0
-         (screening + full fit) against M_0,r: preferred -> stop, M_1 to
-         the profile scheme; otherwise the next family;
+      - in order: full fit (ML + evidence) of M_0,r + group against M_0,r
+        (ln B > lnB_preferred). The first one that passes becomes M_0,r
+        -> 1.
+      - none passes -> 3.
+ 3. Res_r0: the same on the residuals of M_0,0 (r = 0), candidates the
+    res_r0 groups. None detected -> 3 sigma test. Each round (M_1 = M_0,r
+    at the first one):
+      a) every detected group added to M_1 with r = 0 (ML fit), ordered by
+         Delta AIC / BIC = penalty - (chi2 of M_1 with r = 0 - chi2 of
+         M_1,0);
+      b) for each group in this order: M_1,r = M_1,0 with r free against
+         M_0,r: preferred -> replaces M_0,r, back to 1; otherwise M_1,0
+         against M_0,r: preferred -> stop, M_1 to the profile scheme;
+         otherwise the next group;
       c) none preferred: Res_r0 on the residuals of the M_1,0 of the first
-         family of the list, M_1 = that M_1,0 and the next round; nothing
-         left in the residuals -> stop. The families tested and not
-         detected, or pruned to nothing with r = 0, in a round of the chain
-         are not tested again in the next rounds.
-    In both cases the Bayesian result is the 3 sigma test on M_0,r; the
-    profile scheme compares M_0,r, M_1 and the models in between.
-    The families added to M_0,r (node 'r0chain') are the candidates of the
-    profile scheme (profile_scheme.py) in both cases, each model at its own
-    r.
-    Res_wr is repeated as long as the replacements come from Res_wr (e.g.
-    after M + d, s is tested); after a replacement from Res_r0 the tree
-    always goes directly to Res_r0.
- 4. Pruning (of every candidate before its comparison with M_0,r, and of
-    the final model): the spectra with zero inside the HPD of their
-    amplitude are removed and the model refitted;
-    the pruned model is kept if ln B(pruned vs full) > lnB_prune (0).
-    Repeated until only detected amplitudes are left.
- If after the pruning the new M_0,r is a model already used as M_0,r
- (cycle, e.g. restore-s adopted and then pruned again) -> 3 sigma test.
- 5. 3 sigma test on r of M_0,r (or upper limit from point 1) on the pruned
-    model: upper limit or r detection.
+         group of the list, M_1 = that M_1,0 and the next round; nothing
+         left in the residuals -> stop. The groups tested and not detected
+         in a round are not tested again in the next rounds.
+    In both cases the Bayesian result is the 3 sigma test on M_0,r. The
+    groups added to M_0,r (node 'r0chain') are the candidates of the
+    profile scheme (profile_scheme.py), each model at its own r.
+    Res_wr is repeated as long as the replacements come from Res_wr; after
+    a replacement from Res_r0 the tree always goes directly to Res_r0.
+ 4. 3 sigma test on r of M_0,r (or upper limit from point 1): upper limit
+    or r detection.
+ Comparisons with M_0,r first from the ML fits: ln B ~ -Delta chi2 / 2 -
+ occam_per_param * Delta k; rejected without the evidence run if below
+ lnB_preferred - lnB_approx_skip (never used to accept).
  Borderline comparisons: if |ln B - threshold| < seed_band * error, the two
- PolyChord fits are repeated with another (random) seed and ln Z averaged,
- up to seed_max_runs runs per fit. This only reduces the numerical error,
- not the fluctuation of the realization. A choice is flagged as undecided if
+ evidence runs are repeated with another (random) seed and ln Z averaged,
+ up to seed_max_runs runs per fit. A choice is flagged as undecided if
  |ln B - threshold| < lnB_flag (1: inconclusive on the Jeffreys scale of
  Trotta 2008) or still < seed_band * error after the repetitions.
 
@@ -95,13 +70,10 @@ Output (in runs_dir)
   decision_log.txt    the same in readable form
   <tag>/              one directory per BBCompSep run (config + output)
 """
-import numpy as np
-
 from .fitter import NoValidStart
 from .log import DecisionLog
-from .models import (Model, candidate_groups, group_amplitudes,
-                     model_from_label)
-from .stats import FitResult, detection, lnB
+from .models import Model, candidate_groups, model_from_label
+from .stats import FitResult, lnB
 
 
 class DecisionTree:
@@ -116,16 +88,6 @@ class DecisionTree:
         # best model available does not describe the data well)
         self.pte_flag = th.get('pte_flag', 0.05)
         self.lnB_pref = th['lnB_preferred']
-        # pruning: the model without the undetected spectra is kept if
-        # ln B(pruned vs full) > lnB_prune
-        self.lnB_prune = th.get('lnB_prune', 0.)
-        # pruning: false switches it off everywhere (screening before the
-        # comparison, prune of the adopted model, r = 0 pruning of M_1,0),
-        # e.g. with single moments: one spectrum per group, so removing the
-        # new one = rejecting the candidate (the evidence comparison does
-        # it) and removing an old one can break the requirements
-        self.pruning = th.get('pruning', True)
-        self.hpd_frac = th.get('hpd_frac', 0.68)
         # borderline comparisons: |ln B - threshold| < seed_band * error ->
         # more PolyChord runs (different seeds), up to seed_max_runs per fit
         self.seed_band = th.get('seed_band', 2.0)
@@ -137,20 +99,14 @@ class DecisionTree:
         # ln B ~ -Delta chi2 / 2 - occam_per_param * Delta k; below the
         # threshold - lnB_approx_skip -> rejected without PolyChord;
         # otherwise PolyChord (None: always PolyChord). Acceptances always go
-        # through PolyChord (the accepted model needs its evidence and
-        # posterior); not used for the pruning (a stuck ML fit of the pruned
-        # model would remove a spectrum without check)
+        # through the evidence run (the accepted model needs its evidence
+        # and posterior)
         self.approx_skip = th.get('lnB_approx_skip', None)
         self.occam = th.get('occam_per_param', 1.0)
         mc = tc['moments']
-        self.res_wr = mc.get('res_wr', ['d', 's'])
-        self.res_r0 = mc.get('res_r0', ['d', 's', 'dT', 'd2', 's2', 'ds1',
-                                        'ds2'])
+        self.res_wr = mc['res_wr']
+        self.res_r0 = mc['res_r0']
         self.extra_requires = mc.get('requires', {})
-        # restore-<group> in Res_r0: off by default. The pruned spectra have
-        # already been judged with r free; with r = 0 they look detected but
-        # refitted with r free they are undetected again (d10s5 seed 6002)
-        self.restore = mc.get('res_r0_restore', False)
         self.max_it = tc['run']['max_iterations']
         # comparisons still within seed_band errors of the threshold after
         # the PolyChord repetitions: reported in the conclusion
@@ -163,16 +119,14 @@ class DecisionTree:
     def run(self):
         M0 = Model(frozenset(), r_free=True)        # "run BBPower nominal"
         # "what if" test: start from a given model (label, e.g.
-        # M_d+s-d_w00w10-s_w00w10_r) instead of the one without moments
+        # M_d11+s11_r) instead of the one without moments
         start = self.tc['run'].get('initial_model')
         if start:
             M0 = model_from_label(start)
         use_wr = True       # False after a replacement coming from Res_r0
-        visited = set()     # models already used as M_0,r
         self.log.info(f"==> Initial model M_0,r = {M0.label}")
         for it in range(1, self.max_it + 1):
             self.log.info(f"\n==> Iteration {it}: M_0,r = {M0.label}")
-            visited.add(M0)
             fit0 = self.F.full_fit(M0)
             self.log.node('fit', f'fit of {M0.label}', 'ok',
                           **fit0.summary())
@@ -188,7 +142,6 @@ class DecisionTree:
                               r_med=rs['r_med'], r_lo1=rs['r_lo1'],
                               r_hi1=rs['r_hi1'])
                 if ok1:
-                    M0, fit0 = self.prune(M0, fit0)
                     return self.conclude_upper_limit(M0, fit0)
 
             outcome, M1, branch = self.search_moments(M0, fit0, use_wr)
@@ -202,26 +155,15 @@ class DecisionTree:
             if outcome == 'replace':
                 self.log.node('replace', f'M_0,r = M_1,r (from {branch})',
                               M1.label)
-                # the new M_0,r was already pruned before its comparison
                 M0, fit0 = M1, self.F.full_fit(M1)
                 use_wr = use_wr and branch == 'Res_wr'
-                # cycle: after the pruning the new M_0,r is a model already
-                # used (e.g. restore-s adopted and then pruned again) -> the
-                # search leads nowhere else, 3 sigma test
-                cycle = M0 in visited
-                self.log.node('cycle', f'Is the new M_0,r ({M0.label}) a '
-                              'model already used as M_0,r?',
-                              'Yes' if cycle else 'No')
-                if cycle:
-                    return self.three_sigma(M0, fit0)
                 continue
             # all the other exits lead to the 3 sigma test on M_0,r
-            M0, fit0 = self.prune(M0, fit0)
             return self.three_sigma(M0, fit0)
 
         self.log.node('stop', 'max_iterations reached', 'stop',
                       max_iterations=self.max_it)
-        M0, fit0 = self.prune(M0, self.F.full_fit(M0))
+        fit0 = self.F.full_fit(M0)
         return dict(conclusion='max_iterations', model=M0.label,
                     **self.flags(fit0))
 
@@ -244,13 +186,11 @@ class DecisionTree:
                               'with the moment constraints, skipped',
                               'skipped', reason=str(err))
                 continue
-            hpd = {a: list(v) for a, v in rr.hpd.items()}
             self.log.node('resid_fit', f'{name}: moment {g} on the residuals '
                           f'of {base.model.label} ({which})',
                           'detected' if rr.detected else 'not detected',
-                          stage=rr.stage, logZ=rr.logZ, logZerr=rr.logZerr,
-                          dchi2=rr.dchi2, pvalue=rr.pvalue, dchi2_thr=rr.thr,
-                          pruned=list(rr.off), hpd68=hpd)
+                          stage=rr.stage,
+                          dchi2=rr.dchi2, pvalue=rr.pvalue, dchi2_thr=rr.thr)
             if rr.detected:
                 found.append(rr)
             else:
@@ -259,9 +199,7 @@ class DecisionTree:
         self.log.node('resid', f'{name}: is there any moment in the '
                       'residuals?', 'Yes' if found else 'No',
                       base=base.model.label,
-                      detected=[rr.group for rr in found],
-                      pruned=[list(rr.off) for rr in found],
-                      logZ=[rr.logZ for rr in found])
+                      detected=[rr.group for rr in found])
         return found
 
     def lnB_decided(self, fit1: FitResult, fit0: FitResult, threshold):
@@ -339,89 +277,23 @@ class DecisionTree:
                       occam_per_param=self.occam)
         return True
 
-    def compare_pruned(self, M1: Model, fit0: FitResult, name,
-                       centers=None):
+    def compare_candidate(self, M1: Model, fit0: FitResult, name,
+                          centers=None):
         """
-        Pruning before the comparison. Screening (ML + emcee, no evidence):
-        the new spectra (not in M_0,r) with zero inside the HPD of their
-        amplitude are removed and the screening is redone, until the
-        remaining ones are all detected; if none is left the candidate is
-        rejected. Then the full fit (ML + PolyChord) and the pruning of all
-        the moment spectra of the model (prune); only the pruned model is
-        compared with M_0,r, rejected if no new spectrum is left.
-        Returns (preferred, fit or None).
+        Candidate M1 against M_0,r: ML fit (rejected without the evidence
+        run if the ML estimate of ln B is clearly below the threshold), then
+        full fit (ML + evidence) and comparison. Returns (preferred, fit or
+        None).
         """
-        old = set(fit0.model.amplitudes())
-        while True:
-            fit1 = self.F.screen_fit(M1, centers=centers)
-            self.log.node('fit', f'screening fit (ML + emcee) of {name} = '
-                          f'{M1.label}', 'ok', **fit1.summary())
-            new = [a for a in M1.amplitudes() if a not in old]
-            if not new:
-                return False, None
-            if not self.pruning:
-                break
-            _, hpd = detection(fit1.sample_names, fit1.samples, new,
-                               self.hpd_frac, self.F.prior_bounds(new))
-            weak = [a for a in new if hpd[a][0] <= 0.0 <= hpd[a][1]]
-            self.log.node('prune_check', f'Undetected new moment amplitudes '
-                          f'in {M1.label}?',
-                          'Yes' if weak else 'No', undetected=weak,
-                          hpd68={a: list(v) for a, v in hpd.items()})
-            if not weak:
-                break
-            if len(weak) == len(new):
-                self.log.node('pruned_out', f'{name}: no new moment '
-                              'detected, candidate rejected', 'rejected',
-                              model=M1.label)
-                return False, None
-            M1, centers = M1.without(weak), fit1.best
-        if self.rejected_by_approx(fit1, fit0, name):
+        ml = self.F.ml_start(M1, centers=centers)
+        self.log.node('fit', f'ML fit of {name} = {M1.label}', 'ok',
+                      **ml.summary())
+        if self.rejected_by_approx(ml, fit0, name):
             return False, None
-        fit1 = self.F.full_fit(M1, centers=fit1.best)
+        fit1 = self.F.full_fit(M1, centers=ml.best)
         self.log.node('fit', f'fit of {name} = {M1.label}', 'ok',
                       **fit1.summary())
-        M1, fit1 = self.prune(M1, fit1)
-        if not set(M1.amplitudes()) - old:
-            self.log.node('pruned_out', f'{name}: no new moment left after '
-                          'the pruning, candidate rejected', 'rejected',
-                          model=M1.label)
-            return False, None
         return self.compare(fit1, fit0, name), fit1
-
-    def prune_r0(self, M10: Model, old, centers=None):
-        """
-        Pruning with r = 0 of the new spectra of M_1,0 (those not in old):
-        screening (ML + emcee) until the new spectra left are all detected.
-        The spectra in old are never removed. No PolyChord here: the
-        evidence of M_1,0 is computed only if it is compared with M_0,r
-        (M_1,r not preferred).
-        Returns (M_1,0, screening fit) or None if no new spectrum is left.
-        """
-        old = set(old)
-        while True:
-            fit = self.F.screen_fit(M10, centers=centers)
-            self.log.node('fit', f'screening fit (ML + emcee) of M_1,0 = '
-                          f'{M10.label}', 'ok', **fit.summary())
-            new = [a for a in M10.amplitudes() if a not in old]
-            if not self.pruning:
-                break
-            _, hpd = detection(fit.sample_names, fit.samples, new,
-                               self.hpd_frac, self.F.prior_bounds(new))
-            weak = [a for a in new if hpd[a][0] <= 0.0 <= hpd[a][1]]
-            self.log.node('prune_check', f'Undetected new moment amplitudes '
-                          f'in {M10.label} (r = 0)?',
-                          'Yes' if weak else 'No', undetected=weak,
-                          hpd68={a: list(v) for a, v in hpd.items()})
-            if not weak:
-                break
-            if len(weak) == len(new):
-                self.log.node('pruned_out', 'M_1,0: no new moment detected '
-                              'with r = 0, family rejected', 'rejected',
-                              model=M10.label)
-                return None
-            M10, centers = M10.without(weak), fit.best
-        return M10, fit
 
     # ── moment search ─────────────────────────────────────────────────────
     def search_moments(self, M0: Model, fit0: FitResult, use_wr=True):
@@ -442,9 +314,9 @@ class DecisionTree:
             else []
         if found:
             for rr in found:
-                M1 = M0.apply(rr.group).without(rr.off)
+                M1 = M0.plus(rr.group)
                 try:
-                    pref, fit1 = self.compare_pruned(
+                    pref, fit1 = self.compare_candidate(
                         M1, fit0, 'M_1,r', centers={**fit0.best, **rr.best})
                 except NoValidStart as err:
                     self.log.node('unfittable', f'Res_wr: {rr.group} cannot '
@@ -453,7 +325,7 @@ class DecisionTree:
                     continue
                 if pref:
                     return 'replace', fit1.model, 'Res_wr'
-            # no candidate passes: Res_r0, where with r = 0 the families
+            # no candidate passes: Res_r0, where with r = 0 the moments
             # can be detected or preferred (and the higher orders tested)
             self.log.info("    (Res_wr candidates not preferred: going to "
                           "Res_r0)")
@@ -463,26 +335,25 @@ class DecisionTree:
         fit00 = self.F.ml_fit(M00, centers=fit0.best)
         self.log.node('fit', f'best fit of {M00.label} (r = 0) for the '
                       'residuals', 'ok', chi2=fit00.chi2, pte=fit00.pte)
-        groups = candidate_groups(M00, self.res_r0, restore=self.restore,
+        groups = candidate_groups(M00, self.res_r0,
                                   extra_requires=self.extra_requires)
         found = self.residual_scan(fit00, groups, 'Res_r0', 'r fixed at 0') \
             if groups else []
         if not found:
             return 'to_3sigma', None, 'Res_r0'
-        # families tested and not detected: not tested again in the next
+        # groups tested and not detected: not tested again in the next
         # rounds of this chain
         excluded = set(self.last_undetected)
 
-        # rounds (M_1 = M_0,r at the first one): every detected family
-        # pruned with r = 0 and ordered by Delta AIC / BIC (r0_candidates); each
-        # tried as M_1,r, then M_1,0 (try_family); none preferred -> Res_r0
-        # on the residuals of the M_1,0 of the first family, next round
+        # rounds (M_1 = M_0,r at the first one): every detected group added
+        # with r = 0 and ordered by Delta AIC / BIC (r0_candidates); each
+        # tried as M_1,r, then M_1,0 (try_group); none preferred -> Res_r0
+        # on the residuals of the M_1,0 of the first group, next round
         M1, chained = M0, False
         while True:
-            old = set(M1.amplitudes())
             first = None
-            for g, M10, scr in self.r0_candidates(M1, found, fit00, excluded):
-                out, M10, fit10 = self.try_family(M0, fit0, M10, scr, old)
+            for g, M10, ml10 in self.r0_candidates(M1, found, fit00):
+                out, M10, fit10 = self.try_group(M0, fit0, M10, ml10)
                 if out == 'replace':
                     return 'replace', M10, 'Res_r0'
                 if out == 'm10':
@@ -503,7 +374,7 @@ class DecisionTree:
             found = self.residual_scan(fit10, groups, 'Res_r0',
                                        'r fixed at 0') if groups else []
             if not groups:
-                self.log.info("    (Res_r0: no family left to test on the "
+                self.log.info("    (Res_r0: no group left to test on the "
                               "residuals of M_1,0)")
             else:
                 excluded |= set(self.last_undetected)
@@ -514,57 +385,48 @@ class DecisionTree:
             self.log_chain(M0, M1, False)
         return 'to_3sigma', None, 'Res_r0'
 
-    def r0_candidates(self, M1, found, fit00, excluded):
+    def r0_candidates(self, M1, found, fit00):
         """
-        Every detected family added to M_1 with r = 0 and its new spectra
-        pruned with r = 0 by the screening (prune_r0); the families pruned
-        to nothing go in excluded. Returns [(family, M_1,0, screening fit)]
-        ordered by Delta AIC / BIC = penalty - (chi2 of M_1 with r = 0 -
-        chi2 of M_1,0), penalty 2k / k ln N, k = new spectra left (lowest
-        first).
+        Every detected group added to M_1 with r = 0 (ML fit). Returns
+        [(group, M_1,0, ML fit)] ordered by Delta AIC / BIC = penalty -
+        (chi2 of M_1 with r = 0 - chi2 of M_1,0), penalty 2k / k ln N,
+        k = new amplitudes (lowest first).
         """
         old = set(M1.amplitudes())
         cands = []
         for rr in found:
-            cand = M1.with_r(False).apply(rr.group).without(rr.off)
+            M10 = M1.with_r(False).plus(rr.group)
             try:
-                got = self.prune_r0(cand, old,
-                                    centers={**fit00.best, **rr.best})
+                ml = self.F.ml_start(M10, centers={**fit00.best, **rr.best})
             except NoValidStart as err:
                 self.log.node('unfittable', f'Res_r0: {rr.group} cannot be '
                               'fitted with the moment constraints, next '
                               'candidate', 'skipped', reason=str(err))
                 continue
-            if got is None:
-                # pruned to nothing with r = 0: the moments can only grow
-                # along the chain, so it would be pruned again
-                excluded.add(rr.group)
-                continue
-            M10, scr = got
+            self.log.node('fit', f'ML fit of M_1,0 = {M10.label}', 'ok',
+                          **ml.summary())
             k = len(set(M10.amplitudes()) - old)
-            dbic = self.F.ic_penalty(k, fit00) - (fit00.chi2 - scr.chi2)
-            cands.append((dbic, rr.group, M10, scr))
+            dic = self.F.ic_penalty(k, fit00) - (fit00.chi2 - ml.chi2)
+            cands.append((dic, rr.group, M10, ml))
         cands.sort(key=lambda c: c[0])
         if cands:
-            self.log.node('r0order', 'Res_r0: families pruned with r = 0, in '
+            self.log.node('r0order', 'Res_r0: groups added with r = 0, in '
                           f'order of Delta {self.F.ic_name()}',
                           ', '.join(f'{g} ({b:+.1f})' for b, g, _, _ in cands),
                           order=[[g, b, M.label] for b, g, M, _ in cands])
-        return [(g, M10, scr) for _, g, M10, scr in cands]
+        return [(g, M10, ml) for _, g, M10, ml in cands]
 
-    def try_family(self, M0, fit0, M10, scr, old):
+    def try_group(self, M0, fit0, M10, ml10):
         """
-        One family of the Res_r0 list: M_1,r = M_1,0 with r free, pruned as
-        in Res_wr, against M_0,r; if not preferred, M_1,0 with the full
-        pruning with r = 0 (screening done, then full fit) against M_0,r.
-        Returns (outcome, model, fit): 'replace' (M_1,r adopted), 'm10'
-        (M_1,0 preferred), 'lost' (neither) or 'out' (M_1,0 pruned to
-        nothing or not fittable).
+        One group of the Res_r0 list: M_1,r = M_1,0 with r free against
+        M_0,r; if not preferred, M_1,0 against M_0,r. Returns (outcome,
+        model, fit): 'replace' (M_1,r adopted), 'm10' (M_1,0 preferred),
+        'lost' (neither) or 'out' (M_1,0 not fittable).
         """
         M1r = M10.with_r(True)
         try:
-            pref, fit1r = self.compare_pruned(
-                M1r, fit0, 'M_1,r', centers={**fit0.best, **scr.best})
+            pref, fit1r = self.compare_candidate(
+                M1r, fit0, 'M_1,r', centers={**fit0.best, **ml10.best})
         except NoValidStart as err:
             self.log.node('unfittable', f'M_1,r = {M1r.label} cannot be '
                           'fitted with the moment constraints', 'skipped',
@@ -572,10 +434,10 @@ class DecisionTree:
             pref = False
         if pref:
             return 'replace', fit1r.model, fit1r
-        if self.rejected_by_approx(scr, fit0, 'M_1,0'):
-            return 'lost', M10, scr
+        if self.rejected_by_approx(ml10, fit0, 'M_1,0'):
+            return 'lost', M10, ml10
         try:
-            fit10 = self.F.full_fit(M10, centers=scr.best)
+            fit10 = self.F.full_fit(M10, centers=ml10.best)
         except NoValidStart as err:
             self.log.node('unfittable', f'M_1,0 = {M10.label} cannot be '
                           'fitted with the moment constraints', 'skipped',
@@ -583,69 +445,18 @@ class DecisionTree:
             return 'out', M10, None
         self.log.node('fit', f'fit of M_1,0 = {M10.label}', 'ok',
                       **fit10.summary())
-        M10, fit10 = self.prune(M10, fit10, keep_amps=old)
-        if not set(M10.amplitudes()) - old:
-            self.log.node('pruned_out', 'M_1,0: no new moment left after the '
-                          'pruning with r = 0', 'rejected', model=M10.label)
-            return 'out', M10, fit10
         if self.compare(fit10, fit0, 'M_1,0'):
             return 'm10', M10, fit10
         return 'lost', M10, fit10
 
     def log_chain(self, M0, M1, preferred):
-        """Families added to M_0,r in Res_r0 (each with its removed
-        spectra): the candidates of the profile scheme."""
+        """Groups added to M_0,r in Res_r0: the candidates of the profile
+        scheme."""
         fams = sorted(M1.moments - M0.moments)
-        self.log.node('r0chain', f'Res_r0: families added to M_0,r '
+        self.log.node('r0chain', f'Res_r0: groups added to M_0,r '
                       f'({M0.label}) up to M_1 = {M1.label}; is M_1,0 '
                       'preferred?', 'Yes' if preferred else 'No',
-                      base=M0.label, m1=M1.label, families=fams,
-                      pruned=[sorted(set(group_amplitudes(g)) & set(M1.off))
-                              for g in fams])
-
-    # ── pruning ───────────────────────────────────────────────────────────
-    def prune(self, M0, fit0, keep_amps=()):
-        """
-        Removes from the final model the undetected moment spectra (zero
-        inside the HPD of their amplitude in the posterior of the full fit),
-        refits and keeps the pruned model if it is preferred
-        (ln B > lnB_prune). Repeated until only detected amplitudes are left.
-        The amplitudes in keep_amps are never removed. Nothing is removed
-        with thresholds: pruning: false.
-        """
-        if not self.pruning:
-            return M0, fit0
-        while [a for a in M0.amplitudes() if a not in keep_amps]:
-            amps = [a for a in M0.amplitudes() if a not in keep_amps]
-            det, hpd = detection(fit0.sample_names, fit0.samples, amps,
-                                 self.hpd_frac, self.F.prior_bounds(amps))
-            weak = [a for a in amps if hpd[a][0] <= 0.0 <= hpd[a][1]]
-            r0 = '' if M0.r_free else ' (r = 0)'
-            self.log.node('prune_check', f'Are all moment amplitudes of '
-                          f'{M0.label} detected{r0}?', 'No' if weak else 'Yes',
-                          undetected=weak,
-                          hpd68={a: list(v) for a, v in hpd.items()})
-            if not weak:
-                break
-            M1 = M0.without(weak)
-            fit1 = self.F.full_fit(M1, centers=fit0.best)
-            self.log.node('fit', f'fit of the pruned model {M1.label}', 'ok',
-                          **fit1.summary())
-            lb, lberr = self.lnB_decided(fit1, fit0, self.lnB_prune)
-            keep = lb > self.lnB_prune
-            self.note_undecided('pruning', M1.label if keep else M0.label,
-                                M0.label if keep else M1.label, lb, lberr,
-                                self.lnB_prune)
-            self.log.node('prune', f'Is the pruned model {M1.label} preferred '
-                          f'over {M0.label}?',
-                          'Yes' if keep else 'No', lnB=lb, lnB_err=lberr,
-                          pc_runs=[len(fit1.logZ_runs),
-                                   len(fit0.logZ_runs)],
-                          lnB_prune=self.lnB_prune)
-            if not keep:
-                break
-            M0, fit0 = M1, fit1
-        return M0, fit0
+                      base=M0.label, m1=M1.label, families=fams)
 
     # ── exits ─────────────────────────────────────────────────────────────
     def three_sigma(self, M0, fit0):

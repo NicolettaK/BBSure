@@ -5,7 +5,7 @@ Test of the logic of the profile scheme without running BBCompSep.
 A MockRunner replaces BBCompSepRunner: the chi2 of each model is a parabola
 in r, chi2(r) = chi2_min + ((r - r_min) / 0.003)^2, and the local evidences
 are given per scenario. A fake concluded tree (the files the scheme reads,
-with the families detected in its last Res_r0) is written in a temporary
+with the groups detected in its last Res_r0) is written in a temporary
 directory, and the scheme must compare the right models at their own r and
 take r from the profile of the winner.
 
@@ -70,17 +70,15 @@ class MockRunner:
 
 
 def fake_tree(d, model, chain=None, replace_after=False, m10=False):
-    """Files of a concluded tree read by the scheme: M_0,r `model`, families
-    added in the last Res_r0 chain = [(group, pruned spectra)]; m10: M_1,0
-    preferred."""
+    """Files of a concluded tree read by the scheme: M_0,r `model`, groups
+    added in the last Res_r0 chain; m10: M_1,0 preferred."""
     M = model_from_label(model)
     ev = []
     if chain is not None:
-        ev.append(dict(node='r0chain', question='Res_r0: families added to '
+        ev.append(dict(node='r0chain', question='Res_r0: groups added to '
                        'M_0,r; is M_1,0 preferred?',
                        answer='Yes' if m10 else 'No', base=model,
-                       families=[g for g, _ in chain],
-                       pruned=[list(off) for _, off in chain]))
+                       families=list(chain)))
     if m10:
         ev.append(dict(node='m10', question='M_1,0 preferred over M_0,r',
                        answer=model))
@@ -109,9 +107,8 @@ def run(scen, model, chain=None, replace_after=False, seed_max_runs=1,
     tree = tempfile.mkdtemp()
     fake_tree(tree, model, chain, replace_after, m10)
     tc = dict(paths=dict(runs_dir=tree, base_config='unused'),
-              thresholds=dict(hpd_frac=0.68, seed_band=2.0,
-                              seed_max_runs=seed_max_runs),
-              moments=dict(requires={'ds1': ['s']}),
+              thresholds=dict(seed_band=2.0, seed_max_runs=seed_max_runs),
+              moments=dict(requires={}),
               profile_scheme=dict(candidates=candidates))
     orig = psm.BBCompSepRunner
     psm.BBCompSepRunner = lambda tc, log: MockRunner(scen)
@@ -139,129 +136,123 @@ def main():
     print("Profile scheme scenarios:")
 
     # 1. the tree concluded before Res_r0: no candidates, profile of M*
-    res, R = run({'r_min': {'M_d_r': 0.010}}, 'M_d_r')
+    res, R = run({'r_min': {'M_d11_r': 0.010}}, 'M_d11_r')
     check("no Res_r0: no candidates, result from the profile of M*",
-          res['model_final'] == 'M_d_r' and res['candidates'] == []
+          res['model_final'] == 'M_d11_r' and res['candidates'] == []
           and close(res['r_star_final'], 0.010)
           and not any(c[0] == 'pc' for c in R.calls))
     check("  r detection at 0.010 +- 0.003",
           res['conclusion'] == 'r_detection'
           and close(res['r_med_pl'], 0.010) and close(res['r_std_pl'], SIG_R))
 
-    # 2. Res_r0 followed by an adoption: its families are not candidates
-    res, R = run({'r_min': {'M_d_r': 0.010}}, 'M_d_r', [('s', [])],
+    # 2. Res_r0 followed by an adoption: its groups are not candidates
+    res, R = run({'r_min': {'M_d11_r': 0.010}}, 'M_d11_r', ['s11'],
                  replace_after=True)
     check("Res_r0 before an adoption: no candidates", res['candidates'] == [])
 
-    # 3. candidates d and s; M* has the highest evidence -> final M*
-    scen = {'r_min': {'M_none_r': 0.010, 'M_d_r': 0.006, 'M_s_r': 0.004,
-                      'M_d+s_r': 0.003},
-            'logz': {'M_none_r': -10., 'M_d_r': -11., 'M_s_r': -12.,
-                     'M_d+s_r': -13.}}
-    res, R = run(scen, 'M_none_r', [('d', []), ('s', [])])
-    check("candidates d, s, d+s; M* wins -> final M*, all rejected",
+    # 3. candidates d11 and s11; M* has the highest evidence -> final M*
+    scen = {'r_min': {'M_none_r': 0.010, 'M_d11_r': 0.006, 'M_s11_r': 0.004,
+                      'M_d11+s11_r': 0.003},
+            'logz': {'M_none_r': -10., 'M_d11_r': -11., 'M_s11_r': -12.,
+                     'M_d11+s11_r': -13.}}
+    res, R = run(scen, 'M_none_r', ['d11', 's11'])
+    check("candidates d11, s11, d11+s11; M* wins -> final M*, all rejected",
           res['model_final'] == 'M_none_r'
-          and res['rejected'] == ['d', 'd+s', 's']
+          and res['rejected'] == ['d11', 'd11+s11', 's11']
           and close(res['r_star_final'], 0.010))
+    at = lambda lab, r: any(c[0] == 'ml' and c[1] == lab
+                            and abs(c[2] - r) < 2e-5 for c in R.calls)
     check("  every model at its own r",
-          ('ml', 'M_d_r', 0.006) in R.calls
-          and ('ml', 'M_s_r', 0.004) in R.calls
-          and ('ml', 'M_none_r', 0.01) in R.calls)
+          at('M_d11_r', 0.006) and at('M_s11_r', 0.004)
+          and at('M_none_r', 0.01))
 
     # 3b. same candidates with profile_scheme: candidates: false: no
     #     comparison, only the profile of M*
-    scen_s = dict(scen, logz=dict(scen['logz'], **{'M_s_r': -5.}))
-    res, R = run(scen_s, 'M_none_r', [('d', []), ('s', [])],
+    scen_s = dict(scen, logz=dict(scen['logz'], **{'M_s11_r': -5.}))
+    res, R = run(scen_s, 'M_none_r', ['d11', 's11'],
                  candidates=False)
     check("candidates: false -> only M*, candidates listed as skipped",
           res['model_final'] == 'M_none_r' and res['candidates'] == []
-          and res['candidates_skipped'] == ['d', 's', 'd+s']
+          and res['candidates_skipped'] == ['d11', 's11', 'd11+s11']
           and res['start'] == 'candidates not compared'
           and close(res['r_star_final'], 0.010))
     check("  no profile or local evidence of the candidates",
-          not any(c[1] in ('M_d_r', 'M_s_r', 'M_d+s_r') for c in R.calls
+          not any(c[1] in ('M_d11_r', 'M_s11_r', 'M_d11+s11_r') for c in R.calls
                   if len(c) > 1))
 
-    # 4. s has the highest evidence -> final M* + s, r from its profile
-    scen['logz'] = {'M_none_r': -10., 'M_d_r': -9., 'M_s_r': -8.,
-                    'M_d+s_r': -8.5}
-    res, R = run(scen, 'M_none_r', [('d', []), ('s', [])])
-    check("s wins -> final M* + s, r from its profile",
-          res['model_final'] == 'M_s_r' and res['rejected'] == ['d', 'd+s']
+    # 4. s11 has the highest evidence -> final M* + s11, r from its profile
+    scen['logz'] = {'M_none_r': -10., 'M_d11_r': -9., 'M_s11_r': -8.,
+                    'M_d11+s11_r': -8.5}
+    res, R = run(scen, 'M_none_r', ['d11', 's11'])
+    check("s11 wins -> final M* + s11, r from its profile",
+          res['model_final'] == 'M_s11_r' and res['rejected'] == ['d11', 'd11+s11']
           and close(res['r_star_final'], 0.004)
           and res['conclusion'] == 'upper_limit')
 
     # 5. spectral parameters in the local evidences: beta_d and beta_s in
-    #    all the models, T_d only in the one with the dT moments
-    scen = {'r_min': {'M_none_r': 0.010, 'M_d_r': 0.006, 'M_dT_r': 0.008,
-                      'M_d+dT_r': 0.005},
-            'logz': {'M_none_r': -10., 'M_d_r': -11., 'M_dT_r': -12.,
-                     'M_d+dT_r': -13.}}
-    res, R = run(scen, 'M_none_r', [('d', []), ('dT', [])])
+    #    all the models, T_d only in the ones with dT11
+    scen = {'r_min': {'M_none_r': 0.010, 'M_d11_r': 0.006, 'M_dT11_r': 0.008,
+                      'M_d11+dT11_r': 0.005},
+            'logz': {'M_none_r': -10., 'M_d11_r': -11., 'M_dT11_r': -12.,
+                     'M_d11+dT11_r': -13.}}
+    res, R = run(scen, 'M_none_r', ['d11', 'dT11'])
     free = {c[1]: set(c[2]) for c in R.calls if c[0] == 'pc'}
-    check("  beta_d, beta_s free in all; T_d only with dT",
+    check("  beta_d, beta_s free in all; T_d only with dT11",
           len(free) == 4
           and all({'beta_d', 'beta_s'} <= f for f in free.values())
-          and 'temp_d' in free['M_dT_r'] and 'temp_d' not in free['M_d_r']
+          and 'temp_d' in free['M_dT11_r'] and 'temp_d' not in free['M_d11_r']
           and 'temp_d' not in free['M_none_r']
           and 'r_tensor' not in set().union(*free.values()))
 
-    # 6. the spectra pruned by the residual screening stay out
-    scen = {'r_min': {'M_d_r': 0.010, 'M_d+s-s_w00w10_r': 0.005},
-            'logz': {'M_d_r': -10., 'M_d+s-s_w00w10_r': -9.}}
-    res, R = run(scen, 'M_d_r', [('s', ['A_s_w00w10'])])
-    check("candidate with a pruned spectrum: M* + s without it",
-          res['model_final'] == 'M_d+s-s_w00w10_r')
-
-    # 7. the two best models within 2 errors (ln B = 0.1 +- 0.14): their
+    # 6. the two best models within 2 errors (ln B = 0.1 +- 0.14): their
     #    local evidences are repeated with other seeds, up to 3 runs each
-    scen = {'r_min': {'M_d_r': 0.010, 'M_d+s_r': 0.006},
-            'logz': {'M_d_r': -10., 'M_d+s_r': -10.1}}
-    res, R = run(scen, 'M_d_r', [('s', [])], seed_max_runs=3)
+    scen = {'r_min': {'M_d11_r': 0.010, 'M_d11+s11_r': 0.006},
+            'logz': {'M_d11_r': -10., 'M_d11+s11_r': -10.1}}
+    res, R = run(scen, 'M_d11_r', ['s11'], seed_max_runs=3)
     reps = [c[3] for c in R.calls if c[0] == 'pc' and '_rep' in c[3]]
-    check("close evidences: PolyChord repeated with other seeds (2 + 2)",
-          len(reps) == 4 and res['comparison']['M_d_r']['logZ_runs']
+    check("close evidences: evidence runs repeated with other seeds (2 + 2)",
+          len(reps) == 4 and res['comparison']['M_d11_r']['logZ_runs']
           == [-10.] * 3)
-    res, R = run(scen, 'M_d_r', [('s', [])])
+    res, R = run(scen, 'M_d11_r', ['s11'])
     check("  no repetitions with seed_max_runs = 1",
           not any('_rep' in c[3] for c in R.calls if c[0] == 'pc'))
     check("  the two best still within 2 errors: choice flagged",
           res['undecided'] and res['undecided_choices'][0]['chosen']
-          == 'M_d_r' and res['undecided_choices'][0]['other'] == 'M_d+s_r')
+          == 'M_d11_r' and res['undecided_choices'][0]['other'] == 'M_d11+s11_r')
 
-    # 8. M_1,0 preferred in the tree: M_0,r = M_none, M_1 =
-    #    M_d+s; the same candidates (every model in between and M_1)
-    scen = {'r_min': {'M_d+s_r': 0.002, 'M_d_r': 0.008, 'M_s_r': 0.006,
+    # 7. M_1,0 preferred in the tree: M_0,r = M_none, M_1 =
+    #    M_d11+s11; the same candidates (every model in between and M_1)
+    scen = {'r_min': {'M_d11+s11_r': 0.002, 'M_d11_r': 0.008, 'M_s11_r': 0.006,
                       'M_none_r': 0.012},
-            'logz': {'M_d+s_r': -10., 'M_d_r': -9., 'M_s_r': -11.,
+            'logz': {'M_d11+s11_r': -10., 'M_d11_r': -9., 'M_s11_r': -11.,
                      'M_none_r': -12.}}
-    res, R = run(scen, 'M_none_r', [('d', []), ('s', [])], m10=True)
-    check("M_1,0 preferred in the tree: d, s, d+s from M_0,r, M_d wins",
-          res['candidates'] == ['d', 's', 'd+s']
-          and res['model_final'] == 'M_d_r'
+    res, R = run(scen, 'M_none_r', ['d11', 's11'], m10=True)
+    check("M_1,0 preferred in the tree: d11, s11, d11+s11 from M_0,r, M_d11 wins",
+          res['candidates'] == ['d11', 's11', 'd11+s11']
+          and res['model_final'] == 'M_d11_r'
           and res['start'] == 'M_1,0 preferred in the tree'
           and close(res['r_star_final'], 0.008))
 
-    # 9. M_1,0 never preferred (3 sigma test in the tree): the same
-    #    combinations of the families of the chain
-    scen = {'r_min': {'M_none_r': 0.010, 'M_d_r': 0.008, 'M_s_r': 0.007,
-                      'M_d+s_r': 0.004},
-            'logz': {'M_none_r': -10., 'M_d_r': -11., 'M_s_r': -11.,
-                     'M_d+s_r': -9.}}
-    res, R = run(scen, 'M_none_r', [('d', []), ('s', [])])
-    check("M_1,0 not preferred: d, s and d+s tried; d+s wins",
-          res['candidates'] == ['d', 's', 'd+s']
-          and res['model_final'] == 'M_d+s_r'
+    # 8. M_1,0 never preferred (3 sigma test in the tree): the same
+    #    combinations of the groups of the chain
+    scen = {'r_min': {'M_none_r': 0.010, 'M_d11_r': 0.008, 'M_s11_r': 0.007,
+                      'M_d11+s11_r': 0.004},
+            'logz': {'M_none_r': -10., 'M_d11_r': -11., 'M_s11_r': -11.,
+                     'M_d11+s11_r': -9.}}
+    res, R = run(scen, 'M_none_r', ['d11', 's11'])
+    check("M_1,0 not preferred: d11, s11 and d11+s11 tried; d11+s11 wins",
+          res['candidates'] == ['d11', 's11', 'd11+s11']
+          and res['model_final'] == 'M_d11+s11_r'
           and res['start'] == 'M_1,0 not preferred in the tree')
 
-    # 10. chain s, then ds1 (requires s): ds1 alone is not a candidate
-    scen = {'r_min': {'M_d_r': 0.010, 'M_d+s_r': 0.007,
-                      'M_d+ds1+s_r': 0.004},
-            'logz': {'M_d_r': -10., 'M_d+s_r': -11., 'M_d+ds1+s_r': -12.}}
-    res, R = run(scen, 'M_d_r', [('s', []), ('ds1', [])])
-    check("requirements: s and s+ds1, not ds1 alone",
-          res['candidates'] == ['s', 's+ds1']
-          and res['model_final'] == 'M_d_r')
+    # 9. chain s11, then ds01 (requires s11): ds01 alone is not a candidate
+    scen = {'r_min': {'M_d11_r': 0.010, 'M_d11+s11_r': 0.007,
+                      'M_d11+ds01+s11_r': 0.004},
+            'logz': {'M_d11_r': -10., 'M_d11+s11_r': -11., 'M_d11+ds01+s11_r': -12.}}
+    res, R = run(scen, 'M_d11_r', ['s11', 'ds01'])
+    check("requirements: s11 and s11+ds01, not ds01 alone",
+          res['candidates'] == ['s11', 's11+ds01']
+          and res['model_final'] == 'M_d11_r')
     print("\nAll tests passed.")
 
 

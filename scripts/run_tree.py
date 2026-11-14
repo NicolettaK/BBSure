@@ -32,7 +32,6 @@ def main():
     log = DecisionLog(tc['paths']['runs_dir'])
     mc = tc.get('moments', {})
     fitter = Fitter(BBCompSepRunner(tc, log),
-                    hpd_frac=tc['thresholds'].get('hpd_frac', 0.68),
                     residual_test=mc.get('residual_test', 'aic'),
                     lrt_p=mc.get('lrt_p', 0.3173))
     result = DecisionTree(tc, fitter, log).run()
@@ -78,7 +77,7 @@ def main():
         undecided_choices=dict(tree=result.get('undecided_choices', []),
                                profile=prof.get('undecided_choices', [])),
         # final model with PTE < pte_flag: it does not describe the data
-        # well (e.g. a foreground outside the moment families)
+        # well (e.g. a foreground outside the moment groups)
         low_pte_tree=result.get('low_pte', False),
         low_pte_profile=prof.get('low_pte', False),
         # Bayesian part: model chosen by the tree, ML best fit, posterior

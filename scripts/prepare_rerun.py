@@ -12,11 +12,11 @@ output/ as a symbolic link; tree/ copied, so that the new runs never write
 in <old root>), several sets in parallel (--jobs). Each set is copied in
 <set>.tmp and renamed at the end: an interrupted copy leaves no half set,
 and running the script again copies only the missing ones. The sets whose
-last Res_r0 detected at least one family (the only ones where M_1,0 and
+last Res_r0 detected at least one moment (the only ones where M_1,0 and
 the combinations of the profile scheme enter) are reset: conclusion files
 and decision logs of tree and profile scheme removed, the fits kept (same config -> reused). The others
 keep their conclusion and are skipped by nersc/run_one.sh. With
---any-res-r0 the sets reset are those where ANY Res_r0 detected a family
+--any-res-r0 the sets reset are those where ANY Res_r0 detected a moment
 (also before an adoption, or followed by a chain whose last residuals are
 empty): the ones a change of the Res_r0 rounds can modify. With --all every
 set is reset. With --range only the sets with index FIRST..LAST (both skies)
@@ -35,7 +35,7 @@ RESET = ['conclusion.json', 'conclusion_tree.json', 'decision_log.json',
 
 
 def any_res_r0(ev):
-    """True if any Res_r0 of the tree detected at least one family."""
+    """True if any Res_r0 of the tree detected at least one moment."""
     return any(e['node'] == 'resid' and e['question'].startswith('Res_r0')
                and e['answer'] == 'Yes' for e in ev)
 
@@ -66,7 +66,7 @@ def main():
                     help='reset every set, not only those with Res_r0 '
                          'detections')
     ap.add_argument('--any-res-r0', action='store_true',
-                    help='reset the sets where any Res_r0 detected a family '
+                    help='reset the sets where any Res_r0 detected a moment '
                          '(default: only the last Res_r0, not followed by an '
                          'adoption)')
     ap.add_argument('--dry-run', action='store_true',

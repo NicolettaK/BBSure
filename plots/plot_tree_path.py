@@ -27,7 +27,7 @@ from matplotlib.patches import FancyBboxPatch  # noqa: E402
 from scipy import stats  # noqa: E402
 
 from bbsure.models import (MOMENT_CROSS, MOMENT_GROUPS,  # noqa: E402
-                           RESTORE, amp_name, model_from_label)
+                           model_from_label)
 from bbsure.profile_scheme import chain_candidates  # noqa: E402
 
 # as the step-by-step flowchart (docs/flowcharts/step_by_step): blue boxes
@@ -36,7 +36,7 @@ from bbsure.profile_scheme import chain_candidates  # noqa: E402
 COLORS = {'box': ('#2a6fdb', '#eaf1fc'), 'dia': ('#d9822b', '#fff4e0'),
           'pbox': ('#7b4fd6', '#f1eafc'), 'ul': ('#2f9e44', '#e6f4ea'),
           'det': ('#d9534f', '#fbe9e7'), 'grey': ('#868e96', '#f1f3f5')}
-QUESTION = ('chi2', 'r1sigma', 'resid', 'pref', 'prune', 'cycle', 'r3sigma')
+QUESTION = ('chi2', 'r1sigma', 'resid', 'pref', 'r3sigma')
 LABEL = re.compile(r'M_[A-Za-z0-9+\-_]+?_(?:r|0)\b')
 WRAP = 140          # characters per line (of the mathtext source)
 LH = 1.0            # line height (data units)
@@ -76,51 +76,28 @@ def spec_name(pref, spec):
     return f"${TERM.get(a, a)}_{ca}\\times {TERM.get(b, b)}_{cb}$"
 
 
-def amp_tex(name):
-    """A_d_w00w10 -> the moment spectrum A_d x beta_d (mathtext)."""
-    _, pref, spec = name.split('_', 2)
-    return spec_name(pref, spec)
-
-
 def fam_tex(g):
-    """Moment group (or 'restore-<group>') -> its spectra (mathtext)."""
-    if g.startswith(RESTORE):
-        return 'restore ' + fam_tex(g[len(RESTORE):])
+    """Moment group -> its spectrum (mathtext)."""
     G = MOMENT_GROUPS.get(g)
     if G is None:
         return g
     return ', '.join(spec_name(G['pref'], x) for x in G['spectra'])
 
 
-def fam_left(g, off):
-    """Family g without the spectra of off (pruned with r = 0 in Res_r0),
-    as tested in the profile scheme: 'beta_d^2 x beta_d^2 (A_d x beta_d^2
-    pruned with r = 0)'."""
-    G = MOMENT_GROUPS.get(g)
-    if G is None or not off:
-        return fam_tex(g)
-    left = [spec_name(G['pref'], x) for x in G['spectra']
-            if amp_name(G['pref'], x) not in off]
-    return (', '.join(left) + ' (' + ', '.join(amp_tex(x) for x in off)
-            + ' pruned with r = 0)')
-
-
 def short(lab):
-    """M_d+s-d_w00w10_r -> the moment spectra left in the model after the
-    pruning, in mathtext ('beta_d x beta_d, A_s x beta_s, ...'), as in the
-    results table; ', r = 0' if r is fixed."""
+    """M_d11+s11_r -> the moment spectra of the model in mathtext
+    ('beta_d x beta_d, beta_s x beta_s'), as in the results table; ', r = 0'
+    if r is fixed."""
     if not lab or not LABEL.fullmatch(lab):
         return str(lab)
     M = model_from_label(lab)
     parts = []
     for g in sorted(M.moments):
         G = MOMENT_GROUPS[g]
-        parts += [spec_name(G['pref'], x) for x in G['spectra']
-                  if amp_name(G['pref'], x) not in M.off]
+        parts += [spec_name(G['pref'], x) for x in G['spectra']]
     for pair, X in MOMENT_CROSS.items():
         if set(pair) <= M.moments:
-            parts += [spec_name(X['pref'], x) for x in X['spectra']
-                      if amp_name(X['pref'], x) not in M.off]
+            parts += [spec_name(X['pref'], x) for x in X['spectra']]
     s = ', '.join(parts) or 'no moments'
     return s + (', $r = 0$' if not M.r_free else '')
 
@@ -146,20 +123,11 @@ def tree_step(e, phase, early):
         return {'chi2': '2', 'r1sigma': '3'}[n]
     if n == 'resid':
         return '4–5' if q.startswith('Res_wr') else '13–14'
-    if n == 'prune_check':
-        if q.startswith('Undetected new'):
-            return '15' if q.endswith('(r = 0)?') else ('7' if wr else '16')
-        if q.endswith('(r = 0)?'):
-            return '17'
-        return '3' if early else ('9' if wr else '16')
-    if n == 'prune':
-        ref = re.split(r'w\.r\.t\.|preferred over', q)[-1].strip(' ?')
-        return '17' if ref.endswith('_0') else ('9' if wr else '16')
     if n == 'pref':
         if q.startswith('Is M_1,0'):
             return '17'
         return ('8' if e.get('method') else '10') if wr else '16'
-    if n in ('replace', 'cycle'):
+    if n == 'replace':
         return '11'
     if n == 'r0order':
         return '15'
@@ -167,10 +135,6 @@ def tree_step(e, phase, early):
         return '17' if e['answer'] == 'Yes' else '18'
     if n == 'm10':
         return '17'
-    if n == 'pruned_out':
-        if q.startswith('M_1,0'):
-            return '15' if 'with r = 0' in q else '17'
-        return ('7' if 'no new moment detected' in q else '9') if wr else '16'
     if n == 'unfittable':
         return '7' if wr else '16'
     if n in ('r3sigma',):
@@ -208,7 +172,6 @@ def tree_items(ev):
     """(colour, [lines], answer, flags, step) for the nodes of the tree."""
     items, pending = [], []
     phase, early = None, False
-    cut = False     # the last pruning check of this screening removed spectra
     for e in ev:
         before = len(items)
         n, q, a = e['node'], e['question'], e['answer']
@@ -220,8 +183,6 @@ def tree_items(ev):
             early = a == 'Yes'
         if n == 'r3sigma':
             early = False
-        if n not in ('fit', 'prune_check'):
-            cut = False
         if n == 'fit':
             # a new M_0,r: the first fit of each iteration
             if q == f"fit of {e.get('model')}":
@@ -263,54 +224,23 @@ def tree_items(ev):
                 lines.append(s)
             pending = []
             items.append(('purple', lines + ['moment detected?'], a))
-        elif n in ('pref', 'prune'):
+        elif n == 'pref':
             lines = [shorten(q)]
             flags = node_flags(e)
             if e.get('method'):
                 lines.append(f"ln B ≈ {e['lnB']:.1f} from the ML fits: "
-                             "clearly rejected, no PolyChord")
+                             "clearly rejected, no evidence run")
             elif 'lnB' in e:
                 s = f"ln B = {e['lnB']:.2f} ± {e['lnB_err']:.2f}"
                 if max(e.get('pc_runs', [1])) > 1:
-                    s += f"  (PolyChord runs {e['pc_runs']})"
+                    s += f"  (evidence runs {e['pc_runs']})"
                 lines.append(s)
             items.append(('red', lines, a, flags))
-        elif n == 'prune_check':
-            r0 = ' (r = 0)' if q.endswith('(r = 0)?') else ' (r free)'
-            lab = LABEL.search(q)
-            if e.get('undetected'):
-                left = short(model_from_label(lab.group(0))
-                             .without(e['undetected']).label) if lab else '?'
-                if q.startswith('Undetected new'):
-                    # screening (ML + emcee): removed right away
-                    head, tail = 'removed (0 in their 68% HPD)', 'left: '
-                else:
-                    # full fit: removed only if the pruned model is
-                    # preferred (next box)
-                    head, tail = ('full fit, 0 in their 68% HPD (removed if '
-                                  'preferred)'), 'pruned model: '
-                items.append(('purple', [f'pruning{r0}: {head}',
-                                         ', '.join(amp_tex(x) for x in
-                                                   e['undetected']),
-                                         tail + left], None))
-                cut = True
-            else:
-                # first check of a screening that removes nothing: shown
-                # too, so that every pruning step appears in the path
-                if q.startswith('Undetected new') and not cut and lab:
-                    items.append(('purple', [f'pruning{r0}: nothing removed '
-                                             '(all new spectra detected)',
-                                             'left: ' + short(lab.group(0))],
-                                  None))
-                cut = False
         elif n == 'replace':
             src = q[q.find('(') + 1:q.rfind(')')] if '(' in q else ''
             items.append(('green', [f"M_0,r = M_1,r = {short(a)}"
                                     + (f"  (from {src[5:]})" if src else ''),
                                     ''], None))
-        elif n == 'cycle':
-            if a == 'Yes':
-                items.append(('grey', [shorten(q)], a))
         elif n == 'r3sigma':
             items.append(('yellow', ['is r compatible with zero at 3 sigma?',
                                      f"99.7%: [{e['r_lo3']:.4f}, "
@@ -337,7 +267,7 @@ def tree_items(ev):
 
 
 # flags as in the results page: PTE < 0.01; '≈' a decision taken on a
-# borderline PolyChord comparison (|ln B - threshold| < 2 errors after the
+# borderline evidence comparison (|ln B - threshold| < 2 errors after the
 # reruns); 'r=0' a model with r = 0 against M_0,r: preferred by a lot (✓✓),
 # by a little (✓, |ln B| < max(LNB_FLAG, 2 errors)), not preferred by a
 # little (✗); ≈ = choice with |ln B - threshold| < max(LNB_FLAG, 2 errors)
@@ -361,10 +291,10 @@ def r0_flag(x, err):
 
 
 def node_flags(e):
-    """Flags of a comparison node ('pref' or 'prune')."""
+    """Flags of a comparison node ('pref')."""
     if 'lnB' not in e or e.get('method'):
         return []
-    thr = e.get('lnB_preferred', e.get('lnB_prune', 0.))
+    thr = e.get('lnB_preferred', 0.)
     out = ['≈'] if abs(e['lnB'] - thr) < band(e['lnB_err']) else []
     if e['node'] == 'pref' and e['question'].startswith('Is M_1,0'):
         f = r0_flag(e['lnB'], e['lnB_err'])
@@ -412,11 +342,11 @@ def end_item(e, model, chi=None, where=''):
 def profile_items(ev, res, ndata=None, tree_ev=()):
     """(colour, [lines], answer) for the nodes of the profile scheme;
     ndata: size of the data vector (for the dof at r = r_min); tree_ev: log
-    of the tree (families of the Res_r0 chain and their pruned spectra)."""
+    of the tree (groups of the Res_r0 chain)."""
     comp = (res or {}).get('comparison') or {}
     items = []
     if res:
-        cands = '; '.join(fam_left(g, off) for g, off in
+        cands = '; '.join(fam_tex(g) for g in
                           chain_candidates(list(tree_ev))) or 'none'
         items.append(('pbox', [f"M* = {short(res['model_tree'])}",
                                f"candidates from the last Res_r0: {cands}"],

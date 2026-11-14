@@ -4,8 +4,9 @@ Test of the logic of the decision tree without running BBCompSep.
 
 A MockFitter returns made-up chi2 / evidences / posteriors of r / residual
 tests for each scenario, and the tree must follow the right branch of the
-flowchart. It also checks that the generated configs are consistent with
-BBPower's ParameterManager (if importable).
+flowchart. It also checks the moment groups and their requirements, the
+residual tests and that the generated configs are consistent with BBPower's
+ParameterManager (if importable).
 
 Usage:  python tests/test_decision_tree.py
 """
@@ -27,36 +28,33 @@ dt = SimpleNamespace(**{k: v for m in (models, stats, config, fitter, log,
 
 NDATA = 315
 rng = np.random.default_rng(1)
+RES_WR = ['d11', 's11', 'd01', 's01']
+RES_R0 = ['d11', 's11', 'dT11', 'd01', 's01', 'dT01', 'd22', 's22', 'd12',
+          's12', 'd02', 's02', 'ds01', 'ds10', 'ds11']
 
 
 class MockFitter:
     """
     scen: dict with
-      chi2[label]  chi2 of the best fit of each model (default: good)
-      logZ[label]  evidence (default: -chi2/2 - 0.5*nfree)
-      r[label]     (mean, sigma) of the posterior of r
-      resid[(base_label, group)]  logZ of the residual test if detected
-                   (groups not listed: not detected)
-      prof_dchi2   difference between the minima of the profiles (M0 - M1)
-      amps[label]  {amplitude: (mean, sigma)} of the posterior of the moment
-                   amplitudes (default (1, 0.1): detected)
-      amps_full[label]  same, for the full fit (PolyChord) only (default:
-                   amps)
-      logZerr[label]  PolyChord error (default 0.1)
+      chi2[label]   chi2 of the best fit of each model (default: good)
+      logZ[label]   evidence (default: -chi2/2 - 0.5*nfree)
+      r[label]      (mean, sigma) of the posterior of r
+      resid[(base_label, group)]  Delta chi2 of the residual test (groups
+                    not listed: 0, not detected)
+      logZerr[label]  error of the evidence (default 0.1)
       reruns[label]   logZ of the following runs with other seeds
-                      (default: logZ)
+      unfittable    labels whose ML fit has no valid starting point
     """
 
     def __init__(self, scen):
         self.s = scen
         self.calls = []
-        # penalty of the Res_r0 order: the real one ('bic' unless given)
-        self.residual_test_kind = scen.get('ic', 'bic')
+        self.residual_test_kind = scen.get('ic', 'aic')
 
     ic_penalty = dt.Fitter.ic_penalty
     ic_name = dt.Fitter.ic_name
 
-    def _fit(self, model, full=False):
+    def _fit(self, model):
         lab = model.label
         nfree = 8 + model.n_moment_params() + (1 if model.r_free else 0)
         chi2 = self.s.get('chi2', {}).get(lab, NDATA - nfree)
@@ -71,17 +69,7 @@ class MockFitter:
         if model.r_free:
             mu, sig = self.s.get('r', {}).get(lab, (0.0, 0.003))
             f.r_samples = rng.normal(mu, sig, 20000)
-        amps = model.amplitudes()
-        spec = self.s.get('amps', {}).get(lab, {})
-        if full:
-            spec = self.s.get('amps_full', {}).get(lab, spec)
-        f.sample_names = amps
-        f.samples = np.array([rng.normal(*spec.get(a, (1., 0.1)), 20000)
-                              for a in amps]).T.reshape(20000, len(amps))
         return f
-
-    def prior_bounds(self, params):
-        return {a: (-100., 100.) for a in params}
 
     def repeat_pc(self, res):
         lab = res.model.label
@@ -97,65 +85,51 @@ class MockFitter:
 
     def full_fit(self, model, centers=None):
         self.calls.append(('full', model.label))
-        return self._fit(model, full=True)
+        return self._fit(model)
 
     def ml_fit(self, model, centers=None):
         self.calls.append(('ml', model.label))
         return self._fit(model)
 
-    def screen_fit(self, model, centers=None):
-        self.calls.append(('screen', model.label))
+    def ml_start(self, model, centers=None):
+        self.calls.append(('ml', model.label))
         if model.label in self.s.get('unfittable', ()):
             raise dt.NoValidStart(model.label)
         return self._fit(model)
 
     def residual_test(self, base, group):
         self.calls.append(('resid', base.model.label, group))
-        lz = self.s.get('resid', {}).get((base.model.label, group))
-        if lz is None:
-            return dt.ResidualResult(group, False, {'A': (-1., 1.)},
-                                     stage='emcee')
-        off = tuple(self.s.get('resid_off', {}).get((base.model.label, group),
-                                                    ()))
-        return dt.ResidualResult(group, True, {'A': (0.5, 1.)}, lz, 0.1,
-                                 {}, stage='polychord', off=off)
+        d = self.s.get('resid', {}).get((base.model.label, group), 0.)
+        k = len(set(base.model.plus(group).amplitudes())
+                - set(base.model.amplitudes()))
+        thr = self.ic_penalty(k, base)
+        return dt.ResidualResult(group, d > thr, dchi2=d, thr=thr,
+                                 rank=thr - d)
 
 
-
-def tree_cfg(runs_dir, seed_max_runs=1, lnB_preferred=2.5, approx_skip=None):
+def tree_cfg(runs_dir, seed_max_runs=1, lnB_preferred=0., approx_skip=None,
+             initial_model=None):
     return dict(paths=dict(runs_dir=runs_dir),
                 thresholds=dict(pte_min=0.01, lnB_preferred=lnB_preferred,
                                 seed_band=2.0, seed_max_runs=seed_max_runs,
                                 lnB_approx_skip=approx_skip),
-                moments=dict(res_wr=['d', 's'],
-                             res_r0=['d', 's', 'dT', 'd2', 's2', 'ds1',
-                                     'ds2']),
-                run=dict(max_iterations=6))
+                moments=dict(res_wr=RES_WR, res_r0=RES_R0),
+                run=dict(max_iterations=6, fit_r0_at_end=False,
+                         initial_model=initial_model))
 
 
-def run(scen, seed_max_runs=1, lnB_preferred=2.5, approx_skip=None,
-        log_out=None):
+def run(scen, **kw):
     d = tempfile.mkdtemp()
-    log = dt.DecisionLog(d, verbose=False)
+    lg = dt.DecisionLog(d, verbose=False)
     F = MockFitter(scen)
-    res = dt.DecisionTree(tree_cfg(d, seed_max_runs, lnB_preferred,
-                                   approx_skip), F, log).run()
-    if log_out is not None:
-        log_out.extend(log.events)
-    path = [(e['node'], e['answer']) for e in log.events]
-    return res, path, F
+    res = dt.DecisionTree(tree_cfg(d, **kw), F, lg).run()
+    path = [(e['node'], e['answer']) for e in lg.events]
+    return res, path, F, lg.events
 
 
 M0 = 'M_none_r'
-BAD = NDATA - 9 + 120          # chi2 with PTE ~ 0
-GOOD = -0.5 * (NDATA - 11) + 20.  # high evidence for the models with moments
-
-
-def log_events(scen, **kw):
-    d = tempfile.mkdtemp()
-    log = dt.DecisionLog(d, verbose=False)
-    dt.DecisionTree(tree_cfg(d, **kw), MockFitter(scen), log).run()
-    return log.events
+R2 = (0.006, 0.003)            # r at 2 sigma: the search starts
+BAD = -1000.                   # very low evidence
 
 
 def check(name, cond):
@@ -171,613 +145,234 @@ def resid_calls(F, base):
 def main():
     print("Flowchart scenarios:")
 
-    # 1. good chi2, r ~ 0 -> upper limit right away
-    res, path, _ = run({})
+    res, path, _, _ = run({})
     check("chi2 ok + r ok at 1 sigma -> upper limit",
           res['conclusion'] == 'upper_limit' and res['model'] == M0
-          and ('r1sigma', 'Yes') in path)
+          and ('r1sigma', 'Yes') in path and not res['low_pte'])
 
-    check("  good chi2: no low-PTE flag", not res['low_pte'])
-
-    # 1b. PTE 0.02: chi2 accepted (> pte_min 0.01) but flagged (< 0.05)
     from scipy import stats as st
-    res, path, _ = run({'chi2': {M0: float(st.chi2.isf(0.02, NDATA - 9))}})
+    res, path, _, _ = run({'chi2': {M0: float(st.chi2.isf(0.02, NDATA - 9))}})
     check("PTE 0.02: accepted as good, but low PTE flagged",
-          ('chi2', 'Yes') in path and res['low_pte']
-          and abs(res['pte'] - 0.02) < 1e-6)
+          ('chi2', 'Yes') in path and res['low_pte'])
 
-    # 2. r at 2 sigma, nothing in Res_wr nor in Res_r0 -> 3 sigma ok
-    res, path, F = run({'r': {M0: (0.006, 0.003)}})
-    check("nothing in Res_wr and Res_r0 -> 3 sigma -> upper limit",
+    res, path, F, _ = run({'r': {M0: R2}})
+    check("nothing in the residuals -> 3 sigma -> upper limit; only the "
+          "groups whose requirements are met are tested",
           res['conclusion'] == 'upper_limit' and ('r3sigma', 'Yes') in path
-          and resid_calls(F, M0) == ['d', 's']
-          and resid_calls(F, 'M_none_0') == ['d', 's', 'dT', 'ds1'])
+          and resid_calls(F, M0) == ['d11', 's11']
+          and resid_calls(F, 'M_none_0') == ['d11', 's11', 'dT11'])
 
-    # 3. r at 5 sigma without moments -> detection
-    res, path, _ = run({'r': {M0: (0.015, 0.003)}})
+    res, path, _, _ = run({'r': {M0: (0.015, 0.003)}})
     check("r at 5 sigma, no moments -> r detection",
           res['conclusion'] == 'r_detection')
 
-    # 4. Res_wr: d and s detected, d wins (evidence), M_d_r preferred -> loop
-    scen = {'chi2': {M0: BAD},
-            'resid': {(M0, 'd'): -100., (M0, 's'): -120.},
-            'logZ': {'M_d_r': GOOD}}
-    res, path, F = run(scen)
-    fulls = [c[1] for c in F.calls if c[0] == 'full']
-    check("Res_wr: best detected d -> M_d_r adopted -> upper limit",
-          res['model'] == 'M_d_r' and ('replace', 'M_d_r') in path
-          and fulls[1] == 'M_d_r' and 'M_s_r' not in fulls)
+    # Res_wr: d11 detected and preferred -> new M_0,r; then its requirements
+    # open d01, d22, ds10 ... and nothing else is found
+    res, path, F, _ = run({'r': {M0: R2, 'M_d11_r': R2},
+                           'resid': {(M0, 'd11'): 10.},
+                           'logZ': {'M_d11_r': 0.}})
+    check("Res_wr: d11 preferred -> M_0,r = M_d11_r",
+          ('replace', 'M_d11_r') in path and res['model'] == 'M_d11_r')
+    check("  next Res_wr: s11 and d01 (d01 needs d11)",
+          resid_calls(F, 'M_d11_r') == ['s11', 'd01'])
+    check("  next Res_r0: second order and cross terms of d11 open up",
+          resid_calls(F, 'M_d11_0') == ['s11', 'dT11', 'd01', 'd22', 'ds10'])
+    check("  no pruning, no emcee screening",
+          not any(n.startswith('prune') for n, _ in path)
+          and all(c[0] in ('ml', 'full', 'resid') for c in F.calls))
 
-    # 4b. same with a bad chi2 of M_d_r: the second round tests s in
-    #     Res_wr, then (s not detected) Res_r0
-    scen['chi2'] = {M0: BAD, 'M_d_r': BAD}
-    res, path, F = run(scen)
-    check("  second iteration: Res_wr tests only s, then Res_r0",
-          resid_calls(F, 'M_d_r') == ['s']
-          and resid_calls(F, 'M_d_0') == ['s', 'dT', 'd2', 'ds1'])
+    # Res_wr candidate not preferred -> Res_r0: s11 detected, M_1,r preferred
+    # -> replaces M_0,r; the next iteration goes straight to Res_r0
+    res, path, F, _ = run({'r': {M0: R2, 'M_s11_r': R2},
+                           'resid': {(M0, 'd11'): 5., ('M_none_0', 's11'): 5.},
+                           'logZ': {'M_d11_r': BAD, 'M_s11_r': 0.}})
+    check("Res_wr not preferred -> Res_r0: M_1,r preferred -> replace",
+          ('replace', 'M_s11_r') in path and res['model'] == 'M_s11_r')
+    check("  after a replacement from Res_r0 no Res_wr",
+          resid_calls(F, 'M_s11_r') == [])
 
-    # 4c. s adopted in the second round from Res_wr: in the third Res_wr
-    #     has no candidates and the tree goes to Res_r0
-    scen = {'chi2': {M0: BAD, 'M_d_r': BAD, 'M_d+s_r': BAD},
-            'resid': {(M0, 'd'): -100., ('M_d_r', 's'): -90.},
-            'logZ': {'M_d_r': GOOD, 'M_d+s_r': GOOD + 10.}}
-    res, path, F = run(scen)
-    check("  third iteration: d and s in, Res_r0 on M_d+s_0",
-          ('replace', 'M_d+s_r') in path
-          and resid_calls(F, 'M_d+s_r') == []
-          and resid_calls(F, 'M_d+s_0') == ['dT', 'd2', 's2', 'ds1',
-                                                 'ds2'])
+    # Res_r0: M_1,r not preferred, M_1,0 preferred -> stop, M_1 to the
+    # profile scheme, 3 sigma test on M_0,r
+    res, path, F, ev = run({'r': {M0: R2},
+                            'resid': {('M_none_0', 's11'): 5.},
+                            'logZ': {'M_s11_r': BAD, 'M_s11_0': 0.}})
+    chain = [e for e in ev if e['node'] == 'r0chain']
+    check("Res_r0: M_1,0 preferred -> m10, 3 sigma test on M_none_r",
+          ('m10', 'M_s11_r') in path and res['model'] == M0
+          and chain and chain[-1]['families'] == ['s11']
+          and chain[-1]['answer'] == 'Yes')
 
-    # 5. Res_wr: d detected but not preferred, s detected and preferred
-    scen = {'chi2': {M0: BAD},
-            'resid': {(M0, 'd'): -100., (M0, 's'): -120.},
-            'logZ': {M0: -0.5 * BAD, 'M_d_r': -0.5 * BAD - 5.,
-                     'M_s_r': GOOD}}
-    res, path, F = run(scen)
-    fulls = [c[1] for c in F.calls if c[0] == 'full']
-    check("Res_wr: first not preferred, second one tried and adopted",
-          fulls[1:3] == ['M_d_r', 'M_s_r'] and ('replace', 'M_s_r') in path)
+    # chain: first round s11 (d11, dT11 not detected), nothing preferred ->
+    # residuals of M_s11_0, where d11 and dT11 are not retested; s22 found,
+    # M_s11+s22_0 preferred
+    res, path, F, ev = run({'r': {M0: R2},
+                            'resid': {('M_none_0', 's11'): 5.,
+                                      ('M_s11_0', 's22'): 5.},
+                            'logZ': {'M_s11_r': BAD, 'M_s11_0': BAD,
+                                     'M_s11+s22_r': BAD,
+                                     'M_s11+s22_0': 0.}})
+    chain = [e for e in ev if e['node'] == 'r0chain']
+    check("Res_r0 chain: second round on the residuals of M_s11_0",
+          ('m10', 'M_s11+s22_r') in path
+          and chain[-1]['families'] == ['s11', 's22'])
+    check("  groups not detected in the first round are not retested",
+          not {'d11', 'dT11'} & set(resid_calls(F, 'M_s11_0'))
+          and {'s01', 's22'} <= set(resid_calls(F, 'M_s11_0')))
 
-    # 6. Res_wr: detected but none preferred -> Res_r0, also when M_0,r has
-    #    no moments yet: with r = 0, s (not detected with r free) is
-    #    detected and M_s_r preferred
-    scen = {'chi2': {M0: BAD},
-            'resid': {(M0, 'd'): -100., ('M_none_0', 's'): -90.},
-            'logZ': {M0: -0.5 * BAD, 'M_d_r': -0.5 * BAD - 5.,
-                     'M_s_r': -0.5 * BAD + 5.}}
-    res, path, F = run(scen)
-    check("Res_wr: detected but none preferred -> Res_r0 (also without "
-          "moments in M_0,r), where s is found",
-          resid_calls(F, 'M_none_0')[:2] == ['d', 's']
-          and ('replace', 'M_s_r') in path)
+    # chain with nothing preferred -> r0chain No, 3 sigma
+    res, path, F, ev = run({'r': {M0: R2},
+                            'resid': {('M_none_0', 's11'): 5.},
+                            'logZ': {'M_s11_r': BAD, 'M_s11_0': BAD}})
+    check("Res_r0: nothing preferred -> 3 sigma test on M_0,r",
+          res['model'] == M0 and ('r3sigma', 'Yes') in path
+          and not any(n == 'm10' for n, _ in path))
 
-    # 7. Res_wr empty, Res_r0: dT detected, M_dT_r preferred -> loop;
-    #    after a replacement from Res_r0 Res_wr is skipped
-    scen = {'chi2': {M0: BAD, 'M_dT_r': BAD},
-            'resid': {('M_none_0', 'dT'): -90., ('M_none_0', 'd'): -95.,
-                      ('M_dT_0', 'd'): -80.},
-            'logZ': {'M_dT_r': GOOD, 'M_d+dT_r': GOOD + 10.}}
-    res, path, F = run(scen)
-    check("Res_r0: best detected (dT) adopted",
-          ('replace', 'M_dT_r') in path)
-    check("  next iteration skips Res_wr and goes to Res_r0",
-          resid_calls(F, 'M_dT_r') == []
-          and resid_calls(F, 'M_dT_0') == ['d', 's', 'ds1']
-          and ('replace', 'M_d+dT_r') in path)
+    # order in Res_r0 by Delta AIC with the ML fits with r = 0: s11 (larger
+    # chi2 gain) before d11
+    res, path, F, ev = run({'r': {M0: R2},
+                            'resid': {('M_none_0', 'd11'): 3.,
+                                      ('M_none_0', 's11'): 3.},
+                            'chi2': {'M_none_0': 310., 'M_d11_0': 306.,
+                                     'M_s11_0': 300.},
+                            'logZ': {'M_d11_r': BAD, 'M_s11_r': BAD,
+                                     'M_d11_0': BAD, 'M_s11_0': BAD}})
+    order = [e for e in ev if e['node'] == 'r0order'][0]['order']
+    check("Res_r0: order by Delta AIC (s11 -8, d11 -2)",
+          [o[0] for o in order] == ['s11', 'd11']
+          and abs(order[0][1] + 8.) < 1e-9)
 
-    # 8. Res_r0: d2 only after d
-    scen = {'chi2': {M0: BAD, 'M_d_r': BAD},
-            'resid': {(M0, 'd'): -100., ('M_d_0', 'd2'): -80.},
-            'logZ': {'M_d_r': GOOD, 'M_d+d2_r': GOOD + 10.}}
-    res, path, F = run(scen)
-    check("d2 tested only when d is in the model",
-          'd2' not in resid_calls(F, 'M_none_0')
-          and resid_calls(F, 'M_d_0') == ['s', 'dT', 'd2', 'ds1']
-          and ('replace', 'M_d+d2_r') in path)
+    # ML estimate of ln B clearly below the threshold -> no evidence run
+    res, path, F, ev = run({'r': {M0: R2}, 'resid': {(M0, 'd11'): 5.},
+                            'chi2': {'M_d11_r': 400.}}, approx_skip=5.)
+    pref = [e for e in ev if e['node'] == 'pref']
+    check("ML estimate clearly below the threshold -> rejected without the "
+          "evidence run", pref and pref[0].get('method') == 'ML estimate'
+          and ('full', 'M_d11_r') not in F.calls)
 
-    # 9. Res_r0: d and s detected; each in order (d first) as M_1,r then
-    #    M_1,0, none preferred; next round on the residuals of M_d_0 (the
-    #    first family), nothing there -> 3 sigma on M_0,r; the chain (d)
-    #    logged for the profile
-    scen = {'r': {M0: (0.012, 0.003)},
-            'resid': {('M_none_0', 'd'): -100., ('M_none_0', 's'): -110.},
-            'logZ': {M0: -150., 'M_d_r': -150.5, 'M_d_0': -152.}}
-    res, path, F = run(scen)
-    ev = log_events(scen)
-    chain = [e for e in ev if e['node'] == 'r0chain'][-1]
-    c = F.calls
-    check("Res_r0: d then s, each as M_1,r then M_1,0, then 3 sigma",
-          path[-2][0] == 'r3sigma' and res['model'] == M0
-          and c.index(('screen', 'M_d_r')) < c.index(('full', 'M_d_0'))
-          < c.index(('screen', 'M_s_r')) < c.index(('full', 'M_s_0'))
-          and resid_calls(F, 'M_d_0') == ['s', 'd2'])
-    check("  chain of families in the log for the profile scheme",
-          chain['answer'] == 'No' and chain['families'] == ['d']
-          and chain['base'] == M0)
+    # borderline: |ln B| < 2 errors -> reruns; |ln B| < 1 -> undecided flag
+    res, path, F, _ = run({'r': {M0: R2, 'M_d11_r': R2},
+                           'resid': {(M0, 'd11'): 5.},
+                           'logZ': {M0: 0., 'M_d11_r': 0.1},
+                           'logZerr': {M0: 0.1, 'M_d11_r': 0.1},
+                           'reruns': {'M_d11_r': [0.5, 0.5]}},
+                          seed_max_runs=3)
+    check("borderline ln B: evidence runs repeated, choice flagged ≈",
+          ('rerun', 'M_d11_r') in F.calls and res['undecided']
+          and res['undecided_choices'][0]['kind'] == 'M_1,r vs M_0,r')
 
-    # 9b. s found in the residuals of M_d_0 -> M_1,0 = M_d+s,0 (new spectra
-    #     pruned with r = 0), M_1,r not preferred, M_1,0 preferred -> stop;
-    #     Bayesian result: 3 sigma test on M_0,r
-    scen['resid'][('M_d_0', 's')] = -105.
-    scen['resid_off'] = {('M_d_0', 's'): ['A_s_w00w10']}
-    DS0 = 'M_d+s-s_w00w10_0'
-    scen['logZ'][DS0] = -140.
-    res, path, F = run(scen)
-    chain = [e for e in log_events(scen) if e['node'] == 'r0chain'][-1]
-    check("second round: M_d+s,0 preferred -> M_1 = M_d+s, 3 sigma on M_0,r",
-          ('m10', 'M_d+s-s_w00w10_r') in path
-          and path[-2][0] == 'r3sigma' and res['model'] == M0
-          and res['conclusion'] == 'r_detection')
-    check("  second round pruned with r = 0, M_1,r compared first, chain "
-          "d, s with the residual screening",
-          ('screen', DS0) in F.calls
-          and ('screen', 'M_d+s-s_w00w10_r') in F.calls
-          and [e[1] for e in path if e[0] == 'pref'][-2:] == ['No', 'Yes']
-          and chain['families'] == ['d', 's']
-          and chain['pruned'] == [[], ['A_s_w00w10']])
-
-    # 9c. M_d_0 already preferred -> M_1 = M_d, no second round
-    scen['logZ']['M_d_0'] = -145.
-    res, path, F = run(scen)
-    check("  M_1,0 of the first family preferred: no second round",
-          ('m10', 'M_d_r') in path and path[-2][0] == 'r3sigma'
-          and resid_calls(F, 'M_d_0') == [])
-
-    # 9e. the first family (d) pruned to nothing with r = 0 -> the next one
-    #     (s) is tried; M_s,0 preferred
-    scen = {'r': {M0: (0.012, 0.003)},
-            'resid': {('M_none_0', 'd'): -100., ('M_none_0', 's'): -110.},
-            'logZ': {M0: -150., 'M_s_0': -140.},
-            'amps': {'M_d_0': {'A_d_w00w10': (0.1, 1.), 'A_d_w10w10': (0.1, 1.)}}}
-    res, path, F = run(scen)
-    check("Res_r0: family pruned to nothing with r = 0 -> next family",
-          ('pruned_out', 'rejected') in path and ('full', 'M_d_0') not in F.calls
-          and ('screen', 'M_s_0') in F.calls and ('m10', 'M_s_r') in path)
-
-    # 9f. the case of the flowchart question: M_1,r pruned to nothing with r
-    #     free (r absorbs the moment), but M_1,0 (pruned with r = 0) is
-    #     preferred over M_0,r -> profile scheme
-    scen = {'r': {M0: (0.012, 0.003)},
-            'resid': {('M_none_0', 'd'): -100.},
-            'logZ': {M0: -150., 'M_d_0': -140.},
-            'amps': {'M_d_r': {'A_d_w00w10': (0.1, 1.), 'A_d_w10w10': (0.1, 1.)}}}
-    res, path, F = run(scen)
-    pr = [e for e in path if e[0] in ('pruned_out', 'pref')]
-    check("M_1,r rejected with r free, M_1,0 preferred -> profile scheme",
-          pr == [('pruned_out', 'rejected'), ('pref', 'Yes')]
-          and ('m10', 'M_d_r') in path and path[-2][0] == 'r3sigma')
-
-    # 9g. r = 0 pruning removes one spectrum: M_1,0 and M_1,r without it
-    D0 = 'M_d-d_w00w10_0'
-    scen = {'r': {M0: (0.012, 0.003)},
-            'resid': {('M_none_0', 'd'): -100.},
-            'logZ': {M0: -150., D0: -140.},
-            'amps': {'M_d_0': {'A_d_w00w10': (0.1, 1.)}}}
-    res, path, F = run(scen)
-    check("r = 0 pruning of one spectrum: M_1,0 and M_1,r without it",
-          ('full', D0) in F.calls and ('screen', 'M_d-d_w00w10_r') in F.calls
-          and ('full', 'M_d_0') not in F.calls
-          and ('m10', 'M_d-d_w00w10_r') in path)
-
-    # 9j. M_1,r preferred in Res_r0: no PolyChord of M_1,0 (its evidence
-    #     is needed only for the M_1,0 vs M_0,r comparison)
-    scen = {'r': {M0: (0.012, 0.003)},
-            'resid': {('M_none_0', 'd'): -100.},
-            'logZ': {M0: -150., 'M_d_r': -140.}}
-    res, path, F = run(scen)
-    # (M_d_0 is fitted only at the very end, as the final model with r = 0)
-    c = F.calls
-    check("M_1,r preferred in Res_r0: no PolyChord of M_1,0 (only the final "
-          "model with r = 0 at the end, ln B reported)",
-          ('replace', 'M_d_r') in path and ('screen', 'M_d_0') in c
-          and c.count(('full', 'M_d_0')) == 1
-          and c.index(('full', 'M_d_0')) > c.index(('full', 'M_d_r'))
-          and 'lnB_rfree_vs_r0' in res)
-
-    # 9h. s not detected in the first round of the chain: not tested again
-    #     on the residuals of M_d_0 (even if it would be detected there)
-    scen = {'r': {M0: (0.012, 0.003)},
-            'resid': {('M_none_0', 'd'): -100., ('M_d_0', 's'): -90.},
-            'logZ': {M0: -150., 'M_d_r': -150.5, 'M_d_0': -152.}}
-    res, path, F = run(scen)
-    check("family not detected in a round is not retested in the next ones",
-          {'s', 'dT'} <= set(resid_calls(F, 'M_none_0'))
-          and not {'s', 'dT'} & set(resid_calls(F, 'M_d_0'))
-          and 'd2' in resid_calls(F, 'M_d_0')
-          and path[-2][0] == 'r3sigma')
-
-    # 9i. d pruned to nothing with r = 0 in the first round, s taken
-    #     instead and not preferred: d not tested again on the residuals of
-    #     M_s_0 (even if it would be detected there)
-    scen = {'r': {M0: (0.012, 0.003)},
-            'resid': {('M_none_0', 'd'): -100., ('M_none_0', 's'): -110.,
-                      ('M_s_0', 'd'): -90., ('M_s_0', 'ds1'): -95.},
-            'logZ': {M0: -150., 'M_s_r': -150.5, 'M_s_0': -152.},
-            'amps': {'M_d_0': {'A_d_w00w10': (0.1, 1.), 'A_d_w10w10': (0.1, 1.)}}}
-    res, path, F = run(scen)
-    check("family pruned to nothing with r = 0 is not retested",
-          ('pruned_out', 'rejected') in path and ('screen', 'M_s_0') in F.calls
-          and 'd' not in resid_calls(F, 'M_s_0'))
-
-    # 9d. the first family preferred as M_1,r -> adopted; s only screened
-    #     with r = 0 (for the order), never tried as M_1,r or M_1,0
-    scen = {'r': {M0: (0.012, 0.003)},
-            'resid': {('M_none_0', 'd'): -100., ('M_none_0', 's'): -110.},
-            'logZ': {M0: -150., 'M_d_r': -140.}}
-    res, path, F = run(scen)
-    check("Res_r0: first family preferred as M_1,r -> adopted",
-          ('replace', 'M_d_r') in path and ('screen', 'M_s_0') in F.calls
-          and ('screen', 'M_s_r') not in F.calls
-          and ('full', 'M_s_0') not in F.calls)
-
-    # 9k. order by Delta BIC after the pruning with r = 0: s (lower chi2 of
-    #     its M_1,0) tried before d, although d comes first in the residuals
-    scen = {'r': {M0: (0.012, 0.003)},
-            'resid': {('M_none_0', 'd'): -100., ('M_none_0', 's'): -110.},
-            'chi2': {'M_s_0': NDATA - 11 - 30.},
-            'logZ': {M0: -150., 'M_s_0': -160.}}
-    res, path, F = run(scen)
-    c = F.calls
-    order = [e for e in log_events(scen) if e['node'] == 'r0order'][0]
-    check("Res_r0: families ordered by Delta BIC after the pruning (s, d)",
-          [o[0] for o in order['order']] == ['s', 'd']
-          and c.index(('screen', 'M_s_r')) < c.index(('screen', 'M_d_r')))
-
-    # 9l. d: M_1,r and M_1,0 not preferred; s (second): M_1,r preferred ->
-    #     adopted
-    scen = {'r': {M0: (0.012, 0.003)},
-            'resid': {('M_none_0', 'd'): -100., ('M_none_0', 's'): -110.},
-            'logZ': {M0: -150., 'M_s_r': -140.}}
-    res, path, F = run(scen)
-    check("second family adopted as M_1,r after the first one lost",
-          ('full', 'M_d_0') in F.calls and ('replace', 'M_s_r') in path)
-
-    # 9m. s (second): M_1,r not preferred, M_1,0 preferred -> profile scheme
-    #     with M_1 = M_s
-    scen = {'r': {M0: (0.012, 0.003)},
-            'resid': {('M_none_0', 'd'): -100., ('M_none_0', 's'): -110.},
-            'logZ': {M0: -150., 'M_s_0': -140.}}
-    res, path, F = run(scen)
-    check("second family: M_1,0 preferred -> profile scheme with M_1 = M_s",
-          ('m10', 'M_s_r') in path and path[-2][0] == 'r3sigma')
-
-    # 9n. ML estimate first: M_1,0 = M_d_0 much worse than M_0,r -> rejected
-    #     without its PolyChord; M_1,r (borderline) still with PolyChord
-    scen = {'r': {M0: (0.012, 0.003)},
-            'resid': {('M_none_0', 'd'): -100.},
-            'chi2': {'M_d_0': NDATA - 8 + 60., 'M_d_r': NDATA - 10 - 15.},
-            'logZ': {M0: -150., 'M_d_r': -151.}}
-    ev = []
-    res, path, F = run(scen, approx_skip=5., log_out=ev)
-    bic = [e for e in ev if e.get('method')]
-    check("ML estimate first: M_1,0 clearly worse -> rejected without PolyChord",
-          ('full', 'M_d_0') not in F.calls and ('full', 'M_d_r') in F.calls
-          and len(bic) == 1 and bic[0]['question'].startswith('Is M_1,0'))
-
-    # 13. immediate pruning: A_d_w00w10 not detected in the full fit of
-    #     M_d_r -> the pruned model is compared directly, and adopted
-    scen = {'chi2': {M0: BAD},
-            'resid': {(M0, 'd'): -100.},
-            'logZ': {'M_d_r': GOOD, 'M_d-d_w00w10_r': GOOD + 1.},
-            'amps': {'M_d_r': {'A_d_w00w10': (0.1, 1.)}}}
-    res, path, F = run(scen)
-    check("immediate pruning: pruned model compared and adopted",
-          ('screen', 'M_d_r') in F.calls and ('full', 'M_d_r') not in F.calls
-          and ('prune_check', 'Yes') in path
-          and ('replace', 'M_d-d_w00w10_r') in path
-          and res['model'] == 'M_d-d_w00w10_r')
-
-    # 14. the full model would win, the pruned one does not -> not adopted
-    scen['logZ'] = {M0: -0.5 * BAD, 'M_d_r': GOOD,
-                    'M_d-d_w00w10_r': -0.5 * BAD - 5.}
-    res, path, F = run(scen)
-    check("immediate pruning: only the pruned model counts",
-          not any(n == 'replace' for n, _ in path)
-          and res['model'] == 'M_none_r')
-
-    # 15. comparison with pruning: M_d_r not preferred, but without its
-    #     undetected amplitude yes
-    scen = {'chi2': {M0: BAD},
-            'resid': {(M0, 'd'): -100.},
-            'logZ': {M0: -0.5 * BAD, 'M_d_r': -0.5 * BAD + 1.,
-                     'M_d-d_w00w10_r': GOOD},
-            'amps': {'M_d_r': {'A_d_w00w10': (0.1, 1.)}}}
-    res, path, F = run(scen)
-    check("comparison with pruning: pruned M_1,r adopted",
-          ('replace', 'M_d-d_w00w10_r') in path
-          and res['model'] == 'M_d-d_w00w10_r')
-
-    # 16. all the new amplitudes undetected -> no pruning, 3 sigma
-    scen['amps'] = {'M_d_r': {'A_d_w00w10': (0.1, 1.),
-                              'A_d_w10w10': (0.1, 1.)}}
-    res, path, F = run(scen)
-    check("  all new amplitudes undetected -> no pruned refit, 3 sigma",
-          ('full', 'M_d-d_w00w10_r') not in F.calls
-          and path[-2][0] == 'r3sigma')
-
-    # 17. spectrum removed by the pruning in Res_wr: not a candidate again in Res_r0
-    scen = {'chi2': {M0: BAD, 'M_d-d_w00w10_r': BAD},
-            'resid': {(M0, 'd'): -100.,
-                      ('M_d-d_w00w10_0', 'restore-d'): -80.},
-            'logZ': {M0: -0.5 * BAD, 'M_d_r': -0.5 * BAD + 1.,
-                     'M_d-d_w00w10_r': GOOD},
-            'amps': {'M_d_r': {'A_d_w00w10': (0.1, 1.)}}}
-    res, path, F = run(scen)
-    check("pruned spectrum NOT retested in Res_r0 (no restore by default)",
-          'restore-d' not in resid_calls(F, 'M_d-d_w00w10_0')
-          and F.calls.count(('screen', 'M_d_r')) == 1)
-
-    # 18. the new M_0,r is pruned right away: in the next round the
-    #     comparisons are with the pruned model
-    scen = {'chi2': {M0: BAD, 'M_d_r': BAD, 'M_d-d_w00w10_r': BAD},
-            'resid': {(M0, 'd'): -100.},
-            'logZ': {'M_d_r': GOOD, 'M_d-d_w00w10_r': GOOD + 3.},
-            'amps': {'M_d_r': {'A_d_w00w10': (0.1, 1.)}}}
-    res, path, F = run(scen)
-    check("adopted model pruned right away, next iteration on the pruned one",
-          resid_calls(F, 'M_d-d_w00w10_r') == ['s']
-          and resid_calls(F, 'M_d-d_w00w10_0')[:1] == ['s'])
-
-    # 18b. pruning of the full fit BEFORE the comparison: the screening
-    #      detects both spectra of d, the posterior of the full fit not
-    #      A_d_w00w10 -> the pruned model is compared and adopted, and not
-    #      pruned again after the adoption (set 22 rand of the validation)
-    X = -0.5 * BAD
-    scen = {'chi2': {M0: BAD},
-            'resid': {(M0, 'd'): -100.},
-            'logZ': {M0: X, 'M_d_r': X + 6., 'M_d-d_w00w10_r': X + 7.},
-            'amps_full': {'M_d_r': {'A_d_w00w10': (0.1, 1.)}}}
-    res, path, F = run(scen)
-    i_rep = [n for n, _ in path].index('replace')
-    check("full-fit pruning before the comparison: pruned model compared "
-          "and adopted",
-          ('pref', 'Yes') in path and ('replace', 'M_d-d_w00w10_r') in path
-          and ('prune', 'Yes') in path[:i_rep]
-          and not any(n == 'prune' for n, _ in path[i_rep:]))
-
-    # 18c. the full fit loses against M_0,r (ln B = -0.5) but the pruned
-    #      model wins (ln B = +0.5) -> adopted (with the pruning after the
-    #      adoption it was never compared)
-    scen['logZ'] = {M0: X, 'M_d_r': X - 0.5, 'M_d-d_w00w10_r': X + 0.5}
-    res, path, F = run(scen, lnB_preferred=0.)
-    check("  the pruned model, not the full one, is compared with M_0,r",
-          ('replace', 'M_d-d_w00w10_r') in path)
-
-    # 18c'. the pruned model is worse than the full one (ln B < 0): the
-    #       pruning is undone and the full model is compared
-    scen['logZ'] = {M0: X, 'M_d_r': X + 3., 'M_d-d_w00w10_r': X + 2.}
-    res, path, F = run(scen)
-    check("  pruned model worse than the full one -> pruning undone",
-          ('prune', 'No') in path and ('replace', 'M_d_r') in path)
-
-    # 18d. the posterior of the full fit leaves no new spectrum -> candidate
-    #      rejected (sets 36 and 81 d9s4 of the validation)
-    scen = {'chi2': {M0: BAD},
-            'resid': {(M0, 's'): -100.},
-            'logZ': {M0: X, 'M_s_r': X + 0.5,
-                     'M_s-s_w00w10-s_w10w10_r': X + 0.8},
-            'amps_full': {'M_s_r': {'A_s_w00w10': (0.1, 1.),
-                                    'A_s_w10w10': (0.1, 1.)}}}
-    res, path, F = run(scen, lnB_preferred=0.)
-    check("  no new spectrum left after the pruning -> candidate rejected",
-          ('pruned_out', 'rejected') in path
-          and not any(n == 'replace' for n, _ in path))
-
-    # 19. second round: s detected in Res_wr but not preferred; the model
-    #     already has d -> to Res_r0 (not to the 3 sigma test)
-    scen = {'chi2': {M0: BAD, 'M_d_r': BAD},
-            'resid': {(M0, 'd'): -100., ('M_d_r', 's'): -90.},
-            'logZ': {'M_d_r': GOOD, 'M_d+s_r': GOOD - 5.}}
-    res, path, F = run(scen)
-    check("Res_wr candidates not preferred with moments already in -> Res_r0",
-          ('full', 'M_d+s_r') in F.calls
-          and resid_calls(F, 'M_d_0') == ['s', 'dT', 'd2', 'ds1'])
-
-    # 20. borderline comparison (ln B = 2.6 +- 0.57 with threshold 2.5):
-    #     PolyChord repeated with other seeds on both models; the mean drops
-    #     to ln B = 1.85 -> d not adopted. Without repetitions it would be.
-    scen = {'chi2': {M0: BAD, 'M_d_r': BAD},
-            'resid': {(M0, 'd'): -100.},
-            'logZ': {M0: -200., 'M_d_r': -197.4},
-            'logZerr': {M0: 0.4, 'M_d_r': 0.4},
-            'reruns': {'M_d_r': [-198.4, -198.2, -198.6]}}
-    res, path, F = run(scen, seed_max_runs=4)
-    reruns = [c[1] for c in F.calls if c[0] == 'rerun']
-    pref = [a for n, a in path if n == 'pref']
-    # (stops when |ln B - 2.5| = 0.65 exceeds 2 x 0.31: 4 + 3 runs)
-    check("borderline lnB -> reruns alternated until out of the band",
-          reruns.count('M_d_r') == 3 and reruns.count(M0) == 2
-          and pref[0] == 'No')
-    res, path, F = run(scen, seed_max_runs=1)
-    pref = [a for n, a in path if n == 'pref']
-    check("seed_max_runs = 1: no reruns, single-run decision",
-          not any(c[0] == 'rerun' for c in F.calls) and pref[0] == 'Yes')
-    check("  still within 2 errors: choice flagged in the conclusion",
-          res['undecided'] and res['undecided_choices'][0]['chosen']
-          == 'M_d_r' and res['undecided_choices'][0]['other'] == M0)
-    # far from the threshold: no repetition
-    scen['logZ']['M_d_r'] = -190.
-    res, path, F = run(scen, seed_max_runs=4)
-    check("clear lnB -> no reruns",
-          not any(c[0] == 'rerun' for c in F.calls))
-    check("  clear lnB -> no undecided flag", not res['undecided'])
-
-    # 21. group s with all its spectra pruned: does not satisfy the
-    #     requirements of s2 / ds1 / ds2, but can still be restored
-    m = dt.Model(frozenset({'d', 's'}), True,
-                 frozenset({'A_d_w00w10', 'A_s_w00w10', 'A_s_w10w10'}))
-    c = dt.candidate_groups(m, ['dT', 'd2', 's2', 'ds1', 'ds2'],
-                            restore=True, extra_requires={'ds1': ['s']})
-    check("fully pruned group does not satisfy requirements",
-          'd2' in c and not {'s2', 'ds1', 'ds2'} & set(c)
-          and 'restore-s' in c)
-
-    # 22. case d10s5 r = 0.03: s detected in the residuals but, pruned, no
-    #     spectrum of s is left -> rejected (Res_wr and Res_r0), no cycle,
-    #     3 sigma test on the pruned d
-    Ms = 'M_d+s-d_w00w10_r'
-    Mp = 'M_d+s-d_w00w10-s_w00w10_r'
-    scen = {'chi2': {M0: BAD},
-            'resid': {(M0, 'd'): -100., ('M_d-d_w00w10_r', 's'): -90.,
-                      ('M_d-d_w00w10_0', 's'): -80.},
-            'logZ': {'M_d_r': GOOD, 'M_d-d_w00w10_r': GOOD + 1.,
-                     Ms: GOOD + 1.5, Mp: GOOD + 0.5},
-            'r': {m: (0.03, 0.005) for m in
-                  ['M_d_r', 'M_d-d_w00w10_r', Ms, Mp]},
-            'amps': {'M_d_r': {'A_d_w00w10': (0.1, 1.)},
-                     Ms: {'A_s_w00w10': (0.1, 1.), 'A_s_w10w10': (1., 0.1)},
-                     Mp: {'A_s_w10w10': (0.1, 1.)}}}
-    res, path, F = run(scen, lnB_preferred=0.)
-    check("new group pruned to nothing -> rejected, no cycle, 3 sigma",
-          path.count(('pruned_out', 'rejected')) == 2
-          and ('cycle', 'Yes') not in path
-          and res['conclusion'] == 'r_detection'
-          and res['model'] == 'M_d-d_w00w10_r')
-
-    # 23. Res_r0: the best candidate (s2) cannot be fitted -> the next one
-    #     (d2) is tried
-    scen = {'chi2': {M0: BAD, 'M_d+s_r': BAD},
-            'resid': {(M0, 'd'): -100., ('M_d_r', 's'): -95.,
-                      ('M_d+s_0', 's2'): -80., ('M_d+s_0', 'd2'): -85.},
-            'logZ': {'M_d_r': GOOD, 'M_d+s_r': GOOD + 1.},
-            'r': {'M_d_r': (0.03, 0.005), 'M_d+s_r': (0.03, 0.005)},
-            'unfittable': {'M_d+s+s2_0'}}
-    res, path, F = run(scen, lnB_preferred=0.)
-    check("Res_r0: unfittable best candidate skipped, next one tried",
+    # unfittable candidate: skipped
+    res, path, F, _ = run({'r': {M0: R2}, 'resid': {(M0, 'd11'): 5.},
+                           'unfittable': ['M_d11_r']})
+    check("candidate with no valid starting point -> skipped",
           ('unfittable', 'skipped') in path
-          and ('screen', 'M_d+d2+s_0') in F.calls)
+          and res['conclusion'] == 'upper_limit')
 
-    # 24. pruning in the residual test: A_d_w00w10 not detected by the
-    #     screening -> the candidate starts without it (no screening of the
-    #     model with A_d_w00w10)
-    scen = {'chi2': {M0: BAD},
-            'resid': {(M0, 'd'): -100.},
-            'resid_off': {(M0, 'd'): ['A_d_w00w10']},
-            'logZ': {'M_d-d_w00w10_r': GOOD}}
-    res, path, F = run(scen)
-    check("residual test pruning: candidate starts already pruned",
-          ('screen', 'M_d_r') not in F.calls
-          and ('screen', 'M_d-d_w00w10_r') in F.calls
-          and res['model'] == 'M_d-d_w00w10_r')
+    # start from a given model
+    res, path, F, _ = run({'r': {'M_d11+s11_r': R2}},
+                          initial_model='M_d11+s11_r')
+    check("run: initial_model: the tree starts from M_d11+s11_r",
+          F.calls[0] == ('full', 'M_d11+s11_r')
+          and resid_calls(F, 'M_d11+s11_r') == ['d01', 's01'])
 
-    print("\nLikelihood-ratio residual test:")
-    test_lrt()
-    test_bic()
-    test_aic()
+    # always preferred -> stops at max_iterations
+    always = {lab: 100. * i for i, lab in enumerate(
+        ['M_d11_r', 'M_d01+d11_r', 'M_d01+d11+s11_r',
+         'M_d01+d11+s01+s11_r'], 1)}
+    resid = {(M0, 'd11'): 5., ('M_d11_r', 'd01'): 5.,
+             ('M_d01+d11_r', 's11'): 5., ('M_d01+d11+s11_r', 's01'): 5.}
+    res, path, F, _ = run({'r': {k: R2 for k in [M0] + list(always)},
+                           'resid': resid, 'logZ': always})
+    check("one spectrum at a time up to M_d01+d11+s01+s11_r",
+          [a for n, a in path if n == 'replace']
+          == ['M_d11_r', 'M_d01+d11_r', 'M_d01+d11+s11_r',
+              'M_d01+d11+s01+s11_r'])
+
+    print("\nMoment groups:")
+    test_models()
+    print("\nResidual tests:")
+    test_residuals()
     print("\nGenerated BBCompSep configs:")
     test_configs()
-    print("\nHPD and detection:")
-    test_hpd()
     print("\nNested ML fits:")
     test_nested_ml()
     print("\nAll tests passed.")
 
 
-def test_lrt():
-    """Fitter with residual_test: lrt, on a runner that returns given chi2:
-    detection from Delta chi2 with k = amplitudes, order by log p."""
-    class R:
-        base = load_yaml(os.path.join(REPO, 'configs',
-                                      'base_config_tree.yml'))
+def test_models():
+    m = dt.model_from_label('M_d01+d11+s11_0')
+    check("labels: M_d01+d11+s11_0 <-> Model",
+          m.label == 'M_d01+d11+s11_0' and not m.r_free
+          and m.moments == {'d01', 'd11', 's11'})
+    try:
+        dt.model_from_label('M_d+s-d_w00w10_r')
+        ok = False
+    except ValueError:
+        ok = True
+    check("  family labels of the old trees are rejected", ok)
+    check("one spectrum per group",
+          all(len(G['spectra']) == 1 for G in dt.MOMENT_GROUPS.values()))
+    check("requirements: d01 needs d11, d12 needs d11 and d22, ds11 needs "
+          "d11 and s11",
+          dt.requirements('d01') == ['d11']
+          and set(dt.requirements('d12')) == {'d11', 'd22'}
+          and set(dt.requirements('ds11')) == {'d11', 's11'})
+    none = dt.Model()
+    check("  candidates of M_none: only groups without requirements",
+          dt.candidate_groups(none, RES_R0) == ['d11', 's11', 'dT11'])
+    check("  requirements_met",
+          dt.requirements_met(dt.Model(frozenset({'d11', 'd01'})))
+          and not dt.requirements_met(dt.Model(frozenset({'d01'}))))
+    check("beta_d x T_d only with d11 and dT11",
+          ('component_1', 'd', 'w10w01') in dt.group_spectra({'d11', 'dT11'})
+          and ('component_1', 'd', 'w10w01')
+          not in dt.group_spectra({'dT11'})
+          and dt.group_amplitudes('dT11') == ['A_d_w01w01', 'A_d_w10w01'])
 
-        def __init__(self, chi2):
-            self.chi2, self.calls = chi2, []
 
-        def ml(self, model, tag, fixed=None, centers=None):
-            self.calls.append(tag)
-            return dt.FitResult(model, tag, ['A'], {'A': 0.5},
-                                self.chi2[tag], NDATA)
+class FakeRunner:
+    base = load_yaml(os.path.join(REPO, 'configs', 'base_config_tree.yml'))
 
+    def __init__(self, chi2):
+        self.chi2, self.calls = chi2, []
+
+    def ml(self, model, tag, fixed=None, centers=None):
+        self.calls.append(tag)
+        return dt.FitResult(model, tag, ['A'], {'A': 0.5}, self.chi2[tag],
+                            NDATA)
+
+
+def test_residuals():
     base = dt.FitResult(dt.Model(frozenset(), False), 'b', ['p'], {'p': 0.},
                         400., NDATA)
     tag = 'resid_M_none_0_plus_'
-    r = R({tag + 'd_ML': 397., tag + 's_ML': 399., tag + 'dT_ML': 390.})
-    F = dt.Fitter(r, residual_test='lrt', lrt_p=0.3173)
-    d, s_, dT = (F.residual_test(base, g) for g in ('d', 's', 'dT'))
-    check("Delta chi2 = 3 with 2 amplitudes: p = 0.22 < 0.32 -> detected",
-          d.detected and abs(d.pvalue - np.exp(-1.5)) < 1e-9
-          and d.stage == 'lrt' and d.off == ())
-    check("  Delta chi2 = 1: p = 0.61 -> not detected",
-          not s_.detected and abs(s_.dchi2 - 1.) < 1e-12)
-    check("  order by log p (dT, Delta chi2 = 10, before d), only ML fits",
-          sorted([d, dT], key=lambda x: x.rank)[0].group == 'dT'
-          and all(t.endswith('_ML') for t in r.calls))
-
-
-def test_aic():
-    """Fitter with residual_test: aic: detected if Delta chi2 > 2k."""
-    class R:
-        base = load_yaml(os.path.join(REPO, 'configs',
-                                      'base_config_tree.yml'))
-
-        def __init__(self, chi2):
-            self.chi2 = chi2
-
-        def ml(self, model, tag, fixed=None, centers=None):
-            return dt.FitResult(model, tag, ['A'], {'A': 0.5},
-                                self.chi2[tag], NDATA)
-
-    base = dt.FitResult(dt.Model(frozenset(), False), 'b', ['p'], {'p': 0.},
-                        400., NDATA)
-    tag = 'resid_M_none_0_plus_'
-    r = R({tag + 'd_ML': 400. - 3.9, tag + 's_ML': 400. - 4.1})
-    F = dt.Fitter(r, residual_test='aic')
-    d, s_ = (F.residual_test(base, g) for g in ('d', 's'))
-    check("AIC: d (2 amplitudes) with Delta chi2 = 3.9 < 4 -> not detected",
-          not d.detected and abs(d.thr - 4.) < 1e-9)
-    check("  s with Delta chi2 = 4.1 > 4 -> detected", s_.detected)
-    # order by Delta AIC: d2 (3 amplitudes, Delta chi2 = 12 -> -6) before
-    # s (2 amplitudes, Delta chi2 = 8 -> -4); with BIC s would come first
-    base_d = dt.FitResult(dt.Model(frozenset({'d'}), False), 'b', ['p'],
+    F = dt.Fitter(FakeRunner({tag + 'd11_ML': 398.1, tag + 's11_ML': 397.9}),
+                  residual_test='aic')
+    d, s_ = (F.residual_test(base, g) for g in ('d11', 's11'))
+    check("AIC, k = 1: Delta chi2 = 1.9 < 2 not detected, 2.1 > 2 detected",
+          not d.detected and s_.detected and abs(d.thr - 2.) < 1e-9)
+    base_d = dt.FitResult(dt.Model(frozenset({'d11'}), False), 'b', ['p'],
                           {'p': 0.}, 400., NDATA)
-    tag_d = 'resid_M_d_0_plus_'
-    F2 = dt.Fitter(R({tag_d + 's_ML': 400. - 8., tag_d + 'd2_ML': 400. - 12.}),
-                   residual_test='aic')
-    s2_, d2 = (F2.residual_test(base_d, g) for g in ('s', 'd2'))
-    check("  order by Delta AIC: d2 (-6) before s (-4)",
-          sorted([s2_, d2], key=lambda x: x.rank)[0].group == 'd2'
-          and abs(F2.ic_penalty(3, base_d) - 6.) < 1e-9
-          and F2.ic_name() == 'AIC')
-
-
-def test_bic():
-    """Fitter with residual_test: bic: detected if Delta chi2 > k ln N."""
-    class R:
-        base = load_yaml(os.path.join(REPO, 'configs',
-                                      'base_config_tree.yml'))
-
-        def __init__(self, chi2):
-            self.chi2 = chi2
-
-        def ml(self, model, tag, fixed=None, centers=None):
-            return dt.FitResult(model, tag, ['A'], {'A': 0.5},
-                                self.chi2[tag], NDATA)
-
-    base = dt.FitResult(dt.Model(frozenset(), False), 'b', ['p'], {'p': 0.},
-                        400., NDATA)
-    tag = 'resid_M_none_0_plus_'
-    thr2 = 2 * np.log(NDATA)
-    r = R({tag + 'd_ML': 400. - thr2 + 0.5, tag + 's_ML': 400. - thr2 - 0.5})
-    F = dt.Fitter(r, residual_test='bic')
-    d, s_ = (F.residual_test(base, g) for g in ('d', 's'))
-    check(f"BIC: d (2 amplitudes) with Delta chi2 just below 2 ln N = "
-          f"{thr2:.1f} -> not detected", not d.detected
-          and abs(d.thr - thr2) < 1e-9)
-    check("  s with Delta chi2 just above 2 ln N -> detected", s_.detected)
-    # order by Delta BIC: s (2 amplitudes, Delta chi2 = 2 ln N + 3) before
-    # d2 (3 amplitudes, Delta chi2 = 3 ln N + 1), although d2 has the lower p
-    lnN = np.log(NDATA)
-    base_d = dt.FitResult(dt.Model(frozenset({'d'}), False), 'b', ['p'],
-                          {'p': 0.}, 400., NDATA)
-    tag_d = 'resid_M_d_0_plus_'
-    F2 = dt.Fitter(R({tag_d + 's_ML': 400. - 2 * lnN - 3,
-                      tag_d + 'd2_ML': 400. - 3 * lnN - 1}),
-                   residual_test='bic')
-    s2_, d2 = (F2.residual_test(base_d, g) for g in ('s', 'd2'))
-    check("  order by Delta BIC: s (-3) before d2 (-1), although d2 has "
-          "the lower p", s2_.detected and d2.detected
-          and sorted([d2, s2_], key=lambda x: x.rank)[0].group == 's'
-          and d2.pvalue < s2_.pvalue)
+    tag = 'resid_M_d11_0_plus_'
+    F = dt.Fitter(FakeRunner({tag + 'dT11_ML': 396.5}), residual_test='aic')
+    r = F.residual_test(base_d, 'dT11')
+    check("  dT11 with d11 there: k = 2 (T_d x T_d and beta_d x T_d), "
+          "threshold 4", not r.detected and abs(r.thr - 4.) < 1e-9)
+    F = dt.Fitter(FakeRunner({'resid_M_none_0_plus_d11_ML': 400. - 8.}),
+                  residual_test='bic')
+    r = F.residual_test(base, 'd11')
+    check("BIC: threshold ln N", r.detected
+          and abs(r.thr - np.log(NDATA)) < 1e-9)
+    F = dt.Fitter(FakeRunner({'resid_M_none_0_plus_d11_ML': 399.}),
+                  residual_test='lrt', lrt_p=0.3173)
+    r = F.residual_test(base, 'd11')
+    check("LRT: Delta chi2 = 1, k = 1: p = 0.317 -> not detected",
+          not r.detected and abs(r.pvalue - 0.3173) < 1e-3)
+    try:
+        dt.Fitter(FakeRunner({}), residual_test='bayes')
+        ok = False
+    except ValueError:
+        ok = True
+    check("residual_test: bayes no longer exists", ok)
 
 
 def test_configs():
@@ -789,8 +384,9 @@ def test_configs():
         print("  (bbpower not importable: skipping the ParameterManager "
               "check)")
 
-    for mom in [frozenset(), {'d'}, {'s'}, {'dT'}, {'d', 'dT'},
-                {'d', 'd2'}, {'d', 's', 's2'}, {'ds1'}, {'d', 's', 'ds2'}]:
+    for mom in [frozenset(), {'d11'}, {'s11'}, {'dT11'}, {'d11', 'dT11'},
+                {'d11', 'd01', 'd22'}, {'d11', 's11', 'ds11'},
+                {'s11', 'ds01'}, {'s11', 's22', 's12', 's02'}]:
         for rf in [True, False]:
             m = dt.Model(frozenset(mom), rf)
             cfg = dt.build_config(base, m, 'maximum_likelihood')
@@ -801,71 +397,33 @@ def test_configs():
                           dt.group_spectra(mom))
             check(f"{m.label}: free amplitudes {amps}",
                   ('r_tensor' in names) == rf and amps == want
-                  and ('temp_d' in names) == ('dT' in mom)
+                  and ('temp_d' in names) == bool({'dT11', 'dT01'} & mom)
                   and all(('alpha' + a[1:]) in names for a in amps))
             if ParameterManager:
                 pm = ParameterManager(cs)
                 check("  same order as ParameterManager",
                       pm.p_free_names == names)
 
-    m = dt.Model(frozenset({'d'}), True, frozenset({'A_d_w00w10'}))
-    names = dt.free_param_names(dt.build_config(base, m, 'polychord')
-                                ['BBCompSep'])
-    check(f"pruned model {m.label}: A_d_w00w10 and its slope fixed",
-          'A_d_w10w10' in names and 'A_d_w00w10' not in names
-          and 'alpha_d_w00w10' not in names)
-    check("  unpruned configs unchanged (runs reused)",
-          dt.build_config(base, dt.Model(frozenset({'d'})), 'polychord')
-          == dt.build_config(base, dt.Model(frozenset({'d'}), True,
-                                            frozenset()), 'polychord'))
-
-    check("cross spectrum w10w01 only with d and dT",
-          ('component_1', 'd', 'w10w01') in dt.group_spectra({'d', 'dT'})
-          and ('component_1', 'd', 'w10w01') not in dt.group_spectra({'dT'}))
-
     # residuals: everything fixed except the group and its beta
-    m = dt.Model(frozenset({'d'}), False)
+    m = dt.Model(frozenset({'d11'}), False)
     fixed = {n: 0.5 for n in ['amp_d_bb', 'alpha_d_bb', 'beta_s',
                               'epsilon_ds', 'amp_s_bb', 'alpha_s_bb']}
     fixed['r_tensor'] = 0.003
     cs = dt.build_config(base, m, 'emcee', fixed=fixed)['BBCompSep']
     free = dt.free_param_names(cs)
     check(f"residuals: only the group and its beta free ({free})",
-          sorted(free) == sorted(['beta_d', 'A_d_w00w10', 'A_d_w10w10',
-                                  'alpha_d_w00w10', 'alpha_d_w10w10'])
+          sorted(free) == sorted(['beta_d', 'A_d_w10w10', 'alpha_d_w10w10'])
           and cs['cmb_model']['params']['r_tensor'][2] == [0.003])
     check("  the base config is not modified",
           base['BBCompSep']['cmb_model']['params']['r_tensor'][1] == 'tophat')
 
 
-def test_hpd():
-    rng = np.random.default_rng(2)     # indipendente dagli scenari
-    x = rng.normal(1., 0.5, 200000)
-    lo, hi = dt.hpd_interval(x)
-    check(f"HPD of a Gaussian = central 68% ({lo:.3f}, {hi:.3f})",
-          abs(lo - 0.5) < 0.02 and abs(hi - 1.5) < 0.02)
-    y = np.abs(rng.normal(0., 1., 200000))
-    lo, _ = dt.hpd_interval(y, bounds=(0., 10.))
-    check(f"HPD of a half-Gaussian with prior >= 0 starts at 0 ({lo})",
-          lo == 0.)
-    z = 3. + np.abs(rng.normal(0., 1., 200000))
-    lo, _ = dt.hpd_interval(z, bounds=(0., 10.))
-    check(f"  but not if the posterior is away from the edge ({lo:.3f})",
-          lo > 2.9)
-    names = ['A', 'B']
-    s = np.vstack([y, rng.normal(3., 1., len(y))]).T
-    b = {'A': (0., 10.), 'B': (-10., 10.)}
-    check("detection: B away from zero -> detected, A alone not",
-          dt.detection(names, s, ['A', 'B'], bounds=b)[0]
-          and not dt.detection(names, s, ['A'], bounds=b)[0])
-
-
 def test_nested_ml():
     """A fit worse than the model it contains is redone from its best fit."""
-    small = dt.Model(frozenset({'d'}), True)
-    big = small.plus('s')
+    small = dt.Model(frozenset({'d11'}), True)
+    big = small.plus('s11')
 
-    class FakeRunner:
+    class R:
         def __init__(self):
             self.tags = []
 
@@ -876,22 +434,24 @@ def test_nested_ml():
             elif tag.endswith('_ML'):
                 chi2 = 600.                  # stuck minimizer
             else:
-                # restart from the best fit of the smaller model
-                chi2 = 515. if centers and centers.get('A_s_w10w10') == 0. else 600.
+                chi2 = (515. if centers and centers.get('A_s_w10w10') == 0.
+                        else 600.)
             return dt.FitResult(model, tag, ['p'], {'p': 1.}, chi2, NDATA)
 
-    R = FakeRunner()
-    F = dt.Fitter(R)
+    r = R()
+    F = dt.Fitter(r)
     F.ml_fit(small)
     res = F.ml_fit(big)
     check("stuck fit of the bigger model redone from the smaller one",
           res.chi2 == 515. and res.tag.endswith('_MLn1'))
-    R2 = FakeRunner()
-    F2 = dt.Fitter(R2)
+    r2 = R()
+    F2 = dt.Fitter(r2)
     F2.ml_fit(big)
-    check("  no smaller model fitted: nothing redone", R2.tags == [big.label + '_ML'])
+    check("  no smaller model fitted: nothing redone",
+          r2.tags == [big.label + '_ML'])
     check("  contains(): r = 0 model inside the r-free one, not the opposite",
-          dt.contains(big, big.with_r(False)) and not dt.contains(big.with_r(False), big)
+          dt.contains(big, big.with_r(False))
+          and not dt.contains(big.with_r(False), big)
           and dt.contains(big, small) and not dt.contains(small, big))
 
 

@@ -9,8 +9,8 @@
 #
 # Sets already concluded are skipped, interrupted ones restart reusing the
 # fits already done: if the job runs out of time, just resubmit it.
-# Single-moment tree on the spectra already made (runs/set_*/tree_single/):
-#   sbatch -A <project> --export=ALL,TREE_TEMPLATE=tree_config_single.yml,TREE_DIR=tree_single <repo>/nersc/job_validation.slurm 0 49
+# Another tree config on the spectra already made (runs/set_*/<TREE_DIR>/):
+#   sbatch -A <project> --export=ALL,TREE_TEMPLATE=<config>,TREE_DIR=tree_v2 <repo>/nersc/job_validation.slurm 0 99
 #SBATCH -C cpu
 #SBATCH -q regular
 #SBATCH -N 1

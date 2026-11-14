@@ -1,7 +1,6 @@
 """
 High-level fit operations used by the tree and by the profile scheme: full
-fit (ML + PolyChord), screening fit (ML + emcee), residual test of a moment
-group.
+fit (ML + evidence run), ML fit, residual test of a moment group.
 """
 import copy
 import re
@@ -10,9 +9,9 @@ import numpy as np
 from scipy.stats import chi2 as chi2_dist
 
 from .config import iter_param_entries
-from .models import MOMENT_GROUPS, Model, cand_group
+from .models import MOMENT_GROUPS, Model
 from .runner import BBCompSepRunner, NoValidStart  # noqa: F401
-from .stats import FitResult, ResidualResult, detection
+from .stats import FitResult, ResidualResult
 
 # a fit of a model may not have a chi2 above that of a model it contains
 # (nested: same model with some amplitudes, or r, set to zero) by more
@@ -33,14 +32,15 @@ class Fitter:
     interface is used in tests/test_decision_tree.py.
     """
 
-    def __init__(self, runner: BBCompSepRunner, hpd_frac=0.68,
-                 residual_test='aic', lrt_p=0.3173):
+    def __init__(self, runner: BBCompSepRunner, residual_test='aic',
+                 lrt_p=0.3173):
         self.R = runner
-        self.hpd_frac = hpd_frac
-        # residual test: 'lrt' (likelihood ratio from two ML fits, detected
-        # if p < lrt_p), 'aic' / 'bic' (same fits, detected if
-        # Delta chi2 > 2k / k ln N, i.e. the AIC / BIC decreases) or 'bayes'
-        # (emcee HPD, PolyChord evidence)
+        # residual test, two ML fits: 'lrt' (likelihood ratio, detected if
+        # p < lrt_p) or 'aic' / 'bic' (detected if Delta chi2 > 2k / k ln N,
+        # i.e. the AIC / BIC decreases)
+        if residual_test not in ('lrt', 'aic', 'bic'):
+            raise ValueError(f"residual_test {residual_test!r}: lrt, aic or "
+                             "bic")
         self.residual_test_kind = residual_test
         self.lrt_p = lrt_p
         self._cache = {}
@@ -98,36 +98,25 @@ class Fitter:
         return {a: (float(entries[a][2][0]), float(entries[a][2][-1]))
                 for a in params}
 
-    def screen_fit(self, model: Model, centers=None) -> FitResult:
+    def ml_start(self, model: Model, centers=None) -> FitResult:
         """
-        ML + emcee (no evidence): only to see which amplitudes are detected
-        before the immediate pruning.
+        ML fit; if it starts outside the region allowed by the moment
+        constraints (lnL = -inf everywhere around), restart with all the
+        amplitudes at zero except the first-order auto-spectra (w10w10,
+        w01w01), which stay where they are: positivity and hierarchical
+        bound are satisfied (the zero of the tophats becomes 1e-6 of the
+        width, so first orders at zero would violate them too).
+        Raises NoValidStart if no valid starting point is found.
         """
-        key = ('screen', model)
-        if key in self._cache:
-            return self._cache[key]
-        res = copy.copy(self.ml_fit(model, centers=centers))
+        res = self.ml_fit(model, centers=centers)
         if not np.isfinite(res.chi2):
-            # start outside the region allowed by the moment constraints
-            # (lnL = -inf everywhere around): restart with all the amplitudes
-            # at zero except the first-order auto-spectra (w10w10, w01w01),
-            # which stay where they are: positivity and hierarchical bound
-            # are satisfied (the zero of the tophats becomes 1e-6 of the
-            # width, so first orders at zero would violate them too)
             start = dict(centers or {})
             start.update({a: 0. for a in model.amplitudes()
                           if not re.match(r'A_[ds]_(w10w10|w01w01)$', a)})
-            res = copy.copy(self.R.ml(model, f"{model.label}_ML0",
-                                      centers=start))
+            res = self.R.ml(model, f"{model.label}_ML0", centers=start)
             self._cache[('ml', model)] = res
         if not np.isfinite(res.chi2):
             raise NoValidStart(f"no valid starting point for {model.label}")
-        names, samp = self.R.emcee(model, f"{model.label}_MC",
-                                   centers=res.best)
-        res.sample_names, res.samples = names, samp
-        if 'r_tensor' in names:
-            res.r_samples = samp[:, names.index('r_tensor')]
-        self._cache[key] = res
         return res
 
     def ml_fit(self, model: Model, centers=None) -> FitResult:
@@ -176,50 +165,20 @@ class Fitter:
 
     def residual_test(self, base: FitResult, group) -> ResidualResult:
         """
-        Test of the moment group `group` on the residuals of `base` (or, with
-        'restore-<group>', of the spectra of that group removed by the
-        pruning).
-
-        Free: the spectra of the group (amplitudes and slopes, plus the cross
-        spectra with the groups already there) and the spectral parameters of
-        the group (MOMENT_GROUPS[...]['free']). Everything else is fixed at
-        the best fit of `base`, r included (0 if base has r fixed).
-
-        Screening with emcee: detected if zero is outside the HPD of at least
-        one amplitude. If detected, PolyChord: evidence and confirmation of
-        the detection with its samples.
+        Test of the moment group `group` on the residuals of `base`: ML fit
+        of the group (its spectrum, the cross spectrum with a group already
+        there, its spectral parameter MOMENT_GROUPS[...]['free']) with
+        everything else fixed at the best fit of `base`, r included (0 if
+        base has r fixed), against the best fit of base (_residual_lrt).
         """
-        m = base.model.apply(group).with_r(False)
-        free = set(MOMENT_GROUPS[cand_group(group)]['free'])
+        m = base.model.plus(group).with_r(False)
+        free = set(MOMENT_GROUPS[group]['free'])
         fixed = {k: v for k, v in base.best.items() if k not in free}
         fixed.setdefault('r_tensor', 0.0)
         old = set(base.model.amplitudes())
         amps = [a for a in m.amplitudes() if a not in old]
         tag = f"resid_{base.model.label}_plus_{group}"
-        bounds = self.prior_bounds(amps)
-
-        if self.residual_test_kind in ('lrt', 'aic', 'bic'):
-            return self._residual_lrt(base, group, m, fixed, amps, tag)
-        names, samp = self.R.emcee(m, tag + "_MC", fixed=fixed,
-                                   centers=base.best)
-        det, hpd = detection(names, samp, amps, self.hpd_frac, bounds)
-        if not det:
-            return ResidualResult(group, False, hpd, stage='emcee')
-        # immediate pruning: PolyChord only with the spectra detected by emcee
-        weak = tuple(a for a in amps if hpd[a][0] <= 0.0 <= hpd[a][1])
-        if weak:
-            m = m.without(weak)
-            amps = [a for a in amps if a not in weak]
-            tag += ''.join(f"-{a[2:]}" for a in weak)
-        logZ, logZerr, names, samp, m2lnl = self.R.polychord(
-            m, tag + "_PC", fixed=fixed, centers=base.best)
-        det, hpd_pc = detection(names, samp, amps, self.hpd_frac,
-                                self.prior_bounds(amps))
-        hpd.update(hpd_pc)
-        i = int(np.argmin(m2lnl))
-        best = dict(zip(names, map(float, samp[i])))
-        return ResidualResult(group, det, hpd, logZ, logZerr, best,
-                              stage='polychord', off=weak)
+        return self._residual_lrt(base, group, m, fixed, amps, tag)
 
     def ic_penalty(self, k, base):
         """
@@ -245,14 +204,14 @@ class Fitter:
         (chi2 with k degrees of freedom; 0.3173: 1 sigma, the analogue of
         zero outside the 68% HPD). 'aic' / 'bic': detected if
         Delta chi2 > 2k / k ln N (N = size of the data vector), i.e. if the
-        AIC / BIC of the model with the group is lower. No pruning of single
-        spectra: the group enters whole. Candidates ordered by log p ('lrt')
+        AIC / BIC of the model with the group is lower. Candidates ordered
+        by log p ('lrt')
         or by Delta AIC / Delta BIC = penalty - Delta chi2, lowest first.
         """
         res = self.R.ml(m, tag + "_ML", fixed=fixed, centers=base.best)
         if not np.isfinite(res.chi2):
             # start outside the moment constraints: amplitudes at zero
-            # except the first-order auto-spectra (as in screen_fit)
+            # except the first-order auto-spectra (as in ml_start)
             start = dict(base.best)
             start.update({a: 0. for a in amps
                           if not re.match(r'A_[ds]_(w10w10|w01w01)$', a)})
@@ -269,7 +228,6 @@ class Fitter:
             thr = float(chi2_dist.isf(self.lrt_p, k))
         # order: Delta AIC / BIC or log p (lrt), lowest first
         rank = thr - dchi2 if self.residual_test_kind != 'lrt' else logp
-        return ResidualResult(group, bool(dchi2 > thr), {},
-                              best=dict(res.best), stage='lrt',
-                              dchi2=dchi2, pvalue=float(np.exp(logp)),
-                              rank=rank, thr=thr)
+        return ResidualResult(group, bool(dchi2 > thr),
+                              best=dict(res.best), dchi2=dchi2,
+                              pvalue=float(np.exp(logp)), rank=rank, thr=thr)

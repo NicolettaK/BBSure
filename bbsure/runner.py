@@ -101,28 +101,8 @@ def equal_weights_file(run_dir):
 
 
 def evidence_run_dir(tree_dir, label):
-    """Directory of the evidence run (<label>_PC) of the model with this
-    label: the one of its canonical model (canonical_run), or the label
-    itself (runs made before the canonical models)."""
-    from .models import model_from_label
-    canon = model_from_label(label).canonical().label
-    d = os.path.join(tree_dir, f"{canon}_PC")
-    return d if os.path.isdir(d) else os.path.join(tree_dir, f"{label}_PC")
-
-
-def canonical_run(model, tag):
-    """
-    Model and run tag of an evidence or emcee run: the canonical model
-    (Model.canonical: groups left with no spectrum removed), with its label
-    in the tag, so that equivalent models (e.g. a group pruned to nothing)
-    share one run instead of repeating it. The ML fits keep their own runs
-    (cheap, and two minimizations from different starting points must not
-    overwrite each other).
-    """
-    cm = model.canonical()
-    if cm != model and model.label in tag:
-        tag = tag.replace(model.label, cm.label)
-    return cm, tag
+    """Directory of the evidence run (<label>_PC) of the model."""
+    return os.path.join(tree_dir, f"{label}_PC")
 
 
 def parse_polychord_stats(fname):
@@ -379,7 +359,6 @@ class BBCompSepRunner:
         Returns logZ, logZerr, names, samples [nsamp, npar], -2lnL.
         """
         sampler = self.evidence_sampler
-        model, tag = canonical_run(model, tag)
         cfg = build_config(self.base, model, sampler, fixed, centers,
                            free_temp=free_temp)
         names = free_param_names(cfg['BBCompSep'])
@@ -403,7 +382,6 @@ class BBCompSepRunner:
         after the burn-in (fraction burn_frac of the chain discarded).
         """
         c = self.mc_cfg
-        model, tag = canonical_run(model, tag)
         cfg = build_config(self.base, model, 'emcee', fixed, centers)
         names = free_param_names(cfg['BBCompSep'])
         # emcee (red-blue move) needs at least 2 walkers per parameter

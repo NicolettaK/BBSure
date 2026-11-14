@@ -4,10 +4,10 @@ Profile scheme: run on a concluded tree. The moments are searched with r = 0
 judged with every model at its own r, the minimum of its profile likelihood,
 instead of with r marginalised.
 
-1. M* = final model of the tree (M_0,r). Candidates: M* +
-   every combination of the families added to M_0,r in the last Res_r0 of
-   the tree (M_1 included), respecting the requirements of the families
-   (e.g. ds1 only with s); none if the tree concluded before Res_r0 or
+1. M* = final model of the tree (M_0,r). Candidates: M* + every
+   combination of the moment groups added to M_0,r in the last Res_r0 of
+   the tree (M_1 included), respecting the requirements of the groups
+   (e.g. d01 only with d11); none if the tree concluded before Res_r0 or
    nothing was detected there.
    With profile_scheme: candidates: false in the tree config the candidates
    are not compared: only the profile of M* (steps 4-6).
@@ -73,7 +73,7 @@ def moment_spectra(M):
 
 # spectral parameters free in every local evidence: beta_d and beta_s (dust
 # and synchrotron are in all the models), plus those of the model's own
-# moment families (T_d only with dT)
+# moment groups (T_d only with dT11 / dT01)
 BETAS = {'beta_d', 'beta_s'}
 
 
@@ -94,48 +94,43 @@ def last_res_r0(ev):
     return last
 
 
-def add_combinations(M0, fams):
+def add_combinations(M0, groups):
     """
-    M0 + every combination of the families fams = [(group, off)] (each with
-    the spectra of `off` removed): [(label, model)], label e.g. 'd2+s'.
+    M0 + every combination of the moment groups `groups`: [(label, model)],
+    label e.g. 'd22+s11'.
     """
-    fams = [(g, off) for g, off in fams if g not in M0.moments]
+    groups = [g for g in groups if g not in M0.moments]
     out = []
-    for k in range(1, len(fams) + 1):
-        for combo in itertools.combinations(fams, k):
+    for k in range(1, len(groups) + 1):
+        for combo in itertools.combinations(groups, k):
             M = M0
-            for g, off in combo:
-                M = M.apply(g).without(off)
-            out.append(('+'.join(g for g, _ in combo), M))
+            for g in combo:
+                M = M.plus(g)
+            out.append(('+'.join(combo), M))
     return out
 
 
 def chain_candidates(ev):
     """
-    Families added to M_0,r in the last Res_r0 of the tree (node
-    'r0chain'), with their removed spectra: [(group, off)]. Empty if there
-    is none or if the tree adopted a new model after it.
+    Groups added to M_0,r in the last Res_r0 of the tree (node 'r0chain').
+    Empty if there is none or if the tree adopted a new model after it.
     """
     idx = [i for i, e in enumerate(ev) if e['node'] == 'r0chain']
     if not idx or any(e['node'] == 'replace' for e in ev[idx[-1]:]):
         return []
-    e = ev[idx[-1]]
-    return list(zip(e['families'], e['pruned']))
+    return list(ev[idx[-1]]['families'])
 
 
 def res_r0_candidates(ev):
     """
-    Families detected in the last Res_r0 of the tree, with the spectra the
-    residual screening removed: [(group, off)]. Empty if there is no Res_r0
-    or if the tree adopted a new model after it. (Trees of the previous
-    versions, e.g. to choose the sets to rerun: scripts/prepare_rerun.py.)
+    Groups detected in the last Res_r0 of the tree. Empty if there is no
+    Res_r0 or if the tree adopted a new model after it. (To choose the sets
+    to rerun: scripts/prepare_rerun.py.)
     """
     last = last_res_r0(ev)
     if last is None or any(e['node'] == 'replace' for e in ev[last:]):
         return []
-    e = ev[last]
-    pruned = e.get('pruned') or [[] for _ in e.get('detected', [])]
-    return list(zip(e.get('detected', []), pruned))
+    return list(ev[last].get('detected', []))
 
 
 class ProfileScheme:
@@ -154,8 +149,7 @@ class ProfileScheme:
         self.out = out
         self.nproc = nproc
         self.log = DecisionLog(out)
-        self.F = Fitter(BBCompSepRunner(tc, self.log),
-                        hpd_frac=tc['thresholds'].get('hpd_frac', 0.68))
+        self.F = Fitter(BBCompSepRunner(tc, self.log))
         self.R = self.F.R
         th = tc['thresholds']
         # close comparisons: |ln B| < seed_band * error between the two best
@@ -178,9 +172,9 @@ class ProfileScheme:
         ev = json.load(open(os.path.join(tree_dir, 'decision_log.json')))
         M0 = model_from_label(concl['model'])
         self.M0 = M0
-        # candidates: M_0,r + every combination of the families added in
-        # Res_r0 (node 'r0chain') that respects the requirements (e.g. ds1
-        # only with s), both when M_1,0 was preferred and when not
+        # candidates: M_0,r + every combination of the groups added in
+        # Res_r0 (node 'r0chain') that respects the requirements (e.g. d01
+        # only with d11), both when M_1,0 was preferred and when not
         self.m10 = any(e['node'] == 'm10' for e in ev)
         req = tc.get('moments', {}).get('requires')
         self.cands = [(lab, M) for lab, M in
@@ -387,7 +381,7 @@ class ProfileScheme:
         """ML of M with r fixed: FitResult with r_tensor in the best fit. If
         the minimizer starts outside the region allowed by the moment
         constraints (infinite chi2), it retries with the amplitudes at zero
-        except the first-order auto-spectra (as screen_fit of the tree)."""
+        except the first-order auto-spectra (as Fitter.ml_start)."""
         m = M.with_r(False)
         if centers is None and M.label in self.PROF_FITS:
             # starting point: the profile fit closest to r (the minimizer from

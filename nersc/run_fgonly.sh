@@ -12,7 +12,7 @@
 # job_fgonly.slurm): the maps have no noise, their own estimate is ~0.
 # Variants (environment):
 #   FG_TEMPLATE  tree config template in configs/ (default
-#                tree_config_template.yml; e.g. tree_config_single.yml)
+#                tree_config_template.yml)
 #   FG_R         r of the Asimov data (default 0: + r x tensor spectrum)
 #   FG_DIR       output directory in <root> (default fgonly); a variant
 #                reuses the foreground spectra of <root>/fgonly/<sky>

@@ -16,7 +16,7 @@ import json, os, re, sys, math, time
 import pandas as pd, numpy as np
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from bbsure.models import MOMENT_CROSS, MOMENT_GROUPS, amp_name, model_from_label
+from bbsure.models import MOMENT_CROSS, MOMENT_GROUPS, model_from_label
 
 TERM = {'00': 'A', '10': r'\beta', '20': r'\beta^2', '01': 'T'}
 
@@ -39,19 +39,17 @@ def param_tex(n):
     return n.replace('_', r'\_')
 
 def model_tex(lab):
-    """Moment spectra left in the model, in TeX ('' = no moments)."""
+    """Moment spectra of the model, in TeX ('' = no moments)."""
     if not isinstance(lab, str) or not lab.startswith('M_'):
         return ''
     M = model_from_label(lab)
     out = []
     for g in sorted(M.moments):
         G = MOMENT_GROUPS[g]
-        out += [spec_tex(G['pref'], x) for x in G['spectra']
-                if amp_name(G['pref'], x) not in M.off]
+        out += [spec_tex(G['pref'], x) for x in G['spectra']]
     for pair, X in MOMENT_CROSS.items():
         if set(pair) <= M.moments:
-            out += [spec_tex(X['pref'], x) for x in X['spectra']
-                    if amp_name(X['pref'], x) not in M.off]
+            out += [spec_tex(X['pref'], x) for x in X['spectra']]
     return ',\\; '.join(out)
 
 def model_specs(lab):
