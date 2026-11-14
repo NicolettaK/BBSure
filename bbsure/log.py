@@ -37,6 +37,17 @@ class DecisionLog:
         # phase 0 runs its two halves in threads that share this log
         self._lock = threading.RLock()
 
+    def __getstate__(self):
+        # the lock cannot be pickled (the profile scheme sends the log to
+        # its worker processes): left out, a new one in the copy
+        d = dict(self.__dict__)
+        d.pop('_lock', None)
+        return d
+
+    def __setstate__(self, d):
+        self.__dict__.update(d)
+        self._lock = threading.RLock()
+
     def info(self, msg):
         with self._lock:
             if self.verbose:
