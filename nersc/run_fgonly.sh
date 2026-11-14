@@ -14,7 +14,9 @@
 #   FG_TEMPLATE  tree config template in configs/ (default
 #                tree_config_template.yml)
 #   FG_R         r of the Asimov data (default 0: + r x tensor spectrum)
-#   FG_PHASE0    1: frequency-split screening first (run_tree.py --phase0)
+#   FG_PHASE0    1: frequency-split check after the analysis, second
+#                analysis from its model if it finds more (run_tree.py
+#                --phase0; second analysis in <run>/tree_p0)
 #   FG_DIR       output directory in <root> (default fgonly); a variant
 #                reuses the foreground spectra of <root>/fgonly/<sky>
 set -euo pipefail

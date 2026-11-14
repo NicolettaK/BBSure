@@ -1,5 +1,5 @@
 """
-Phase 0: frequency-split screening that sets the starting model of the tree.
+Phase 0: frequency-split screening, a check of the analysis.
 
 The data are split in two halves, each fitted with BBCompSep on a subset of
 the bands (config option `bands`), r free:
@@ -16,8 +16,11 @@ round starts from it; otherwise the half stops. No residual test and no
 moments matter, and a moment hidden in the full data by the other component
 can have a small Delta chi2 in the half (d12s5, LF+MF: beta_s x beta_s,
 Delta chi2 = 1.1) and still be preferred by the evidence.
-The tree on the full data then starts from M_0,r = the groups kept in the
-two halves (run: initial_model).
+Used by scripts/run_tree.py --phase0 after the standard analysis (A): if
+the phase 0 keeps a group that is not in the final model of A, a second
+analysis (B) starts from the model of the phase 0 alone (run:
+initial_model); B finds again the other moments of A if they are real.
+A stays the main result, B is reported next to it.
 
 Config (tree config):
   phase0:
@@ -49,11 +52,20 @@ from .runner import BBCompSepRunner
 from .stats import lnB
 
 
+# halves used when the tree config has no phase0 block
+DEFAULT_SPLITS = [
+    dict(name='LFMF', bands=['band1', 'band2', 'band3', 'band4'],
+         groups=['s11', 's01']),
+    dict(name='MFUHF', bands=['band3', 'band4', 'band5', 'band6'],
+         groups=['d11', 'd01'])]
+
+
 class Phase0:
     def __init__(self, tc, log):
         self.tc = tc
         self.log = log
-        self.cfg = tc['phase0']
+        self.cfg = dict(tc.get('phase0') or {})
+        self.cfg.setdefault('splits', DEFAULT_SPLITS)
         th = tc['thresholds']
         self.lnB_pref = th['lnB_preferred']
         self.lnB_flag = th.get('lnB_flag', 1.0)

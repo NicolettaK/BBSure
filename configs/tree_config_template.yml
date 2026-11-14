@@ -72,12 +72,14 @@ emcee:
     burn_frac: 0.5
 
 phase0:
-    # Frequency-split screening before the tree (bbsure/phase0.py; also
+    # Frequency-split screening after the analysis (bbsure/phase0.py; also
     # with scripts/run_tree.py --phase0): synchrotron moments searched on
     # LF+MF only, dust moments on MF+UHF only, r free, one group at a time
     # by evidence (ln B > lnB_preferred, no residual test; candidates
-    # clearly rejected by the ML estimate get no evidence run); the tree on
-    # the full data starts from the union of what the two halves keep.
+    # clearly rejected by the ML estimate get no evidence run). If it keeps
+    # a group that is not in the final model of the analysis (A), a second
+    # analysis (B) starts from its model, in <runs_dir>_p0; A stays the
+    # main result, B is reported in conclusion.json (block phase0).
     # First order only (higher orders: the tree on the full data); no T_d
     # on MF+UHF, where it is degenerate with beta_d (T_d x T_d was picked
     # over beta_d x beta_d in all the d10 / d12 skies)
