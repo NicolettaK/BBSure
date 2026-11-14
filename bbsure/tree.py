@@ -119,6 +119,12 @@ class DecisionTree:
         # pruning: the model without the undetected spectra is kept if
         # ln B(pruned vs full) > lnB_prune
         self.lnB_prune = th.get('lnB_prune', 0.)
+        # pruning: false switches it off everywhere (screening before the
+        # comparison, prune of the adopted model, r = 0 pruning of M_1,0),
+        # e.g. with single moments: one spectrum per group, so removing the
+        # new one = rejecting the candidate (the evidence comparison does
+        # it) and removing an old one can break the requirements
+        self.pruning = th.get('pruning', True)
         self.hpd_frac = th.get('hpd_frac', 0.68)
         # borderline comparisons: |ln B - threshold| < seed_band * error ->
         # more PolyChord runs (different seeds), up to seed_max_runs per fit
@@ -353,6 +359,8 @@ class DecisionTree:
             new = [a for a in M1.amplitudes() if a not in old]
             if not new:
                 return False, None
+            if not self.pruning:
+                break
             _, hpd = detection(fit1.sample_names, fit1.samples, new,
                                self.hpd_frac, self.F.prior_bounds(new))
             weak = [a for a in new if hpd[a][0] <= 0.0 <= hpd[a][1]]
@@ -396,6 +404,8 @@ class DecisionTree:
             self.log.node('fit', f'screening fit (ML + emcee) of M_1,0 = '
                           f'{M10.label}', 'ok', **fit.summary())
             new = [a for a in M10.amplitudes() if a not in old]
+            if not self.pruning:
+                break
             _, hpd = detection(fit.sample_names, fit.samples, new,
                                self.hpd_frac, self.F.prior_bounds(new))
             weak = [a for a in new if hpd[a][0] <= 0.0 <= hpd[a][1]]
@@ -600,8 +610,11 @@ class DecisionTree:
         inside the HPD of their amplitude in the posterior of the full fit),
         refits and keeps the pruned model if it is preferred
         (ln B > lnB_prune). Repeated until only detected amplitudes are left.
-        The amplitudes in keep_amps are never removed.
+        The amplitudes in keep_amps are never removed. Nothing is removed
+        with thresholds: pruning: false.
         """
+        if not self.pruning:
+            return M0, fit0
         while [a for a in M0.amplitudes() if a not in keep_amps]:
             amps = [a for a in M0.amplitudes() if a not in keep_amps]
             det, hpd = detection(fit0.sample_names, fit0.samples, amps,

@@ -1,6 +1,6 @@
 # Tree config of the validation, SINGLE MOMENTS variant (template: @REPO@, @DATA@ and @RUN@ are
 # filled in by nersc/run_one.sh). HL likelihood, hierarchical moment bound
-# (k = 10), lnB_preferred = 0, immediate pruning, emcee screening, profile
+# (k = 10), lnB_preferred = 0, no pruning, emcee screening, profile
 # scheme after the tree.
 # Usage: python scripts/run_tree.py --config tree_config.yml
 
@@ -26,6 +26,10 @@ thresholds:
     # Pruning: the model without the undetected moment amplitudes is kept if
     # ln B(pruned vs full) > lnB_prune
     lnB_prune: 0.0
+    # single moments: no pruning at all (one spectrum per group: removing
+    # the new spectrum = rejecting the candidate, which the evidence
+    # comparison already does; removing an old one breaks the requirements)
+    pruning: false
     # Moment detected in the residuals: zero outside the HPD interval
     # (fraction hpd_frac) of at least one amplitude of the group's spectra
     hpd_frac: 0.68
