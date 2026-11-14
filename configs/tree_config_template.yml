@@ -71,6 +71,20 @@ emcee:
     n_iters: 2000
     burn_frac: 0.5
 
+phase0:
+    # Frequency-split screening before the tree (bbsure/phase0.py; also
+    # with scripts/run_tree.py --phase0): the Bayesian tree on LF+MF with
+    # the synchrotron moments only and on MF+UHF with the dust moments only;
+    # the tree on the full data starts from the union of their final models
+    enabled: false
+    splits:
+        - name: LFMF
+          bands: [band1, band2, band3, band4]
+          groups: [s11, s01, s22, s12, s02]
+        - name: MFUHF
+          bands: [band3, band4, band5, band6]
+          groups: [d11, d01, dT11, dT01, d22, d12, d02]
+
 profile_scheme:
     # points of the initial grid of the profiles in r (see
     # bbsure/profile_scheme.py)

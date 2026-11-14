@@ -14,6 +14,7 @@
 #   FG_TEMPLATE  tree config template in configs/ (default
 #                tree_config_template.yml)
 #   FG_R         r of the Asimov data (default 0: + r x tensor spectrum)
+#   FG_PHASE0    1: frequency-split screening first (run_tree.py --phase0)
 #   FG_DIR       output directory in <root> (default fgonly); a variant
 #                reuses the foreground spectra of <root>/fgonly/<sky>
 set -euo pipefail
@@ -32,7 +33,7 @@ if [[ -f "${RUN}/tree/conclusion.json" ]]; then
     exit 0
 fi
 {
-echo "==> ${DIR} ${SKY}: started $(date '+%F %T') (template ${TEMPLATE}, r = ${R})"
+echo "==> ${DIR} ${SKY}: started $(date '+%F %T') (template ${TEMPLATE}, r = ${R}, phase 0: ${FG_PHASE0:-0})"
 if [[ ! -f "${RUN}/output/cells_coadded.fits" ]]; then
     mkdir -p "${RUN}/output"
     if [[ "$RUN/output" != "$SRC" && -f "${SRC}/cells_coadded.fits" ]]; then
@@ -72,6 +73,7 @@ if [[ ! -f "${RUN}/output/.noise_mean" ]]; then
 fi
 sed -e "s#@REPO@#${REPO}#g" -e "s#@DATA@#${DATA}#g" -e "s#@RUN@#${RUN}#g" \
     "${REPO}/configs/${TEMPLATE}" > "${RUN}/tree_config.yml"
-python "${REPO}/scripts/run_tree.py" --config "${RUN}/tree_config.yml"
+P0=$([[ "${FG_PHASE0:-0}" == 1 ]] && echo --phase0 || true)
+python "${REPO}/scripts/run_tree.py" --config "${RUN}/tree_config.yml" $P0
 echo "==> ${DIR} ${SKY}: finished $(date '+%F %T')"
 } > "$LOG" 2>&1

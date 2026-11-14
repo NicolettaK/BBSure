@@ -12,6 +12,7 @@
 # Variants (see run_fgonly.sh), e.g. r = 0.01 or another tree config:
 #   sbatch -A <project> --export=ALL,FG_R=0.01,FG_DIR=fgonly_r0.01 <repo>/nersc/job_fgonly.slurm d9s4 d9s7
 #   sbatch -A <project> --export=ALL,FG_TEMPLATE=<config>,FG_DIR=fgonly_v2 <repo>/nersc/job_fgonly.slurm
+#   sbatch -A <project> --export=ALL,FG_PHASE0=1,FG_DIR=fgonly_phase0 <repo>/nersc/job_fgonly.slurm
 # (a variant needs the spectra of the base run, <root>/fgonly/<sky>/output)
 #SBATCH -C cpu
 #SBATCH -q debug
@@ -40,7 +41,7 @@ if [[ ! -f "$NM" ]]; then
     python "${REPO}/scripts/mean_noise.py" "${NM}.tmp" $(cat "${ROOT}/fgonly/noise_list.txt") \
         && mv "${NM}.tmp" "$NM" || { echo "mean noise FAILED"; exit 1; }
 fi
-echo "job ${SLURM_JOB_ID}: ${FG_DIR:-fgonly} (${FG_TEMPLATE:-tree_config_template.yml}, r = ${FG_R:-0}) ${SKIES}, ${BBPOWER_NPROC} processes each, $(date '+%F %T')"
+echo "job ${SLURM_JOB_ID}: ${FG_DIR:-fgonly} (${FG_TEMPLATE:-tree_config_template.yml}, r = ${FG_R:-0}, phase 0: ${FG_PHASE0:-0}) ${SKIES}, ${BBPOWER_NPROC} processes each, $(date '+%F %T')"
 for sky in $SKIES; do echo "$sky"; done | xargs -P "$NPAR" -n 1 bash -c \
     'bash "'"$REPO"'/nersc/run_fgonly.sh" "'"$ROOT"'" "$0" \
      && echo "$0: done" || echo "$0: FAILED (see logs)"'

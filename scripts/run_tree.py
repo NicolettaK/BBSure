@@ -3,7 +3,10 @@
 Runs the decision tree on one data set and, with run: profile_scheme: true,
 the profile scheme on the concluded tree.
 
-  python scripts/run_tree.py --config tree_config.yml
+  python scripts/run_tree.py --config tree_config.yml [--phase0]
+
+--phase0 (or phase0: enabled: true in the config): frequency-split
+screening first (bbsure/phase0.py), the tree starts from its model.
 
 Output in paths: runs_dir: decision_log.{txt,json}, conclusion.json (and
 conclusion_tree.json + profile/ with the profile scheme), one directory per
@@ -19,12 +22,15 @@ import yaml
 
 from bbsure import BBCompSepRunner, DecisionLog, DecisionTree, Fitter
 from bbsure.log import fmt, json_default
+from bbsure.phase0 import Phase0
 
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawTextHelpFormatter)
     ap.add_argument('--config', required=True)
+    ap.add_argument('--phase0', action='store_true',
+                    help='frequency-split screening before the tree')
     args = ap.parse_args()
 
     tc = yaml.safe_load(open(args.config))
@@ -34,7 +40,15 @@ def main():
     fitter = Fitter(BBCompSepRunner(tc, log),
                     residual_test=mc.get('residual_test', 'aic'),
                     lrt_p=mc.get('lrt_p', 0.3173))
-    result = DecisionTree(tc, fitter, log).run()
+    p0 = tc.get('phase0') or {}
+    p0_undecided = []
+    if args.phase0 or p0.get('enabled', False):
+        ph = Phase0(tc, log)
+        tc['run']['initial_model'] = ph.run().label
+        p0_undecided = ph.undecided
+    dt = DecisionTree(tc, fitter, log)
+    dt.undecided.extend(p0_undecided)
+    result = dt.run()
     log.info("\n==> CONCLUSION")
     for k, v in result.items():
         log.info(f"    {k:<18} {fmt(v)}")
