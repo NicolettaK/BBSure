@@ -73,9 +73,10 @@ emcee:
 
 phase0:
     # Frequency-split screening before the tree (bbsure/phase0.py; also
-    # with scripts/run_tree.py --phase0): the Bayesian tree on LF+MF with
-    # the synchrotron moments only and on MF+UHF with the dust moments only;
-    # the tree on the full data starts from the union of their final models
+    # with scripts/run_tree.py --phase0): synchrotron moments searched on
+    # LF+MF only, dust moments on MF+UHF only, r free, one group at a time
+    # by evidence (ln B > lnB_preferred, no residual test); the tree on the
+    # full data starts from the union of what the two halves keep
     enabled: false
     splits:
         - name: LFMF

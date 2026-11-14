@@ -2,16 +2,22 @@
 Phase 0: frequency-split screening that sets the starting model of the tree.
 
 The data are split in two halves, each fitted with BBCompSep on a subset of
-the bands (config option `bands`):
+the bands (config option `bands`), r free:
   LF+MF  (e.g. band1-4): only the synchrotron moments are searched, the dust
          has no moments;
   MF+UHF (e.g. band3-6): only the dust moments are searched, the
          synchrotron has no moments.
-In each half the Bayesian tree runs as on the full data (tree.py: residual
-tests with r free and with r = 0, evidence comparisons, 3 sigma test), with
-the moment groups restricted to those of the half and no profile scheme.
-The tree on the full data then starts from M_0,r = the groups of the final
-models of the two halves (run: initial_model).
+In each half the search starts from the model without moments and adds one
+moment group at a time: every group of the half whose required groups are
+already there is fitted (ML + evidence run); the one with the highest
+evidence is kept if ln B(with vs without) > lnB_preferred, and the next
+round starts from it; otherwise the half stops. No residual test and no
+"r compatible with 0" shortcut: in a half r is poorly constrained, only the
+moments matter, and a moment hidden in the full data by the other component
+can have a small Delta chi2 in the half (d12s5, LF+MF: beta_s x beta_s,
+Delta chi2 = 1.1) and still be preferred by the evidence.
+The tree on the full data then starts from M_0,r = the groups kept in the
+two halves (run: initial_model).
 
 Config (tree config):
   phase0:
@@ -21,19 +27,19 @@ Config (tree config):
              groups: [s11, s01, s22, s12, s02]}
           - {name: MFUHF, bands: [band3, band4, band5, band6],
              groups: [d11, d01, dT11, dT01, d22, d12, d02]}
-Output: each half in <runs_dir>/phase0_<name>/ (fits, decision_log,
-conclusion.json); in the decision log of the full tree the nodes
-phase0_split (final model of each half) and phase0_start.
+Output: the fits of each half in <runs_dir>/phase0_<name>/ (result.json:
+its model); in the decision log of the tree the nodes phase0_fit,
+phase0_pref, phase0_split and phase0_start.
 """
 import copy
 import json
 import os
 
-from .fitter import Fitter
-from .log import DecisionLog, json_default
-from .models import Model, model_from_label
+from .fitter import Fitter, NoValidStart
+from .log import json_default
+from .models import Model, candidate_groups, model_from_label
 from .runner import BBCompSepRunner
-from .tree import DecisionTree
+from .stats import lnB
 
 
 class Phase0:
@@ -41,51 +47,101 @@ class Phase0:
         self.tc = tc
         self.log = log
         self.cfg = tc['phase0']
-        # choices flagged as undecided in the halves (added to those of the
-        # tree on the full data)
+        th = tc['thresholds']
+        self.lnB_pref = th['lnB_preferred']
+        self.lnB_flag = th.get('lnB_flag', 1.0)
+        self.extra_requires = tc.get('moments', {}).get('requires', {})
+        self.max_rounds = self.cfg.get('max_rounds', 5)
+        # choices with |ln B - threshold| < lnB_flag: flagged as undecided
+        # (added to those of the tree on the full data)
         self.undecided = []
 
-    def run_split(self, split):
-        """Bayesian tree on the bands of one half: its final model."""
-        name = split['name']
+    def fitter(self, split, d):
+        """Fitter on the bands of the split, runs in d."""
         tc = copy.deepcopy(self.tc)
-        d = os.path.join(self.tc['paths']['runs_dir'], f"phase0_{name}")
         tc['paths']['runs_dir'] = d
-        mc = tc['moments']
-        mc['res_wr'] = [g for g in mc['res_wr'] if g in split['groups']]
-        mc['res_r0'] = [g for g in mc['res_r0'] if g in split['groups']]
-        tc['run']['initial_model'] = None
-        tc['run']['fit_r0_at_end'] = False
+        R = BBCompSepRunner(tc, self.log)
+        R.base['BBCompSep']['bands'] = list(split['bands'])
+        return Fitter(R)
+
+    def run_split(self, split):
+        """Groups kept in one half."""
+        name = split['name']
+        d = os.path.join(self.tc['paths']['runs_dir'], f"phase0_{name}")
         os.makedirs(d, exist_ok=True)
-        f = os.path.join(d, 'conclusion.json')
-        if os.path.isfile(f):
-            res = json.load(open(f))
-        else:
-            log = DecisionLog(d)
-            log.info(f"==> Phase 0, {name}: bands {split['bands']}, "
-                     f"groups {split['groups']}")
-            R = BBCompSepRunner(tc, log)
-            R.base['BBCompSep']['bands'] = list(split['bands'])
-            F = Fitter(R, residual_test=mc.get('residual_test', 'aic'),
-                       lrt_p=mc.get('lrt_p', 0.3173))
-            res = DecisionTree(tc, F, log).run()
-            with open(f, 'w') as out:
-                json.dump(res, out, indent=2, default=json_default)
-        for u in res.get('undecided_choices', []):
-            self.undecided.append(dict(u, kind=f"phase 0 {name}: {u['kind']}"))
-        self.log.node('phase0_split', f'phase 0 {name} (bands '
-                      f"{', '.join(split['bands'])}): final model of the "
-                      'Bayesian tree', res['model'], split=name,
-                      conclusion=res['conclusion'], r_med=res.get('r_med'),
-                      undecided=res.get('undecided', False))
-        return set(model_from_label(res['model']).moments)
+        out = os.path.join(d, 'result.json')
+        if os.path.isfile(out):
+            res = json.load(open(out))
+            self.undecided += res['undecided']
+            self.log_split(split, res)
+            return set(model_from_label(res['model']).moments)
+        F = self.fitter(split, d)
+        M = Model()
+        fit0 = F.full_fit(M)
+        self.log_fit(name, fit0)
+        und = []
+        for _ in range(self.max_rounds):
+            cands = candidate_groups(M, split['groups'], self.extra_requires)
+            fits = []
+            for g in cands:
+                try:
+                    f = F.full_fit(M.plus(g))
+                except NoValidStart as err:
+                    self.log.node('unfittable', f'phase 0 {name}: {g} cannot '
+                                  'be fitted with the moment constraints',
+                                  'skipped', reason=str(err))
+                    continue
+                self.log_fit(name, f)
+                fits.append(f)
+            if not fits:
+                break
+            best = max(fits, key=lambda f: f.logZ)
+            lb, lberr = lnB(best, fit0)
+            pref = lb > self.lnB_pref
+            if abs(lb - self.lnB_pref) < self.lnB_flag:
+                und.append(dict(kind=f'phase 0 {name}',
+                                chosen=(best if pref else fit0).model.label,
+                                other=(fit0 if pref else best).model.label,
+                                lnB=lb, lnB_err=lberr,
+                                threshold=self.lnB_pref))
+            self.log.node('phase0_pref', f'phase 0 {name}: is the best '
+                          f'candidate ({best.model.label}) preferred over '
+                          f'{M.label}?', 'Yes' if pref else 'No', lnB=lb,
+                          lnB_err=lberr, split=name,
+                          candidates={f.model.label: f.logZ for f in fits},
+                          lnB_preferred=self.lnB_pref)
+            if not pref:
+                break
+            M, fit0 = best.model, best
+        res = dict(model=M.label, bands=split['bands'], undecided=und,
+                   r_med=fit0.r_summary()['r_med'], logZ=fit0.logZ)
+        with open(out, 'w') as f:
+            json.dump(res, f, indent=2, default=json_default)
+        self.undecided += und
+        self.log_split(split, res)
+        return set(M.moments)
+
+    def log_fit(self, name, f):
+        s = f.summary()
+        self.log.node('phase0_fit', f'phase 0 {name}: fit of '
+                      f'{f.model.label}', 'ok', split=name,
+                      **{k: s[k] for k in ('model', 'chi2', 'logZ', 'logZerr',
+                                           'r_med', 'r_std') if k in s})
+
+    def log_split(self, split, res):
+        self.log.node('phase0_split', f"phase 0 {split['name']} (bands "
+                      f"{', '.join(split['bands'])}): model kept",
+                      res['model'], split=split['name'],
+                      undecided=bool(res['undecided']))
 
     def run(self):
         """Starting model of the tree on the full data (r free)."""
-        self.log.info("==> Phase 0: Bayesian tree on the two frequency "
+        self.log.info("==> Phase 0: moments searched on the two frequency "
                       "halves")
         groups = set()
         for split in self.cfg['splits']:
+            self.log.info(f"==> Phase 0, {split['name']}: bands "
+                          f"{split['bands']}, groups {split['groups']}")
             groups |= self.run_split(split)
         M = Model(frozenset(groups), r_free=True)
         self.log.node('phase0_start', 'phase 0: starting model of the tree',
