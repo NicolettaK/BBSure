@@ -10,7 +10,9 @@ Each realization is analysed twice: with d9s4 and with a PySM sky chosen at
 random among d9/d10/d12 x s4/s5/s7 (d9s4 excluded).
 Blind run (--blind-sky): the random sky is drawn among all the 9 skies,
 d9s4 included, and it is written in truth/sky.csv, not in the plan (the
-column sky_rand of the plan says 'hidden'); run it with KINDS=rand only.
+column sky_rand of the plan says 'hidden'); each set has r = 0 with
+probability 0.1, so also the number of sets with r = 0 is unknown; run it
+with KINDS=rand only.
 
 Writes:
   plan/sets.csv     index, seed, sky_rand        (can be looked at)
@@ -52,7 +54,10 @@ if a.blind_sky:
 root, SEED0, R_MIN = a.root, a.seed0, a.r_min
 rng = np.random.default_rng(a.rng_seed)
 r = 10 ** rng.uniform(np.log10(R_MIN), np.log10(R_MAX), N)
-r[rng.choice(N, N_R0, replace=False)] = 0.
+if a.blind_sky:
+    r[rng.random(N) < N_R0 / N] = 0.
+else:
+    r[rng.choice(N, N_R0, replace=False)] = 0.
 sky = rng.choice(SKIES, N)
 
 os.makedirs(os.path.join(root, 'plan'), exist_ok=True)
@@ -77,7 +82,9 @@ with open(os.path.join(root, 'truth', 'r_true.csv'), 'w', newline='') as f:
         w.writerow([i, f'{r[i]:.6e}'])
 print(f"written plan/sets.csv and truth/r_true.csv ({N} sets, seeds "
       f"{SEED0}-{SEED0 + N - 1}, "
-      f"{N_R0} with r = 0, the others log-uniform in [{R_MIN:g}, {R_MAX:g}]); "
+      + ("each with r = 0 with probability 0.1" if a.blind_sky else
+         f"{N_R0} with r = 0") +
+      f", the others log-uniform in [{R_MIN:g}, {R_MAX:g}]); "
       + ("random skies among " + ', '.join(SKIES) + " in truth/sky.csv "
          "(hidden)" if a.blind_sky else "random skies: "
          + ', '.join(f'{s} x{int((sky == s).sum())}' for s in SKIES)))
