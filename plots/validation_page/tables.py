@@ -43,6 +43,13 @@ def tree_interval(root, s, m):
     return m - (p['med'] - p['lo1']), m + (p['hi1'] - p['med'])
 
 
+def read_tree(R):
+    """Table of the trees: results_unblinded.csv, or for a blind run
+    results.csv (collect.py without --unblind: no r_true, no pull)."""
+    f = f'{R}/results_unblinded.csv'
+    return pd.read_csv(f if os.path.isfile(f) else f'{R}/results.csv')
+
+
 def setname(i, kind):
     return f"set_{int(i):03d}_{kind}"
 
@@ -61,7 +68,7 @@ def main(R):
         p['dof_rstar'] = p['dof_rstar'].astype('Int64')
     p.to_csv(f'{R}/profile_results.csv', index=False)
 
-    t = pd.read_csv(f'{R}/results_unblinded.csv')
+    t = read_tree(R)
 
     # tree with the 68% interval also for the upper limits
     tf = t.copy()
@@ -82,7 +89,8 @@ def main(R):
     pd.DataFrame(ff).to_csv(f'{R}/first_fit.csv', index=False)
 
     # profile scheme with the column names of the tree
-    pa = p.merge(t[['index', 'kind', 'sky', 'r_true']], on=['index', 'kind'])
+    pa = p.merge(t[['index', 'kind', 'sky'] + (['r_true'] if 'r_true' in t
+                                                else [])], on=['index', 'kind'])
     pa = pa.rename(columns={'r_med_pl': 'r_med', 'r_std_pl': 'r_std',
                             'r_lo1_pl': 'r_lo1', 'r_hi1_pl': 'r_hi1',
                             'r_95_pl0': 'r_95'})
@@ -103,11 +111,11 @@ def main(R):
         und = ct.get('undecided_choices', [])
         kinds = [c['kind'] for c in und]
         res = json.load(open(f'{tdir}/profile/result.json'))
-        rt = a.r_true
+        rt = a.get("r_true", np.nan)
         rows.append(dict(
             set=s, index=int(a['index']), kind=a.kind, sky=a.sky, r_true=rt,
             t_concl=a.conclusion, t_model=a.model, t_r=a.r_med, t_sig=a.r_std,
-            t_lo=a.r_lo1, t_hi=a.r_hi1, t_r95=a.r_95, t_pull=a.pull,
+            t_lo=a.r_lo1, t_hi=a.r_hi1, t_r95=a.r_95, t_pull=a.get("pull", np.nan),
             t_pte=a.pte, t_lowpte=bool(a.low_pte),
             u_mom=sum(k.startswith('M_1,r') for k in kinds),
             u_r0=sum(k.startswith('M_1,0') for k in kinds),

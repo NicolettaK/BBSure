@@ -25,6 +25,9 @@ ap.add_argument('--title', default=None)
 ap.add_argument('--label', default='')
 ap.add_argument('--ref', default=None, help='csv whose d9s4 median is shown next to the true r '
                 '(first_fit.csv: fit without moments)')
+ap.add_argument('--review', default=None, help='csv of the page (set, conclusion_trusted, '
+                'model_trusted, comment): red band, conclusion not trusted; yellow band, '
+                'conclusion trusted but model not')
 a = ap.parse_args()
 
 rows = sorted((r for r in csv.DictReader(open(a.csv))
@@ -32,6 +35,9 @@ rows = sorted((r for r in csv.DictReader(open(a.csv))
               key=lambda r: int(r['index']))
 f = lambda r, k: float(r[k]) if r.get(k) not in (None, '') else np.nan
 i = np.array([int(r['index']) for r in rows])
+# blind run (no r_true column, e.g. results.csv of collect.py without
+# --unblind): no true r, no wrong conclusions, no coverage or bias
+BLIND = 'r_true' not in rows[0]
 rt = np.array([f(r, 'r_true') for r in rows]) * 1e3
 rm = np.array([f(r, 'r_med') for r in rows]) * 1e3
 sd = np.array([f(r, 'r_std') for r in rows]) * 1e3
@@ -72,8 +78,9 @@ for x, y in zip(i[ul], r95[ul]):
     ax.annotate('', xy=(x, y - 1.6), xytext=(x, y),
                 arrowprops=dict(arrowstyle='-|>', color=C_UL, lw=1.0,
                                 mutation_scale=7), zorder=3)
-ax.scatter(i, rt, marker='*', s=70, color=C_TRUE, edgecolor='white', lw=0.4,
-           zorder=4, label=STAR)
+if not BLIND:
+    ax.scatter(i, rt, marker='*', s=70, color=C_TRUE, edgecolor='white', lw=0.4,
+               zorder=4, label=STAR)
 # wrong conclusions: upper limit below the true r, detection with true r = 0
 bad = (ul & (rt > r95)) | (det & (rt == 0))
 if bad.any():
@@ -90,6 +97,24 @@ if low.any():
                label=r'detection with true r < $3\times10^{-3}$')
     for x in i[low]:
         ax.axvspan(x - 0.5, x + 0.5, color='#f2c94c', alpha=0.18, zorder=0)
+if a.review:
+    # bands from the checks of the results page
+    rv = {r['set']: r for r in csv.DictReader(open(a.review))}
+    nb = nm = 0
+    for x, r in zip(i, rows):
+        q = rv.get(f"set_{int(r['index']):03d}_{a.kind}")
+        if q is None:
+            continue
+        if q['conclusion_trusted'] != '1':
+            ax.axvspan(x - 0.5, x + 0.5, color='#dc2832', alpha=0.16, zorder=0, lw=0)
+            nb += 1
+        elif q['model_trusted'] != '1':
+            ax.axvspan(x - 0.5, x + 0.5, color='#f2c94c', alpha=0.35, zorder=0, lw=0)
+            nm += 1
+    ax.fill_between([], [], color='#dc2832', alpha=0.16, lw=0,
+                    label=f'conclusion not trusted ({nb})')
+    ax.fill_between([], [], color='#f2c94c', alpha=0.35, lw=0,
+                    label=f'conclusion trusted, model not ({nm})')
 if rd is not None:
     # d9s4 median of the same set, shifted a little to the right
     ax.scatter(i + 0.3, rd, marker='D', s=20, color='#2f9e44', edgecolor='white',
@@ -112,18 +137,20 @@ if rd is not None:
     pp = (rm - rd) / sd
     extra = (f"; paired bias $(r - r_{{\\rm d9s4,\\,M_{{0,r}}}})/\\sigma$ "
              f"{np.nanmean(pp):+.2f}")
-ax.set_title(a.title or
+title = (f"{a.kind}, {a.label}, blind: {len(rows)} sets — {det.sum()} detections, "
+         f"{ul.sum()} upper limits") if BLIND else (
              f"{a.kind}, {a.label}: {len(rows)} sets — {det.sum()} detections "
              f"(true r in 68%: {n_cov[0]}/{det.sum()}), {ul.sum()} upper "
              f"limits (true r < r$_{{95}}$: {n_cov[1]}/{ul.sum()}) — "
-             f"bias {np.nanmean(pull):+.2f} $\\pm$ {np.nanstd(pull):.2f}" + extra,
-             fontsize=11, color='#1b1b1b', loc='left', pad=48)
+             f"bias {np.nanmean(pull):+.2f} $\\pm$ {np.nanstd(pull):.2f}" + extra)
+ax.set_title(a.title or title, fontsize=11, color='#1b1b1b', loc='left', pad=48)
 for s in ('top', 'right'):
     ax.spines[s].set_visible(False)
 h, l = ax.get_legend_handles_labels()
-order = [l.index(x) for x in ([STAR] + ([REFL] if rd is not None else []) + ['r detection: median, 68% interval',
+order = [l.index(x) for x in ([] if BLIND else [STAR]) + ( ([REFL] if rd is not None else []) + ['r detection: median, 68% interval',
                               'upper limit: median, 68% interval',
-                              'upper limit: $r_{95}$'] + [x for x in l if x.startswith('wrong') or x.startswith('detection with')])]
+                              'upper limit: $r_{95}$']) + ([x for x in l if x.startswith('wrong') or x.startswith('detection with')
+                              or x.startswith('conclusion')])]
 ax.legend([h[k] for k in order], [l[k] for k in order], loc='lower left',
           bbox_to_anchor=(0, 1.0), frameon=False, ncol=4, fontsize=9)
 fig.tight_layout()

@@ -2,7 +2,7 @@
 import json, os, sys
 import numpy as np, pandas as pd
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from tables import tree_interval
+from tables import read_tree, tree_interval
 
 
 def tree_dof(root, s, model):
@@ -15,7 +15,9 @@ def summary(table, root):
     d = pd.read_csv(table)
     p = pd.read_csv(os.path.join(root, 'profile_results.csv'))
     d = d.merge(p[['index', 'kind', 'chi2_at_rstar', 'dof_rstar']], on=['index', 'kind'])
-    t = pd.read_csv(os.path.join(root, 'results_unblinded.csv'))[['index', 'kind', 'chi2']]
+    t = read_tree(root)[['index', 'kind', 'chi2']]
+    # blind run (no true r): only the numbers that do not need it
+    blind = bool(d.r_true.isna().all())
     d = d.merge(t, on=['index', 'kind'])
     for i, r in d.iterrows():
         if not np.isfinite(r.t_lo):
@@ -24,6 +26,8 @@ def summary(table, root):
     out = {'groups': {}}
     for g in ('d9s4', 'rand'):
         v = d[d.kind == g]
+        if not len(v):
+            continue
         row = {'n': len(v)}
         for k in ('t', 'p'):
             pull = v[f'{k}_pull']; det = v[f'{k}_concl'] == 'r_detection'; ul = ~det
@@ -31,20 +35,25 @@ def summary(table, root):
             chi2 = v.chi2 if k == 't' else v.chi2_at_rstar
             dof = v.t_dof if k == 't' else v.dof_rstar
             pte = v[f'{k}_pte']
-            row[k] = dict(
+            row[k] = dict(n_det=int(det.sum()), n_ul=int(ul.sum()),
+                pte_bins=[int(x) for x in np.histogram(pte, [0, .01, .05, .2, .6, 1.0001])[0]],
+                chi2_red=round(float((chi2 / dof).mean()), 3))
+            if blind:
+                continue
+            row[k].update(
                 bias=round(pull.mean(), 2), bias_err=round(pull.std(ddof=1) / np.sqrt(len(v)), 2),
                 width=round(pull.std(ddof=1), 2),
                 in68=int(((v.r_true >= v[f'{k}_lo']) & (v.r_true <= v[f'{k}_hi'])).sum()),
                 false_det=int((det & low).sum()), n_low=int(low.sum()),
                 det_r0=int((det & (v.r_true == 0)).sum()), n_r0=int((v.r_true == 0).sum()),
-                ul_ok=int((ul & (v.r_true <= v[f'{k}_r95'])).sum()), n_ul=int(ul.sum()),
-                det_hi=int((det & hi).sum()), n_hi=int(hi.sum()), n_det=int(det.sum()),
-                pte_bins=[int(x) for x in np.histogram(pte, [0, .01, .05, .2, .6, 1.0001])[0]],
-                chi2_red=round(float((chi2 / dof).mean()), 3))
+                ul_ok=int((ul & (v.r_true <= v[f'{k}_r95'])).sum()),
+                det_hi=int((det & hi).sum()), n_hi=int(hi.sum()))
         row['model_changed'] = int((v.t_model != v.p_model).sum())
         row['concl_changed'] = int((v.t_concl != v.p_concl).sum())
         out['groups'][g] = row
     # paired difference (same CMB + noise): (r_rand - r_d9s4) / sigma_rand
+    if blind or not (d.kind == 'd9s4').any():
+        return out
     a = d[d.kind == 'rand'].set_index('index'); b = d[d.kind == 'd9s4'].set_index('index')
     a = a.loc[a.index.intersection(b.index)]; b = b.loc[a.index]
     pair = {}

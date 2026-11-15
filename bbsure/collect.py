@@ -45,6 +45,11 @@ def collect_tree(root, unblind=False, tree='tree'):
     sky = {int(r['index']): r['sky_rand']
            for r in csv.DictReader(open(os.path.join(root, 'plan',
                                                      'sets.csv')))}
+    # blind plan (make_plan.py --blind-sky): the sky is in truth/sky.csv,
+    # read only when unblinding
+    fs = os.path.join(root, 'truth', 'sky.csv')
+    if unblind and os.path.isfile(fs):
+        sky = {int(r['index']): r['sky'] for r in csv.DictReader(open(fs))}
     rows = []
     for d in sorted(glob.glob(os.path.join(root, 'runs', 'set_*'))):
         _, i, kind = os.path.basename(d).split('_')

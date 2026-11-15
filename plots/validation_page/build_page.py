@@ -88,20 +88,23 @@ from tables import tree_interval
 ROOT = os.path.dirname(TABLE)
 KIND = {'M_1,r vs M_0,r': 'mom', 'M_1,0 vs M_0,r': 'r0', 'pruning': 'cut'}
 
-RANK = {'': 0, '✗': 1, '✓': 2, '✓✓': 3}
+RANK = {'': 0, '✗✗': 0.5, '✗': 1, '✓': 2, '✓✓': 3}
+# r significantly below zero (a moment subtracting too much): r / sigma < NEG
+NEG = -1.5
 
 
-def r0grade(x, e):
+def r0grade(x, e, xx=False):
     """x = ln B(model with r = 0 vs M_0,r): preferred by a lot (✓✓), by a
     little (✓, |ln B| < max(1, 2 sigma): inconclusive on the Jeffreys scale
     of Trotta 2008, or within the numerical error), not preferred by a
-    little (✗), otherwise nothing."""
+    little (✗), not preferred by a lot (✗✗, with xx). Every set gets a
+    grade from its final model with r = 0 (M_0,0)."""
     if x is None or e is None:
         return ''
     b = max(1., 2 * e if e == e else 0.)
     if x > 0:
         return '✓✓' if x >= b else '✓'
-    return '✗' if x > -b else ''
+    return '✗' if x > -b else ('✗✗' if xx else '')
 
 
 def details(name):
@@ -113,12 +116,31 @@ def details(name):
     reached = any(e['node'] == 'resid' and e['question'].startswith('Res_r0') for e in ev)
     ch = [e for e in ev if e['node'] == 'r0chain']
     early = any(e['node'] == 'r1sigma' and e['answer'] == 'Yes' for e in ev)
+    # r (median, sigma; 1e-3) of each model: posterior of its evidence run in
+    # the tree, profile of the model in the profile scheme
+    rt_ = {e['model']: (e['r_med'], e['r_std']) for e in ev
+           if e['node'] == 'fit' and e.get('model') and e.get('r_std') is not None
+           and isinstance(e.get('logZ'), float) and e['logZ'] == e['logZ']}
+    pf = os.path.join(t, 'profile', 'decision_log.json')
+    rp_ = {e['question'].split()[0]: (e['r_med_pl'], e['r_std_pl'])
+           for e in (json.load(open(pf)) if os.path.isfile(pf) else [])
+           if e['node'] == 'compare' and 'r_med_pl' in e}
+
+    def rr(lab, tab):
+        if lab.endswith('_0'):
+            return '0'
+        v = tab.get(lab)
+        return f"{1e3 * v[0]:.2f} ± {1e3 * v[1]:.2f}" if v else None
     und = [dict(k=KIND.get(c['kind'], c['kind']), c=model_tex(c['chosen']),
                 o=model_tex(c['other']), c0=c['chosen'].endswith('_0'),
-                o0=c['other'].endswith('_0'), b=round(c['lnB'], 2), e=round(c['lnB_err'], 2))
+                o0=c['other'].endswith('_0'), b=round(c['lnB'], 2), e=round(c['lnB_err'], 2),
+                rc=rr(c['chosen'], rt_), ro=rr(c['other'], rt_))
            for c in ct.get('undecided_choices', [])]
     pund = [dict(c=model_tex(c['chosen']), o=model_tex(c['other']),
-                 b=round(c['lnB'], 2), e=round(c['lnB_err'], 2)) for c in res.get('undecided_choices', [])]
+                 b=round(c['lnB'], 2), e=round(c['lnB_err'], 2),
+                 rc=rr(c['chosen'], rp_), ro=rr(c['other'], rp_)) for c in res.get('undecided_choices', [])]
+    und, pund = dedup(und, pund)
+    p0 = phase0_info(t, ev)
     b = res['bayes']
     names = ['r_tensor'] + [n for n in b['posterior'] if n != 'r_tensor']
     names += [n for n in res['params_at_rstar'] if n not in names]
@@ -139,7 +161,48 @@ def details(name):
                 r0=('early' if early else 'none' if not reached else 'nothing' if not ch else 'chain'),
                 fam=ch[-1]['families'] if ch else [], und=und, pund=pund,
                 cands=res.get('candidates', []), start=res.get('start', ''), rounds=r0_rounds(ev),
-                lb0=ct.get('lnB_rfree_vs_r0'), lb0e=ct.get('lnB_err'), r0c=r0comps(ev, ct))
+                lb0=ct.get('lnB_rfree_vs_r0'), lb0e=ct.get('lnB_err'), r0c=r0comps(ev, ct), p0=p0)
+
+
+def dedup(und, pund):
+    """The same borderline choice (same two models) met more than once, e.g.
+    in Res_wr and again in Res_r0, or in the tree and again in the profile
+    scheme: shown once, with n = how many times and the range of ln B."""
+    seen = {}
+    for c in und:
+        key = (c['c'], c['o'], c['c0'], c['o0'])
+        if key in seen:
+            s = seen[key]
+            s['n'] += 1
+            s['bmin'], s['bmax'] = min(s['bmin'], c['b']), max(s['bmax'], c['b'])
+        else:
+            seen[key] = dict(c, n=1, bmin=c['b'], bmax=c['b'], prof=False)
+    out = list(seen.values())
+    pout = []
+    for c in pund:
+        same = [s for s in out if (s['c'], s['o']) in ((c['c'], c['o']), (c['o'], c['c']))
+                and not s['c0'] and not s['o0']]
+        if same:
+            same[0]['prof'] = True
+        else:
+            pout.append(c)
+    return out, pout
+
+
+def phase0_info(t, ev):
+    """Phase 0 check (run_tree.py --phase0): its model, the spectra it keeps
+    that are not in the final model of the analysis, and the decisions of
+    the two halves. None if the set had no phase 0."""
+    f = os.path.join(t, 'conclusion.json')
+    p = json.load(open(f)).get('phase0') if os.path.isfile(f) else None
+    if not p:
+        return None
+    steps = [dict(h=e.get('split'), q=model_tex(e['question'].split('(')[1].split(')')[0]),
+                  a=e['answer'], b=round(e['lnB'], 2), ml=e.get('method') == 'ML estimate')
+             for e in ev if e['node'] == 'phase0_pref']
+    kept = {e.get('split'): model_tex(e['answer']) for e in ev if e['node'] == 'phase0_split'}
+    extra = [model_tex('M_' + g + '_r') for g in p.get('extra_groups', [])]
+    return dict(start=model_tex(p['start']), extra=extra, steps=steps, kept=kept)
 
 
 def r0comps(ev, ct):
@@ -151,11 +214,11 @@ def r0comps(ev, ct):
         if e['node'] == 'pref' and q.startswith('Is M_1,0 (') and 'lnB' in e and not e.get('method'):
             m = q.split('(')[1].split(')')[0]
             out.append(dict(w='M₁,₀', m=model_tex(m), x=round(e['lnB'], 2), e=round(e['lnB_err'], 2),
-                            g=r0grade(e['lnB'], e['lnB_err'])))
+                            g=r0grade(e['lnB'], e['lnB_err'], xx=True)))
     lb, le = ct.get('lnB_rfree_vs_r0'), ct.get('lnB_err')
     if lb is not None:
         out.append(dict(w='M₀,₀', m=model_tex(ct.get('model')), x=round(-lb, 2), e=round(le, 2),
-                        g=r0grade(-lb, le)))
+                        g=r0grade(-lb, le, xx=True)))
     return out
 
 fin = lambda v: isinstance(v, float) and math.isfinite(v)
@@ -181,6 +244,11 @@ for _, r in d.iterrows():
         tw=bool(r.r_true > r.t_r95 if r.t_concl == 'upper_limit' else r.r_true == 0),
         pw=bool(r.r_true > r.p_r95 if r.p_concl == 'upper_limit' else r.r_true == 0),
         r0g=max((c['g'] for c in x['r0c']), key=lambda g: RANK[g], default=''),
+        p0=bool(x['p0'] and x['p0']['extra']),
+        tneg=bool(r.t_r / r.t_sig < NEG), pneg=bool(r.p_r / r.p_sig < NEG),
+        # distance of r = 0 in sigma: posterior median / standard deviation
+        # (tree), the same from the profile posterior (profile scheme)
+        tz=f(r.t_r / r.t_sig, 1), pz=f(r.p_r / r.p_sig, 1),
         x=x))
 from summary import summary
 
@@ -195,6 +263,26 @@ def block(text, name):
 run = open(ARGS[1]).read()
 html = open(os.path.join(os.path.dirname(os.path.abspath(__file__)),
                          'template.html')).read()
+# blind run (no true r in the table): sections that need the true r or the
+# sky (<!--TRUTH--> ... <!--/TRUTH-->) out, the blind ones (<!--BLIND-->) in;
+# otherwise the reverse
+BLIND = bool(d.r_true.isna().all())
+html = re.sub(r'<!--%s-->.*?<!--/%s-->\n?' % (('TRUTH',) * 2 if BLIND else ('BLIND',) * 2), '', html, flags=re.S)
+html = re.sub(r'<!--/?(TRUTH|BLIND)-->\n?', '', html)
+html = html.replace('/*BLIND*/false', 'true' if BLIND else 'false')
+# review of the sets (review.csv in the root, exported from the page: set,
+# conclusion_trusted, model_trusted, comment): fixed in the page, read only,
+# with the plots of make_page.sh instead of the ones drawn in the browser
+RF = os.path.join(ROOT, 'review.csv')
+REV = None
+if os.path.isfile(RF):
+    rv = pd.read_csv(RF, dtype=str, keep_default_na=False)
+    REV = dict(ok=[r.set for r in rv.itertuples() if r.conclusion_trusted == '1'],
+               okm=[r.set for r in rv.itertuples() if r.model_trusted == '1'],
+               notes={r.set: r.comment for r in rv.itertuples() if r.comment.strip()})
+html = re.sub(r'<!--%s-->.*?<!--/%s-->\n?' % (('LIVE',) * 2 if REV else ('FROZEN',) * 2), '', html, flags=re.S)
+html = re.sub(r'<!--/?(LIVE|FROZEN)-->\n?', '', html)
+html = html.replace('/*REVIEW*/null', json.dumps(REV, ensure_ascii=False).replace('</', '<\\/') if REV else 'null')
 html = (html.replace('<!--TITLE-->', block(run, 'TITLE').strip())
         .replace('<!--HEADER-->\n', block(run, 'HEADER'))
         .replace('<!--KEYS-->\n', block(run, 'KEYS'))
@@ -216,5 +304,11 @@ if '--standalone' in sys.argv:
             '<meta name="viewport" content="width=device-width, '
             'initial-scale=1">\n' + html[:i] + '\n</head>\n<body>\n'
             + html[i:] + '\n</body>\n</html>\n')
+# figures not made for this run (e.g. the d9s4 ones in a run with random
+# skies only): out of the page
+OUTD = os.path.dirname(os.path.abspath(ARGS[2]))
+html = re.sub(r'\s*<figure><img data-lb src="(figures/[^"?]+)[^"]*"[^>]*>\s*<figcaption>.*?</figcaption></figure>',
+              lambda m: m.group(0) if os.path.isfile(os.path.join(OUTD, m.group(1)))
+              and not (m.group(1).endswith('_d9s4.png') and (d.kind != 'd9s4').all()) else '', html, flags=re.S)
 open(ARGS[2], 'w').write(html)
 print(len(rows), 'sets ->', ARGS[2])

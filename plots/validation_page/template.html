@@ -67,6 +67,8 @@ tr.detail td { white-space: normal; background: var(--bg); color: var(--fg); fon
 .c-pte { background: var(--warn-soft); color: var(--warn); }
 .c-und { background: var(--und-soft); color: var(--und); }
 .c-m10 { background: var(--accent-soft); color: var(--accent); }
+.c-p0 { background: var(--und-soft); color: var(--fg); border: 1px solid var(--und); }
+.c-neg { background: var(--bad-soft); color: var(--bad); }
 .p2 { color: var(--bad); font-weight: 600; }
 .p1 { color: var(--warn); }
 .ul { color: var(--muted); }
@@ -101,6 +103,20 @@ figcaption { color: var(--muted); font-size: .85rem; max-width: 95ch; }
 .keys b { font-weight: 600; }
 .byline { color: var(--muted); font-size: .95rem; margin: -6px 0 14px; }
 details.more summary { cursor: pointer; color: var(--accent); font-size: .9rem; margin-top: 4px; }
+td.okc { text-align: center; }
+td.okc input { width: 16px; height: 16px; cursor: pointer; accent-color: var(--accent); }
+.okbar { display: inline-flex; gap: 8px; align-items: center; margin-left: auto; font-size: .85rem; color: var(--muted); }
+.okbar button, .okimp { font: inherit; font-size: .8rem; padding: 3px 9px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); color: var(--ink, inherit); cursor: pointer; }
+.okimp input { display: none; }
+.band { display: inline-block; width: 14px; height: 12px; border-radius: 2px; margin-right: 6px; vertical-align: -1px; }
+.b-bad { background: rgba(220, 40, 50, .30); } .b-mod { background: rgba(242, 201, 76, .55); }
+#myplots svg { width: 100%; height: auto; display: block; margin-bottom: 22px; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; }
+#myplots svg text { fill: var(--fg); font-family: inherit; }
+#myplots svg .ax { stroke: var(--muted); } #myplots svg .gr { stroke: var(--line); }
+textarea.note { width: 100%; max-width: 90ch; min-height: 4.5em; font: inherit; font-size: .9rem; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg, transparent); color: inherit; resize: vertical; }
+.nt { color: var(--accent); margin-left: 4px; }
+.notefix { white-space: pre-wrap; max-width: 90ch; padding: 6px 10px; border-left: 3px solid var(--accent); background: var(--accent-soft); border-radius: 4px; }
+.nomark { color: #c8323c; }
 </style>
 
 <div class="wrap">
@@ -115,7 +131,7 @@ details.more summary { cursor: pointer; color: var(--accent); font-size: .9rem; 
   </section>
   <section>
     <h2>Parameters and priors: moment spectra</h2>
-    <div class="scroll"><table><thead><tr><th>family</th><th>spectrum amplitude A</th><th>prior</th></tr></thead><tbody><tr><td>d</td><td>A<sub>d</sub>×β<sub>d</sub></td><td>flat [−5, 5]</td></tr><tr><td></td><td>β<sub>d</sub>×β<sub>d</sub></td><td>flat [0, 5]</td></tr><tr><td>s</td><td>A<sub>s</sub>×β<sub>s</sub></td><td>flat [−2, 2]</td></tr><tr><td></td><td>β<sub>s</sub>×β<sub>s</sub></td><td>flat [0, 1]</td></tr><tr><td>dT</td><td>A<sub>d</sub>×T<sub>d</sub></td><td>flat [−0.5, 0.5]</td></tr><tr><td></td><td>T<sub>d</sub>×T<sub>d</sub></td><td>flat [0, 0.025]</td></tr><tr><td></td><td>β<sub>d</sub>×T<sub>d</sub> (with d)</td><td>flat [−0.25, 0.25]</td></tr><tr><td>d2</td><td>A<sub>d</sub>×β<sub>d</sub><sup>2</sup></td><td>flat [−5, 5]</td></tr><tr><td></td><td>β<sub>d</sub>×β<sub>d</sub><sup>2</sup></td><td>flat [−2.5, 2.5]</td></tr><tr><td></td><td>β<sub>d</sub><sup>2</sup>×β<sub>d</sub><sup>2</sup></td><td>flat [0, 2.5]</td></tr><tr><td>s2</td><td>A<sub>s</sub>×β<sub>s</sub><sup>2</sup></td><td>flat [−1, 1]</td></tr><tr><td></td><td>β<sub>s</sub>×β<sub>s</sub><sup>2</sup></td><td>flat [−0.5, 0.5]</td></tr><tr><td></td><td>β<sub>s</sub><sup>2</sup>×β<sub>s</sub><sup>2</sup></td><td>flat [0, 0.5]</td></tr><tr><td>ds1</td><td>A<sub>d</sub>×β<sub>s</sub></td><td>flat [−2, 2]</td></tr><tr><td></td><td>β<sub>d</sub>×A<sub>s</sub></td><td>flat [−2, 2]</td></tr><tr><td>ds2</td><td>β<sub>d</sub>×β<sub>s</sub></td><td>flat [−1, 1]</td></tr></tbody></table></div>
+    <div class="scroll"><table><thead><tr><th>moment spectrum, amplitude A</th><th>prior</th><th>only with</th></tr></thead><tbody><tr><td>β<sub>d</sub>×β<sub>d</sub></td><td>flat [0, 5]</td><td class="ul">—</td></tr><tr><td>A<sub>d</sub>×β<sub>d</sub></td><td>flat [−5, 5]</td><td class="ul">β<sub>d</sub>×β<sub>d</sub></td></tr><tr><td>β<sub>s</sub>×β<sub>s</sub></td><td>flat [0, 1]</td><td class="ul">—</td></tr><tr><td>A<sub>s</sub>×β<sub>s</sub></td><td>flat [−2, 2]</td><td class="ul">β<sub>s</sub>×β<sub>s</sub></td></tr><tr><td>T<sub>d</sub>×T<sub>d</sub></td><td>flat [0, 0.025]</td><td class="ul">—</td></tr><tr><td>A<sub>d</sub>×T<sub>d</sub></td><td>flat [−0.5, 0.5]</td><td class="ul">T<sub>d</sub>×T<sub>d</sub></td></tr><tr><td>β<sub>d</sub>×T<sub>d</sub></td><td>flat [−0.25, 0.25]</td><td class="ul">on with β<sub>d</sub>×β<sub>d</sub> and T<sub>d</sub>×T<sub>d</sub></td></tr><tr><td>β<sub>d</sub><sup>2</sup>×β<sub>d</sub><sup>2</sup></td><td>flat [0, 2.5]</td><td class="ul">β<sub>d</sub>×β<sub>d</sub></td></tr><tr><td>β<sub>d</sub>×β<sub>d</sub><sup>2</sup></td><td>flat [−2.5, 2.5]</td><td class="ul">β<sub>d</sub>×β<sub>d</sub>, β<sub>d</sub><sup>2</sup>×β<sub>d</sub><sup>2</sup></td></tr><tr><td>A<sub>d</sub>×β<sub>d</sub><sup>2</sup></td><td>flat [−5, 5]</td><td class="ul">β<sub>d</sub><sup>2</sup>×β<sub>d</sub><sup>2</sup></td></tr><tr><td>β<sub>s</sub><sup>2</sup>×β<sub>s</sub><sup>2</sup></td><td>flat [0, 0.5]</td><td class="ul">β<sub>s</sub>×β<sub>s</sub></td></tr><tr><td>β<sub>s</sub>×β<sub>s</sub><sup>2</sup></td><td>flat [−0.5, 0.5]</td><td class="ul">β<sub>s</sub>×β<sub>s</sub>, β<sub>s</sub><sup>2</sup>×β<sub>s</sub><sup>2</sup></td></tr><tr><td>A<sub>s</sub>×β<sub>s</sub><sup>2</sup></td><td>flat [−1, 1]</td><td class="ul">β<sub>s</sub><sup>2</sup>×β<sub>s</sub><sup>2</sup></td></tr><tr><td>A<sub>d</sub>×β<sub>s</sub></td><td>flat [−2, 2]</td><td class="ul">β<sub>s</sub>×β<sub>s</sub></td></tr><tr><td>β<sub>d</sub>×A<sub>s</sub></td><td>flat [−2, 2]</td><td class="ul">β<sub>d</sub>×β<sub>d</sub></td></tr><tr><td>β<sub>d</sub>×β<sub>s</sub></td><td>flat [−1, 1]</td><td class="ul">β<sub>d</sub>×β<sub>d</sub>, β<sub>s</sub>×β<sub>s</sub></td></tr></tbody></table></div>
     <p class="ul sumnote">Each spectrum is A (ℓ/80)<sup>α</sup> in D<sub>ℓ</sub> at the pivot frequency of its component (units of √(A<sub>d</sub>A<sub>s</sub>) for the dust × synch terms; T<sub>d</sub> moments in K<sup>−1</sup>); every slope α flat in [−2, 0.5]. Constraints: the covariance of the moment maps is positive semi-definite at every ℓ (auto-spectra ≥ 0, cross terms bounded by Cauchy–Schwarz), and each second-order auto-spectrum is at most 10 × (first order)<sup>2</sup> / (component).</p>
   </section>
   </div>
@@ -124,11 +140,11 @@ details.more summary { cursor: pointer; color: var(--accent); font-size: .9rem; 
     <h2>How the pipeline works</h2>
     <ul>
       <li><b>Start simple.</b> Fit the model without moments (dust and synchrotron with a fixed SED, r free). If its χ² is good and r is compatible with 0 at 1σ, stop with an upper limit.</li>
-      <li><b>Look for moments in the residuals</b>, first with r at its best fit (Res<sub>wr</sub>: first order in β<sub>d</sub> and β<sub>s</sub>), then with r = 0 (Res<sub>r0</sub>: also T<sub>d</sub>, second order in β, dust × synchrotron), so that a moment can show up even when r has absorbed it. A family is a candidate if it lowers the AIC of the residual fit.</li>
-      <li><b>Keep a moment only if the evidence wants it.</b> Each candidate is fitted with all the parameters free, its spectra compatible with 0 are pruned, and it is adopted if its Bayesian evidence beats the current model (ln B &gt; 0). Clearly worse candidates are rejected from the ML fits without the evidence run; borderline comparisons are repeated with other sampler seeds. After an adoption the search starts again from the new model.</li>
+      <li><b>Look for moments in the residuals, one spectrum at a time</b>, first with r at its best fit (Res<sub>wr</sub>: β<sub>d</sub>×β<sub>d</sub>, β<sub>s</sub>×β<sub>s</sub>, A<sub>d</sub>×β<sub>d</sub>, A<sub>s</sub>×β<sub>s</sub>), then with r = 0 (Res<sub>r0</sub>: also T<sub>d</sub>, second order in β, dust × synchrotron), so that a moment can show up even when r has absorbed it. A spectrum is tested only when the spectra it requires are already in the model (a cross spectrum needs both auto-spectra, a second-order auto-spectrum the first-order one), and it is a candidate if it lowers the AIC of the residual fit (Δχ² &gt; 2).</li>
+      <li><b>Keep a moment only if the evidence wants it.</b> Each candidate is fitted with all the parameters free and adopted if its Bayesian evidence beats the current model (ln B &gt; 0); no pruning. Clearly worse candidates are rejected from the ML fits without the evidence run; borderline comparisons are repeated with other sampler seeds. After an adoption the search starts again from the new model.</li>
       <li><b>Moments instead of r.</b> If a model with r = 0 and more moments is preferred over the current one, the search stops: the Bayesian result stays the 3σ test on the current model, and the case is flagged.</li>
       <li><b>Conclusion of the tree.</b> 0 outside the central 3σ of the posterior of r → r detection; otherwise upper limit (95%, r ≥ 0).</li>
-      <li><b>Profile scheme.</b> The final model of the tree and the moment families found with r = 0 are compared again, each at its own r (minimum of its profile likelihood); the posterior of r from the profile of the winner gives the final conclusion with the same 3σ rule.</li>
+      <li><b>Profile scheme.</b> The final model of the tree and the moment spectra found with r = 0 are compared again, each at its own r (minimum of its profile likelihood); the posterior of r from the profile of the winner gives the final conclusion with the same 3σ rule.</li>
       <li><b>Flags</b> mark what to look at, without changing the result: low PTE, a borderline decision (≈), a model with r = 0 preferred or nearly preferred (r=0).</li>
     </ul>
   </section>
@@ -147,7 +163,9 @@ details.more summary { cursor: pointer; color: var(--accent); font-size: .9rem; 
   <section>
     <h2>Summary: tree → profile scheme</h2>
     <div class="scroll"><table id="sumres"></table></div>
+<!--TRUTH-->
     <p class="ul sumnote">Bias = mean pull ± its error over the sets; width = standard deviation of the pulls (1 if σ is right). Coverage with the 68% central interval of each set (expected 68%). Detections and upper limits as concluded by each scheme.</p>
+<!--/TRUTH-->
   </section>
 
   <div class="sumgrid">
@@ -158,6 +176,7 @@ details.more summary { cursor: pointer; color: var(--accent); font-size: .9rem; 
   </section>
   </div>
 
+<!--TRUTH-->
   <div class="sumgrid">
   <section>
     <h2>Mean pull by sky: Bayesian tree</h2>
@@ -185,14 +204,34 @@ details.more summary { cursor: pointer; color: var(--accent); font-size: .9rem; 
       <figcaption>r set by set, d9s4, profile scheme: median and 68% interval (detections), 95% upper limit (orange bar); the star is the true r. Red circle and band: wrong conclusion (true r above the 95% upper limit, or detection with true r = 0); yellow: detection with true r &lt; 3×10⁻³, as in the table.</figcaption></figure>
       <figure><img data-lb src="figures/r_sets_rand_vs_d9s4_profile.png" alt="r set by set, random skies, with d9s4 of the same set">
       <figcaption>r set by set, random skies, profile scheme. Black star: true r; green diamond: r of d9s4 of the same set (same CMB + noise) from the first fit of the tree, without moments (M<sub>0,r</sub>, done in every set), so the distance from the diamond shows the effect of the foregrounds alone. Red circle and band: wrong conclusion; yellow: detection with true r &lt; 3×10⁻³. Sky under each set.</figcaption></figure>
+      <figure><img data-lb src="figures/r_sets_rand_profile.png" alt="r set by set, random skies, profile scheme">
+      <figcaption>r set by set, random skies, profile scheme: median and 68% interval (detections), 95% upper limit (orange bar); the star is the true r, sky under each set. Red circle and band: wrong conclusion; yellow: detection with true r &lt; 3×10⁻³.</figcaption></figure>
       <details class="more"><summary>same plots for the Bayesian tree</summary>
         <div class="figs" style="margin-top:12px">
           <figure><img data-lb src="figures/r_sets_d9s4_tree.png" alt="r set by set, d9s4, tree"><figcaption>d9s4, tree.</figcaption></figure>
           <figure><img data-lb src="figures/r_sets_rand_vs_d9s4_tree.png" alt="r set by set, random skies, tree"><figcaption>Random skies, tree; star: true r, diamond: d9s4 of the same set, fit without moments.</figcaption></figure>
+          <figure><img data-lb src="figures/r_sets_rand_tree.png" alt="r set by set, random skies, tree"><figcaption>Random skies, tree; star: true r.</figcaption></figure>
         </div>
       </details>
     </div>
   </section>
+<!--/TRUTH-->
+<!--BLIND-->
+  <section>
+    <h2>Plots</h2>
+    <div class="figs">
+      <figure><img data-lb src="figures/r0flag_vs_rest.png" alt="sets in increasing estimated r, coloured by the r = 0 flag">
+      <figcaption>Sets in increasing estimated r: best fit r* of the model chosen by the profile scheme and its 68% interval, set number above. Colour: r=0 flag (blue: a model with r = 0 preferred, by a lot or a little; pink: not preferred, by a little or a lot); circle: r detection, triangle: upper limit (profile scheme).</figcaption></figure>
+      <figure><img data-lb src="figures/r_sets_profile.png" alt="r set by set, profile scheme">
+      <figcaption>r set by set, profile scheme: median and 68% interval (detections filled, upper limits open), 95% upper limit (orange bar).</figcaption></figure>
+      <details class="more"><summary>same plot for the Bayesian tree</summary>
+        <div class="figs" style="margin-top:12px">
+          <figure><img data-lb src="figures/r_sets_tree.png" alt="r set by set, tree"><figcaption>r set by set, Bayesian tree.</figcaption></figure>
+        </div>
+      </details>
+    </div>
+  </section>
+<!--/BLIND-->
 
 
 
@@ -205,29 +244,77 @@ details.more summary { cursor: pointer; color: var(--accent); font-size: .9rem; 
       <label for="fflag">Show<select id="fflag">
         <option value="all">all sets</option>
         <option value="any">any flag</option>
+        <option value="ok">conclusion trusted (checked)</option>
+        <option value="nok">conclusion not checked</option>
+        <option value="okm">model trusted (checked)</option>
+        <option value="nokm">model not checked</option>
+        <option value="note">with my comment</option>
         <option value="pte">PTE &lt; 0.01 (tree or profile)</option>
         <option value="und">≈ borderline decision</option>
         <option value="r0any">r=0: any</option>
         <option value="r0vv">r=0 ✓✓ preferred by a lot</option>
         <option value="r0v">r=0 ✓ preferred by a little</option>
         <option value="r0x">r=0 ✗ not preferred by a little</option>
+        <option value="r0xx">r=0 ✗✗ not preferred by a lot</option>
+        <option value="p0">phase 0 finds something else</option>
+        <option value="neg">r &lt; −1.5σ (tree or profile)</option>
+<!--TRUTH-->
         <option value="wrong">wrong conclusion (tree or profile)</option>
         <option value="low">detection with true r &lt; 3×10⁻³</option>
         <option value="big">|pull| &gt; 2 (tree or profile)</option>
         <option value="r0">r true = 0</option>
+<!--/TRUTH-->
       </select></label>
       <label for="fq">Set<input id="fq" type="search" placeholder="e.g. 018"></label>
       <span class="count" id="count"></span>
+      <span class="okbar"><span id="okn"></span>
+        <button type="button" id="okx">export checks and comments</button>
+        <label class="okimp">import<input id="oki" type="file" accept=".csv,.txt"></label></span>
     </div>
     <div class="legend" style="margin:10px 0">
       <span><span class="chip c-pte">PTE</span>final model PTE &lt; 0.01</span>
       <span><span class="chip c-und">≈</span>a decision taken on inconclusive evidence: |ln B − threshold| &lt; 1 (Jeffreys scale, Trotta 2008)</span>
-      <span>model with r = 0 against M₀,r: <span class="chip c-m10">r=0 ✓✓</span>preferred by a lot <span class="chip c-m10">r=0 ✓</span>preferred by a little <span class="chip c-m10">r=0 ✗</span>not preferred, by a little (a little: |ln B| &lt; 1)</span>
+      <span>model with r = 0 against M₀,r: <span class="chip c-m10">r=0 ✓✓</span>preferred by a lot <span class="chip c-m10">r=0 ✓</span>preferred by a little <span class="chip c-m10">r=0 ✗</span>not preferred, by a little <span class="chip c-m10">r=0 ✗✗</span>not preferred, by a lot (a little: |ln B| &lt; 1; every set has a grade, from its final model with r = 0)</span>
+      <span><span class="chip c-p0">p0</span>the phase 0 (synchrotron moments searched on LF+MF, dust moments on MF+UHF, first order, by evidence) keeps a spectrum that is not in the final model</span>
+      <span><b>r/σ</b>: distance of r = 0 in σ, posterior median over its standard deviation (tree: posterior of the evidence run; profile scheme: posterior from the profile likelihood)</span>
+      <span><span class="chip c-neg">r&lt;0</span>r below zero by more than 1.5σ: probably a moment subtracting too much</span>
+<!--TRUTH-->
       <span><span class="chip c-pte">det</span>yellow cells: detection with true r &lt; 3×10⁻³</span>
       <span><span class="wrong">UL ✗ / det ✗</span> red cells: wrong conclusion: true r above the 95% upper limit, or detection with true r = 0</span>
+<!--/TRUTH-->
     </div>
     <div class="scroll"><table id="sets"></table></div>
   </section>
+
+<!--LIVE-->
+  <section>
+    <h2>Plots with my checks</h2>
+    <div class="legend" style="margin:0 0 10px">
+      <span><span class="band b-bad"></span>conclusion not checked</span>
+      <span><span class="band b-mod"></span>conclusion checked, model not checked</span>
+      <span>no band: both checked. The bands follow the check boxes of the table.</span>
+    </div>
+    <div id="myplots"></div>
+  </section>
+<!--/LIVE-->
+<!--FROZEN-->
+  <section>
+    <h2>Plots with the review of the sets</h2>
+    <div class="legend" style="margin:0 0 10px">
+      <span><span class="band b-bad"></span>conclusion not trusted</span>
+      <span><span class="band b-mod"></span>conclusion trusted, foreground model not trusted</span>
+      <span>no band: both trusted (review of each set by eye, columns concl. ✓ and model ✓ of the table, comments in the details)</span>
+    </div>
+    <div class="figs">
+      <figure><img data-lb src="figures/r0flag_vs_rest_review.png" alt="r = 0 flag with the review bands">
+      <figcaption>Sets in increasing estimated r (best fit r* of the profile scheme and its 68% interval, set number above), coloured by the r=0 flag; circle: detection, triangle: upper limit. Bands: review of the set.</figcaption></figure>
+      <figure><img data-lb src="figures/r_sets_profile_review.png" alt="r set by set, profile scheme, with the review bands">
+      <figcaption>r set by set, profile scheme, with the review bands.</figcaption></figure>
+      <figure><img data-lb src="figures/r_sets_tree_review.png" alt="r set by set, tree, with the review bands">
+      <figcaption>r set by set, Bayesian tree, with the review bands.</figcaption></figure>
+    </div>
+  </section>
+<!--/FROZEN-->
 </div>
 
 <div class="lb" id="lb" role="dialog" aria-label="image viewer">
@@ -238,6 +325,10 @@ details.more summary { cursor: pointer; color: var(--accent); font-size: .9rem; 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
 <script>
 const D = /*DATA*/[];
+// blind run: no true r, no sky, no pulls (build_page.py sets it)
+const BLIND = /*BLIND*/false;
+// review of the sets fixed in the page (review.csv of the run): read only
+const REVIEW = /*REVIEW*/null;
 const SUM = /*SUMMARY*/{};
 // moment spectra in TeX, rendered as MathML (no KaTeX stylesheet needed)
 const mx = t => {
@@ -259,12 +350,49 @@ const rv = (c, r, lo, hi, u) => ae(r, lo, hi, v => v.toFixed(1)) + (c === 'upper
 const cv = (c, w) => { const t = c === 'upper_limit' ? 'UL' : 'det';
   return w ? `<span class="wrong" title="${c === 'upper_limit' ? 'wrong: true r above the 95% upper limit' : 'wrong: detection with true r = 0'}">${t} ✗</span>` : t; };
 const tflags = r => (r.tlow ? '<span class="chip c-pte">PTE</span>' : '') + (r.tund ? '<span class="chip c-und">≈</span>' : '') +
-  (r.r0g ? `<span class="chip c-m10">r=0 ${r.r0g}</span>` : '');
-const pflags = r => (r.plow ? '<span class="chip c-pte">PTE</span>' : '') + (r.pu ? '<span class="chip c-und">≈</span>' : '');
+  (r.r0g ? `<span class="chip c-m10">r=0 ${r.r0g}</span>` : '') + (r.p0 ? '<span class="chip c-p0">p0</span>' : '') +
+  (r.tneg ? '<span class="chip c-neg">r&lt;0</span>' : '');
+const pflags = r => (r.plow ? '<span class="chip c-pte">PTE</span>' : '') + (r.pu ? '<span class="chip c-und">≈</span>' : '') +
+  (r.pneg ? '<span class="chip c-neg">r&lt;0</span>' : '');
 const PTE_FLAG = 0.01;
+// distance of r = 0 in sigma: posterior median / standard deviation
+const zs = z => z == null ? '' : `${z.toFixed(1)}σ`;
+// check boxes "I trust the conclusion" (OK) and "I trust the model" (OKM):
+// saved in this browser (one list per page title), exported / imported as csv
+const OKKEY = 'bbsure-solid:' + document.title, OKMKEY = 'bbsure-model:' + document.title;
+let OK = new Set(), OKM = new Set();
+if (!REVIEW) {
+  try { OK = new Set(JSON.parse(localStorage.getItem(OKKEY) || '[]')); } catch (e) {}
+  try { OKM = new Set(JSON.parse(localStorage.getItem(OKMKEY) || '[]')); } catch (e) {}
+} else { OK = new Set(REVIEW.ok); OKM = new Set(REVIEW.okm); }
+const saveOK = () => { if (REVIEW) return; try { localStorage.setItem(OKKEY, JSON.stringify([...OK]));
+  localStorage.setItem(OKMKEY, JSON.stringify([...OKM])); } catch (e) {} };
+const okmark = v => v ? '<span class="yes" title="trusted">✓</span>' : '<span class="nomark" title="not trusted">✗</span>';
+const okText = () => `${OK.size} conclusions, ${OKM.size} models trusted`;
+// comments written on the page, one per set, saved the same way
+const NOTEKEY = 'bbsure-notes:' + document.title;
+let NOTES = {};
+if (!REVIEW) { try { NOTES = JSON.parse(localStorage.getItem(NOTEKEY) || '{}'); } catch (e) {} }
+else NOTES = REVIEW.notes;
+const saveNotes = () => { if (REVIEW) return; try { localStorage.setItem(NOTEKEY, JSON.stringify(NOTES)); } catch (e) {} };
+const esc = t => t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+const csvq = t => /[",\n\r]/.test(t) ? '"' + t.replace(/"/g, '""') + '"' : t;
+function csvparse(t) {
+  const rows = []; let row = [], f = '', q = false;
+  for (let i = 0; i < t.length; i++) {
+    const c = t[i];
+    if (q) { if (c === '"') { if (t[i + 1] === '"') { f += '"'; i++; } else q = false; } else f += c; }
+    else if (c === '"') q = true;
+    else if (c === ',') { row.push(f); f = ''; }
+    else if (c === '\n' || c === '\r') { if (c === '\r' && t[i + 1] === '\n') i++; row.push(f); rows.push(row); row = []; f = ''; }
+    else f += c;
+  }
+  if (f || row.length) { row.push(f); rows.push(row); }
+  return rows;
+}
 D.forEach(r => { r.tlow = r.tpte < PTE_FLAG; r.plow = r.ppte < PTE_FLAG; });
 D.forEach(r => { r.tb = r.x.tbr * 1e3; r.pb = r.x.pbr * 1e3; });
-D.forEach(r => { r.tund = !!(r.um || r.ur || r.up); r.any = r.tlow || r.plow || r.tund || r.pu || !!r.r0g; r.grp = r.k === 'd9s4' ? 'd9s4' : 'rand'; });
+D.forEach(r => { r.tund = !!(r.um || r.ur || r.up); r.any = r.tlow || r.plow || r.tund || r.pu || !!r.r0g || r.p0 || r.tneg || r.pneg; r.grp = r.k === 'd9s4' ? 'd9s4' : 'rand'; });
 
 // summary
 const cnt = f => D.filter(f).length;
@@ -276,8 +404,10 @@ const stats = [
   [cnt(r => r.ur), 'undecided M₁,₀ vs M₀,r'],
   [cnt(r => r.pu), 'undecided profile choice'],
   [cnt(r => r.m10), 'M₁,₀ preferred'],
-  [`${cnt(r => r.rt === 0 && (r.tc === 'r_detection' || r.pc === 'r_detection'))} / ${cnt(r => r.rt === 0)}`, 'detections with r true = 0'],
-];
+  [cnt(r => r.p0), 'phase 0 finds something else'],
+  [`${cnt(r => r.tneg)} / ${cnt(r => r.pneg)}`, 'r < −1.5σ (tree / profile)'],
+].concat(BLIND ? [] : [
+  [`${cnt(r => r.rt === 0 && (r.tc === 'r_detection' || r.pc === 'r_detection'))} / ${cnt(r => r.rt === 0)}`, 'detections with r true = 0']]);
 if ($('stats')) $('stats').innerHTML = stats.map(([v, l]) => `<div class="stat"><b>${v}</b><span>${l}</span></div>`).join('');
 
 const mean = a => a.length ? a.reduce((x, y) => x + y, 0) / a.length : NaN;
@@ -290,34 +420,36 @@ if ($('bysky')) $('bysky').innerHTML = `<thead><tr class="grp"><th></th><th clas
     return `<tr><td>${n}</td><td class="n">${v.length}</td><td class="n">${v.filter(r => r.any).length}</td><td class="n">${fmt(mean(v.map(r => r.tp)))}</td><td class="n">${fmt(mean(u.map(r => r.tp)))}</td><td class="n">${fmt(mean(v.map(r => r.pp)))}</td><td class="n">${fmt(mean(u.map(r => r.pp)))}</td><td class="n">${v.filter(r => Math.abs(r.pp) > 2).length}</td></tr>`; }).join('') + '</tbody>';
 
 // table
-const skies = ['all', 'd9s4 (kind)', 'rand (kind)', ...[...new Set(D.map(r => r.sky))].sort()];
+const skies = BLIND ? ['all'] : ['all', 'd9s4 (kind)', 'rand (kind)', ...[...new Set(D.map(r => r.sky))].sort()];
 $('fsky').innerHTML = skies.map(s => `<option value="${s}">${s}</option>`).join('');
-const cols = [['s', 'set'], ['sky', 'sky'], ['rt', 'r true', 1], ['tm', 'model'], ['tc', ''], ['tr', 'r', 1], ['tb', 'best fit', 1], ['tp', 'pull', 1], ['tpte', 'PTE', 1], ['tf', 'flags'],
-  ['pm', 'model'], ['pc', ''], ['pr', 'r', 1], ['pb', 'r*', 1], ['pp', 'pull', 1], ['pf', 'flags']];
+const cols = [['s', 'set'], ['ok', 'concl. ✓'], ['okm', 'model ✓'], ['sky', 'sky'], ['rt', 'r true', 1], ['tm', 'model'], ['tc', ''], ['tr', 'r', 1], ['tb', 'best fit', 1], ['tz', 'r/σ', 1], ['tp', 'pull', 1], ['tpte', 'PTE', 1], ['tf', 'flags'],
+  ['pm', 'model'], ['pc', ''], ['pr', 'r', 1], ['pb', 'r*', 1], ['pz', 'r/σ', 1], ['pp', 'pull', 1], ['pf', 'flags']]
+  .filter(([k]) => !BLIND || !['sky', 'rt', 'tp', 'pp'].includes(k));
 let sortK = 's', sortD = 1;
-const filters = { all: () => true, any: r => r.any, tlow: r => r.tlow, um: r => r.um, ur: r => r.ur, up: r => r.up, pu: r => r.pu, m10: r => !!r.m10, pte: r => r.tlow || r.plow, und: r => r.tund || r.pu, r0any: r => !!r.r0g, r0vv: r => r.r0g === '✓✓', r0v: r => r.r0g === '✓', r0x: r => r.r0g === '✗',
+const filters = { all: () => true, any: r => r.any, ok: r => OK.has(r.s), nok: r => !OK.has(r.s), okm: r => OKM.has(r.s), nokm: r => !OKM.has(r.s), note: r => !!NOTES[r.s], tlow: r => r.tlow, um: r => r.um, ur: r => r.ur, up: r => r.up, pu: r => r.pu, m10: r => !!r.m10, pte: r => r.tlow || r.plow, und: r => r.tund || r.pu, r0any: r => !!r.r0g, r0vv: r => r.r0g === '✓✓', r0v: r => r.r0g === '✓', r0x: r => r.r0g === '✗', r0xx: r => r.r0g === '✗✗', p0: r => r.p0, neg: r => r.tneg || r.pneg,
   big: r => Math.abs(r.tp) > 2 || Math.abs(r.pp) > 2, wrong: r => r.tw || r.pw, low: r => (r.tc === 'r_detection' || r.pc === 'r_detection') && r.rt < 3, r0: r => r.rt === 0 };
 function render() {
   const sky = $('fsky').value, fl = filters[$('fflag').value], q = $('fq').value.trim();
   let v = D.filter(r => (sky === 'all' || (sky === 'd9s4 (kind)' ? r.k === 'd9s4' : sky === 'rand (kind)' ? r.k === 'rand' : r.sky === sky)) && fl(r) && (!q || r.s.includes(q)));
-  const key = { tf: r => !!r.any, pf: r => r.plow || r.pu }[sortK] || (r => r[sortK]);
+  const key = { ok: r => OK.has(r.s), okm: r => OKM.has(r.s), tf: r => !!r.any, pf: r => r.plow || r.pu || r.pneg }[sortK] || (r => r[sortK]);
   v.sort((a, b) => { const x = key(a), y = key(b); return (x > y ? 1 : x < y ? -1 : 0) * sortD; });
   $('count').textContent = `${v.length} of ${D.length} sets`;
-  $('sets').innerHTML = `<thead><tr class="grp"><th colspan="3"></th><th colspan="7">tree (Bayesian)</th><th colspan="6">profile scheme</th></tr><tr>${cols.map(([k, l, n]) =>
+  $('okn').textContent = okText();
+  $('sets').innerHTML = `<thead><tr class="grp"><th colspan="${BLIND ? 3 : 5}"></th><th colspan="${BLIND ? 7 : 8}">tree (Bayesian)</th><th colspan="${BLIND ? 6 : 7}">profile scheme</th></tr><tr>${cols.map(([k, l, n]) =>
     `<th data-k="${k}" class="${n ? 'n' : ''}">${l}${sortK === k ? (sortD > 0 ? ' ▲' : ' ▼') : ''}</th>`).join('')}</tr></thead><tbody>` +
-    v.map(r => { const lt = r.tc === 'r_detection' && r.rt < 3, lp = r.pc === 'r_detection' && r.rt < 3;
+    v.map(r => { const lt = !BLIND && r.tc === 'r_detection' && r.rt < 3, lp = !BLIND && r.pc === 'r_detection' && r.rt < 3;
       const w = r.tw || r.pw, bt = r.tw ? ' badc' : (lt ? ' lowc' : ''), bp = r.pw ? ' badc' : (lp ? ' lowc' : '');
       const ba = w ? ' badc' : (lt || lp ? ' lowc' : '');
-      return `<tr data-s="${r.s}"><td class="id${ba}">${r.s.replace('set_', '')}</td><td class="${ba}">${r.sky}</td><td class="n${ba}">${r.rt.toFixed(1)}</td>
-      <td>${mx(r.tmx)}</td><td class="${bt}">${cv(r.tc, r.tw)}</td><td class="n${bt}">${rv(r.tc, r.tr, r.tlo, r.thi, r.t95)}</td><td class="n">${r.tb.toFixed(1)}</td><td class="n">${pv(r.tp)}</td><td class="n">${r.tpte.toFixed(3)}</td><td>${tflags(r)}</td>
-      <td>${mx(r.pmx)}</td><td class="${bp}">${cv(r.pc, r.pw)}</td><td class="n${bp}">${rv(r.pc, r.pr, r.plo, r.phi, r.p95)}</td><td class="n">${r.pb.toFixed(1)}</td><td class="n">${pv(r.pp)}</td><td>${pflags(r)}</td></tr>`; }).join('') + '</tbody>';
+      return `<tr data-s="${r.s}"><td class="id${ba}">${r.s.replace('set_', '')}<span class="nt" title="has my comment"${NOTES[r.s] ? '' : ' hidden'}>✎</span></td>${REVIEW ? `<td class="okc">${okmark(OK.has(r.s))}</td><td class="okc">${okmark(OKM.has(r.s))}</td>` : `<td class="okc"><input type="checkbox" data-ok="${r.s}" ${OK.has(r.s) ? 'checked' : ''} title="I trust the conclusion" aria-label="conclusion of ${r.s} trusted"></td><td class="okc"><input type="checkbox" data-okm="${r.s}" ${OKM.has(r.s) ? 'checked' : ''} title="I trust the model" aria-label="model of ${r.s} trusted"></td>`}${BLIND ? '' : `<td class="${ba}">${r.sky}</td><td class="n${ba}">${r.rt.toFixed(1)}</td>`}
+      <td>${mx(r.tmx)}</td><td class="${bt}">${cv(r.tc, r.tw)}</td><td class="n${bt}">${rv(r.tc, r.tr, r.tlo, r.thi, r.t95)}</td><td class="n">${r.tb.toFixed(1)}</td><td class="n">${zs(r.tz)}</td>${BLIND ? '' : `<td class="n">${pv(r.tp)}</td>`}<td class="n">${r.tpte.toFixed(3)}</td><td>${tflags(r)}</td>
+      <td>${mx(r.pmx)}</td><td class="${bp}">${cv(r.pc, r.pw)}</td><td class="n${bp}">${rv(r.pc, r.pr, r.plo, r.phi, r.p95)}</td><td class="n">${r.pb.toFixed(1)}</td><td class="n">${zs(r.pz)}</td>${BLIND ? '' : `<td class="n">${pv(r.pp)}</td>`}<td>${pflags(r)}</td></tr>`; }).join('') + '</tbody>';
 }
 const FAM = { d: 'first order in β<sub>d</sub>', s: 'first order in β<sub>s</sub>', dT: 'first order in T<sub>d</sub>',
   d2: 'second order in β<sub>d</sub>', s2: 'second order in β<sub>s</sub>', ds1: 'dust × synchrotron, first order',
   ds2: 'dust × synchrotron, β<sub>d</sub> × β<sub>s</sub>' };
 const KINDL = { mom: 'Adding a moment (r free in both models)', r0: 'Moments instead of r (model with r = 0 against M₀,r)',
   cut: 'Removing an undetected spectrum (pruning)' };
-const lnb = (b, e, a) => b == null ? '<span class="ul">not fitted</span>' : `${b.toFixed(2)} ± ${e.toFixed(2)} <span class="${a === 'Yes' ? 'yes' : 'ul'}">${a === 'Yes' ? 'preferred' : 'not preferred'}</span>`;
+const lnb = (b, e, a) => b == null ? '<span class="ul">not fitted</span>' : `${b.toFixed(2)}${e == null || isNaN(e) ? ' (ML estimate)' : ' ± ' + e.toFixed(2)} <span class="${a === 'Yes' ? 'yes' : 'ul'}">${a === 'Yes' ? 'preferred' : 'not preferred'}</span>`;
 function r0tab(R, r) {
   if (!R.length) return 'no model with r = 0 was fitted';
   const k = R.findIndex(q => q.a0 === 'Yes');
@@ -326,26 +458,36 @@ function r0tab(R, r) {
     : `<div><b>M₁,₀ preferred over M₀,r: no</b>: no model with r = 0 beat M₀,r = ${mx(R[0].base)}.</div>`;
   return head + `<div class="scroll r0t"><table><thead><tr><th>round</th><th>spectra added to M₀,r</th><th class="n">M₁,r vs M₀,r: ln B</th><th class="n">M₁,₀ (r = 0) vs M₀,r: ln B</th></tr></thead><tbody>` +
     R.map((q, i) => `<tr class="${i === k ? 'pick' : ''}"><td>${i + 1}</td><td>${mx(q.add)}</td><td class="n">${lnb(q.br, q.er, q.ar)}</td><td class="n">${lnb(q.b0, q.e0, q.a0)}</td></tr>`).join('') +
-    '</tbody></table></div><div class="ul">each round adds the families detected in the residuals of the previous model with r = 0; the search stops at the first M₁,₀ preferred over M₀,r (threshold ln B = 0)</div>';
+    '</tbody></table></div><div class="ul">each round adds the spectra detected in the residuals of the previous model with r = 0; the search stops at the first M₁,₀ preferred over M₀,r (threshold ln B = 0)</div>';
 }
+const rpair = c => (c.rc || c.ro) ? `<div class="ul" style="margin-left:22px">r [10⁻³]: kept ${c.rc ?? '–'}, other ${c.ro ?? '–'}</div>` : '';
 const r0txt = (m, z) => mx(m) + (z ? ' <span class="ul">(r = 0)</span>' : '');
 function detail(r) {
   const x = r.x, items = [];
+  if (REVIEW) items.push(['Comment of the review', NOTES[r.s] ? `<div class="notefix">${esc(NOTES[r.s].trim())}</div>` : '<span class="ul">none</span>']);
+  else items.push(['My comment', `<textarea class="note" data-note="${r.s}" placeholder="write a comment on this set (saved in this browser, exported with the check boxes)">${esc(NOTES[r.s] || '')}</textarea>`]);
   let s;
   if (x.r0 === 'early') s = 'not reached: r is compatible with 0 at 1σ, the tree gives the upper limit straight away';
   else if (x.r0 === 'none') s = 'not reached';
-  else if (x.r0 === 'nothing') s = 'no moment family detected in the residuals with r = 0';
+  else if (x.r0 === 'nothing') s = 'no moment spectrum detected in the residuals with r = 0';
   else s = r0tab(x.rounds, r);
   items.push(['Search with r = 0 (Res<sub>r0</sub>)', s]);
   items.push(['Profile scheme', x.cands.length ? `models compared: M₀,r and M₀,r + ${x.cands.map(c => `<b>${c}</b>`).join(', ')}` :
     'no candidates: only the profile of the tree model']);
-  const u = x.und.map(c => `<div><span class="chip c-und">≈</span>${KINDL[c.k] || c.k}: kept ${r0txt(c.c, c.c0)} over ${r0txt(c.o, c.o0)}, ln B = ${c.b.toFixed(2)} ± ${c.e.toFixed(2)}</div>`)
-    .concat(x.pund.map(c => `<div><span class="chip c-und">≈</span>Profile scheme, best model: ${mx(c.c)} beat ${mx(c.o)}, ln B = ${c.b.toFixed(2)} ± ${c.e.toFixed(2)}</div>`));
+  const u = x.und.map(c => `<div><span class="chip c-und">≈</span>${KINDL[c.k] || c.k}: kept ${r0txt(c.c, c.c0)} over ${r0txt(c.o, c.o0)}, ln B = ${c.n > 1 ? `${c.bmin.toFixed(2)} … ${c.bmax.toFixed(2)} (met ${c.n} times)` : `${c.b.toFixed(2)} ± ${c.e.toFixed(2)}`}${c.prof ? '; the same choice also in the profile scheme' : ''}${rpair(c)}</div>`)
+    .concat(x.pund.map(c => `<div><span class="chip c-und">≈</span>Profile scheme, best model: ${mx(c.c)} beat ${mx(c.o)}, ln B = ${c.b.toFixed(2)} ± ${c.e.toFixed(2)}${rpair(c)}</div>`));
   items.push(['Borderline decisions (≈)', u.length ? u.join('') + '<div class="ul">|ln B − threshold| &lt; 1 (inconclusive on the Jeffreys scale), or within 2σ of the threshold even after repeating the evidence run with other seeds: the choice could have gone the other way</div>' : 'none']);
   const pt = (v, l) => `${l} <span class="${v < PTE_FLAG ? 'p2' : ''}">${v.toFixed(3)}</span>`;
-  const GR = { '✓✓': 'preferred by a lot', '✓': 'preferred by a little', '✗': 'not preferred, by a little', '': 'not preferred' };
+  const GR = { '✓✓': 'preferred by a lot', '✓': 'preferred by a little', '✗': 'not preferred, by a little', '✗✗': 'not preferred, by a lot', '': 'not preferred' };
   if (x.r0c && x.r0c.length) items.push(['Models with r = 0 (r=0 flag)', x.r0c.map(c => `<div>${c.g ? `<span class="chip c-m10">r=0 ${c.g}</span>` : ''}${c.w === 'M₀,₀' ? 'final model with r = 0, M₀,₀' : 'M₁,₀ of Res<sub>r0</sub>'} = ${mx(c.m) || 'no moments'}: ln B(r = 0 vs M₀,r) = ${c.x.toFixed(2)} ± ${c.e.toFixed(2)}, ${GR[c.g]}</div>`).join('') +
     '<div class="ul">by a lot / by a little: |ln B| above / below 1. M₁,₀ preferred stops the Bayesian search (3σ test on M₀,r); M₀,₀ is only reported</div>']);
+  if (x.p0) {
+    const st = x.p0.steps.map(q => `<div>${q.h}: ${mx(q.q)} → <span class="${q.a === 'Yes' ? 'yes' : 'ul'}">${q.a === 'Yes' ? 'kept' : 'not kept'}</span> (ln B = ${q.b.toFixed(2)}${q.ml ? ', ML estimate' : ''})</div>`).join('');
+    items.push(['Phase 0 (p0 flag)', (x.p0.extra.length ? `<div><span class="chip c-p0">p0</span>keeps ${x.p0.extra.map(mx).join(', ')}, not in the final model</div>` : '<div>nothing that is not already in the final model</div>') +
+      `<div>model of the phase 0: ${mx(x.p0.start) || 'no moments'}</div>` + st +
+      '<div class="ul">synchrotron moments searched on LF+MF (27, 39, 93, 145 GHz), dust moments on MF+UHF (93, 145, 225, 280 GHz), r free, first order only, one spectrum at a time, kept if ln B &gt; 0; only reported, it does not change the result</div>']);
+  }
+  if (r.tneg || r.pneg) items.push(['r below zero (r&lt;0 flag)', `<span class="chip c-neg">r&lt;0</span>r / σ = ${(r.tr / r.ts).toFixed(2)} (tree), ${(r.pr / r.ps).toFixed(2)} (profile scheme): below −1.5, probably a moment subtracting too much`]);
   items.push(['Goodness of fit', `PTE of the final model: ${pt(r.tpte, 'tree')}, ${pt(r.ppte, 'profile scheme')}`]);
   const nv = (v, n) => v == null ? '<span class="ul">–</span>' : (Math.abs(v) >= 100 ? v.toFixed(1) : Math.abs(v) >= 1 ? v.toFixed(3) : Math.abs(v) >= 1e-3 ? v.toPrecision(3) : v.toExponential(2));
   const ms = (m, lo, hi) => m == null ? '<span class="ul">–</span>' : lo == null ? nv(m) : ae(m, lo, hi, nv);
@@ -359,12 +501,15 @@ function detail(r) {
     <img data-lb src="${img}" loading="lazy" alt="decision path of ${r.s}">
     <div class="ul">click the image to zoom (scroll or drag to move, + / − to zoom, Esc to close)</div></details>`]);
   const cimg = `corners/${r.s}.png?v=${BUILD}`;
-  items.push(['Corner plot', `<details class="path"><summary>show the corner plot (blue: evidence run (nautilus) of the tree model; orange: profile scheme, emcee at r = r*, r from the profile)</summary>
+  if (!BLIND) items.push(['Corner plot', `<details class="path"><summary>show the corner plot (blue: evidence run (nautilus) of the tree model; orange: profile scheme, emcee at r = r*, r from the profile)</summary>
     <img data-lb src="${cimg}" loading="lazy" alt="corner plot of ${r.s}">
     <div class="ul">black line: true r; dashed orange: r = r*; contours 68% and 95%. Click the image to zoom</div></details>`]);
   return `<dl class="dl">${items.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('')}</dl>`;
 }
 $('sets').addEventListener('click', e => {
+  const cb = e.target.closest('input[data-ok], input[data-okm]');
+  if (cb) { const S = cb.dataset.ok ? OK : OKM, k = cb.dataset.ok || cb.dataset.okm;
+    cb.checked ? S.add(k) : S.delete(k); saveOK(); $('okn').textContent = okText(); myPlots(); return; }
   const th = e.target.closest('th[data-k]');
   if (th) { const k = th.dataset.k; sortD = sortK === k ? -sortD : 1; sortK = k; render(); return; }
   const tr = e.target.closest('tr[data-s]'); if (!tr) return;
@@ -374,7 +519,95 @@ $('sets').addEventListener('click', e => {
   d.innerHTML = `<td colspan="${cols.length}">${detail(r)}</td>`; tr.after(d);
 });
 ['fsky', 'fflag', 'fq'].forEach(id => $(id).addEventListener('input', render));
+$('sets').addEventListener('input', e => {
+  const ta = e.target.closest('textarea[data-note]'); if (!ta) return;
+  const v = ta.value.trim();
+  if (v) NOTES[ta.dataset.note] = ta.value; else delete NOTES[ta.dataset.note];
+  saveNotes();
+  const m = document.querySelector(`tr[data-s="${ta.dataset.note}"] .nt`); if (m) m.hidden = !v;
+});
+$('okx').addEventListener('click', () => {
+  const t = 'set,conclusion_trusted,model_trusted,comment\n' + D.map(r => `${r.s},${OK.has(r.s) ? 1 : 0},${OKM.has(r.s) ? 1 : 0},${csvq(NOTES[r.s] || '')}`).join('\n') + '\n';
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([t], { type: 'text/csv' }));
+  a.download = 'review_' + document.title.replace(/\W+/g, '_') + '.csv'; a.click(); URL.revokeObjectURL(a.href);
+});
+$('oki').addEventListener('change', async e => {
+  const f = e.target.files[0]; if (!f) return;
+  const all = csvparse(await f.text()), h = all[0].map(x => x.trim()), rows = all.slice(1).filter(x => x[0]);
+  // columns by name (also the older export: set,solid,comment)
+  const col = n => h.indexOf(n), ic = col('conclusion_trusted') >= 0 ? col('conclusion_trusted') : col('solid'),
+    im = col('model_trusted'), in_ = col('comment');
+  const on = (x, i) => i >= 0 && (x[i] || '').trim() === '1';
+  OK = new Set(rows.filter(x => on(x, ic)).map(x => x[0].trim()));
+  OKM = new Set(rows.filter(x => on(x, im)).map(x => x[0].trim()));
+  NOTES = {}; rows.forEach(x => { if (in_ >= 0 && x[in_] && x[in_].trim()) NOTES[x[0].trim()] = x[in_]; });
+  saveOK(); saveNotes(); render(); myPlots(); e.target.value = '';
+});
 render();
+
+// plots with the check boxes: red band, conclusion not trusted; yellow band,
+// conclusion trusted but model not; drawn here so they follow the boxes
+const BANDC = r => !OK.has(r.s) ? 'rgba(220,40,50,0.30)' : !OKM.has(r.s) ? 'rgba(242,201,76,0.45)' : null;
+const R0C = { '✓✓': '#2c5f8e', '✓': '#86afd6', '✗': '#f1a7c5', '✗✗': '#c42a6e' };
+function frame(rows, ymin, ymax, title, sub, xlab, xof) {
+  const W = 1400, H = 400, L = 62, Rm = 14, T = 46, B = 46, n = rows.length;
+  const X = j => L + (j + 0.5) * (W - L - Rm) / n, dx = (W - L - Rm) / n;
+  const Y = v => T + (ymax - v) / (ymax - ymin) * (H - T - B);
+  let g = '';
+  rows.forEach((r, j) => { const c = BANDC(r); if (c) g += `<rect x="${X(j) - dx / 2}" y="${T}" width="${dx}" height="${H - T - B}" fill="${c}"/>`; });
+  const step = (ymax - ymin) > 30 ? 10 : 5;
+  for (let v = Math.ceil(ymin / step) * step; v <= ymax; v += step)
+    g += `<line class="gr" x1="${L}" x2="${W - Rm}" y1="${Y(v)}" y2="${Y(v)}" stroke-width="${v === 0 ? 1.2 : 0.6}"/><text x="${L - 8}" y="${Y(v) + 4}" font-size="12" text-anchor="end">${v}</text>`;
+  g += `<line class="ax" x1="${L}" x2="${W - Rm}" y1="${H - B}" y2="${H - B}"/>`;
+  rows.forEach((r, j) => { const t = xof(r, j); if (t != null) g += `<text x="${X(j)}" y="${H - B + 16}" font-size="11" text-anchor="middle">${t}</text>`; });
+  g += `<text x="${L}" y="22" font-size="15" font-weight="600">${title}</text><text x="${L}" y="38" font-size="12" opacity=".7">${sub}</text>`;
+  g += `<text x="${(L + W) / 2}" y="${H - 8}" font-size="12" text-anchor="middle">${xlab}</text>`;
+  g += `<text x="16" y="${(T + H - B) / 2}" font-size="12" text-anchor="middle" transform="rotate(-90 16 ${(T + H - B) / 2})">r × 10³</text>`;
+  return { g, X, Y, W, H };
+}
+function plotSets(rows, p, label) {
+  // r set by set: median and 68% interval (detection filled, upper limit open), r95 bar with arrow
+  const v = rows.map(r => [r[p + 'lo'], r[p + 'hi'], r[p + '95']]).flat().filter(x => x != null);
+  const f = frame(rows, Math.floor(Math.min(0, ...v) - 1), Math.ceil(Math.max(...v) + 1), `r set by set, ${label}`,
+    `${rows.filter(r => r[p + 'c'] === 'r_detection').length} detections, ${rows.filter(r => r[p + 'c'] === 'upper_limit').length} upper limits; blue: detection, median and 68% interval; orange: upper limit (open), r95 bar`,
+    'set', r => r.i % 10 === 0 ? r.i : null);
+  let g = f.g;
+  rows.forEach((r, j) => {
+    const x = f.X(j), det = r[p + 'c'] === 'r_detection', col = det ? '#2a6fdb' : '#d9822b';
+    g += `<line x1="${x}" x2="${x}" y1="${f.Y(r[p + 'lo'])}" y2="${f.Y(r[p + 'hi'])}" stroke="${col}" stroke-width="1.8"/>`;
+    g += `<circle cx="${x}" cy="${f.Y(r[p + 'r'])}" r="3.8" fill="${det ? col : 'var(--surface)'}" stroke="${col}" stroke-width="1.5"><title>${r.s}</title></circle>`;
+    if (!det && r[p + '95'] != null) { const y = f.Y(r[p + '95']);
+      g += `<line x1="${x - 5}" x2="${x + 5}" y1="${y}" y2="${y}" stroke="${col}" stroke-width="2.4"/><path d="M${x - 3},${y + 4} L${x + 3},${y + 4} L${x},${y + 9} Z" fill="${col}"/>`; }
+  });
+  return `<svg viewBox="0 0 ${f.W} ${f.H}" role="img" aria-label="r set by set, ${label}">${g}</svg>`;
+}
+function plotR0(rows) {
+  // sets in increasing r* (profile scheme), 68% interval, colour = r=0 flag, circle detection / triangle upper limit
+  const d = rows.slice().sort((a, b) => a.pb - b.pb || a.i - b.i);
+  const v = d.map(r => [r.plo, r.phi]).flat();
+  const f = frame(d, Math.floor(Math.min(0, ...v) - 1), Math.ceil(Math.max(...v) + 5), 'r = 0 flag',
+    'best fit r* of the model of the profile scheme and its 68% interval, set number above; blue ✓✓ / light blue ✓: r = 0 preferred, pink ✗ / raspberry ✗✗: not preferred; circle: detection, triangle: upper limit',
+    'sets, in increasing estimated r', (r, j) => j % 10 === 0 ? j : null);
+  let g = f.g;
+  d.forEach((r, j) => {
+    const x = f.X(j), c = R0C[r.r0g] || '#999', y = f.Y(r.pb);
+    g += `<line x1="${x}" x2="${x}" y1="${f.Y(r.plo)}" y2="${f.Y(r.phi)}" stroke="${c}" stroke-width="2" opacity=".85"/>`;
+    g += r.pc === 'r_detection' ? `<circle cx="${x}" cy="${y}" r="5" fill="${c}" stroke="#4a4a4a" stroke-width=".8"><title>${r.s}</title></circle>`
+      : `<path d="M${x - 5.5},${y - 4} L${x + 5.5},${y - 4} L${x},${y + 5.5} Z" fill="${c}" stroke="#4a4a4a" stroke-width=".8"><title>${r.s}</title></path>`;
+    const yt = f.Y(r.phi) - 4;
+    g += `<text x="${x + 3}" y="${yt}" font-size="9" transform="rotate(-90 ${x + 3} ${yt})">${String(r.i).padStart(3, '0')}</text>`;
+  });
+  return `<svg viewBox="0 0 ${f.W} ${f.H}" role="img" aria-label="r = 0 flag plot">${g}</svg>`;
+}
+function myPlots() {
+  const kinds = [...new Set(D.map(r => r.k))];
+  $('myplots').innerHTML = kinds.map(k => { const rows = D.filter(r => r.k === k).sort((a, b) => a.i - b.i);
+    const tag = kinds.length > 1 ? ` (${k})` : '';
+    return plotR0(rows) + plotSets(rows, 'p', 'profile scheme' + tag) + plotSets(rows, 't', 'Bayesian tree' + tag); }).join('');
+}
+if (REVIEW) { $('okx').remove(); $('oki').closest('label').remove(); }
+if ($('myplots')) myPlots();
 
 // image viewer
 (() => {
@@ -428,12 +661,13 @@ document.querySelectorAll('span.tex').forEach(e => { e.innerHTML = mx(e.textCont
     ['detections / upper limits', g => `${G[g].t.n_det} / ${G[g].t.n_ul} → <b>${G[g].p.n_det} / ${G[g].p.n_ul}</b>`],
     ['conclusion changed by the profile', g => `${G[g].concl_changed}`],
     ['foreground model changed by the profile', g => `${G[g].model_changed}`],
-  ];
-  $('sumres').innerHTML = `<thead><tr><th>metric</th><th class="n">d9s4 (${G.d9s4.n})</th><th class="n">random (${G.rand.n})</th></tr></thead><tbody>` +
-    rows.map(([l, f]) => `<tr><td>${l}</td><td class="n">${f('d9s4')}</td><td class="n">${f('rand')}</td></tr>`).join('') + '</tbody>';
+  ].filter(([l]) => !BLIND || ['detections / upper limits', 'conclusion changed by the profile', 'foreground model changed by the profile'].includes(l));
+  const GN = [['d9s4', 'd9s4'], ['rand', 'random']].filter(([g]) => G[g]);
+  $('sumres').innerHTML = `<thead><tr><th>metric</th>${GN.map(([g, n]) => `<th class="n">${n} (${G[g].n})</th>`).join('')}</tr></thead><tbody>` +
+    rows.map(([l, f]) => `<tr><td>${l}</td>${GN.map(([g]) => `<td class="n">${f(g)}</td>`).join('')}</tr>`).join('') + '</tbody>';
   const bins = ['&lt; 0.01', '0.01–0.05', '0.05–0.2', '0.2–0.6', '0.6–1'];
   const gl = [['expected', [1, 4, 15, 40, 40], '1.000']];
-  for (const [g, n] of [['d9s4', 'd9s4'], ['rand', 'random']]) for (const [k, kn] of [['t', 'tree'], ['p', 'profile']])
+  for (const [g, n] of GN) for (const [k, kn] of [['t', 'tree'], ['p', 'profile']])
     gl.push([`${n}, ${kn}`, G[g][k].pte_bins, G[g][k].chi2_red.toFixed(3)]);
   $('sumgof').innerHTML = `<thead><tr><th>PTE</th>${bins.map(b => `<th class="n">${b}</th>`).join('')}<th class="n">mean χ²/dof</th></tr></thead><tbody>` +
     gl.map(([l, b, c]) => `<tr><td>${l}</td>${b.map(x => `<td class="n">${x}</td>`).join('')}<td class="n">${c}</td></tr>`).join('') + '</tbody>';
@@ -448,7 +682,7 @@ document.querySelectorAll('span.tex').forEach(e => { e.innerHTML = mx(e.textCont
       `<tr><td><b>random</b></td><td class="n" colspan="3">${c(D.filter(r => r.k !== 'd9s4').map(r => r[key]))}</td></tr>` +
       `<tr><td><b>all</b></td><td class="n" colspan="3">${c(D.map(r => r[key]))}</td></tr></tbody>`;
   };
-  pgrid('pullt', 'tp'); pgrid('pullp', 'pp');
+  if (!BLIND) { pgrid('pullt', 'tp'); pgrid('pullp', 'pp'); }
   if (false) { const cell = s => { const a = P.p.grid[s], b = P.t.grid[s]; return a ? `<div>${sg(a.m)}${a.e != null ? ` <span class="ul">± ${a.e.toFixed(2)}</span>` : ''}</div><div class="ul pc">tree ${sg(b.m)} · ${a.n} pairs</div>` : '—'; };
   $('sumpair').innerHTML = `<thead><tr><th>dust \\ synch</th><th class="n">s4</th><th class="n">s5</th><th class="n">s7</th></tr></thead><tbody>` +
     ['d9', 'd10', 'd12'].map(dd => `<tr><td><b>${dd}</b></td>${['s4', 's5', 's7'].map(ss => `<td class="n">${dd + ss === 'd9s4' ? '—' : cell(dd + ss)}</td>`).join('')}</tr>`).join('') +
