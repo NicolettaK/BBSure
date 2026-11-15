@@ -13,6 +13,10 @@
 #                  phase 0, analysis B in <TREE_DIR>_p0 if it finds more);
 #                  with an existing TREE_DIR the fits of A are reused. Done
 #                  when <TREE_DIR>/.phase0_done exists.
+#                  check: phase 0 as a flag only (run_tree.py --phase0
+#                  --no-b): no analysis B.
+# Blind plan (make_plan.py --blind-sky, sky_rand 'hidden'): the sky is read
+# from truth/sky.csv and never written in the log.
 set -euo pipefail
 
 ROOT="$1"; I="$2"; KIND="$3"
@@ -63,10 +67,16 @@ read -r SEED SKY_RAND < <(tr -d '\r' < "${ROOT}/plan/sets.csv" | \
                           awk -F, -v i="$I" '$1 == i {print $2, $3}')
 R=$(tr -d '\r' < "${ROOT}/truth/r_true.csv" | \
     awk -F, -v i="$I" '$1 == i {print $2}')
+SKY_LOG="$SKY_RAND"
+if [[ "$SKY_RAND" == hidden ]]; then
+    SKY_RAND=$(tr -d '\r' < "${ROOT}/truth/sky.csv" | \
+               awk -F, -v i="$I" '$1 == i {print $2}')
+fi
 SKY=$([[ "$KIND" == d9s4 ]] && echo d9s4 || echo "$SKY_RAND")
+[[ "$KIND" == d9s4 ]] && SKY_LOG=d9s4
 
 {
-echo "==> ${NAME}${SFX}: sky ${SKY}, seed ${SEED}, template ${TEMPLATE}, started $(date '+%F %T')"
+echo "==> ${NAME}${SFX}: sky ${SKY_LOG}, seed ${SEED}, template ${TEMPLATE}, started $(date '+%F %T')"
 # spectra made elsewhere (e.g. on a laptop) and copied gzipped
 for f in cells_coadded cells_noise; do
     if [[ ! -f "${RUN}/output/${f}.fits" && -f "${RUN}/output/${f}.fits.gz" ]]; then
@@ -108,6 +118,9 @@ sed -e "s#@REPO@#${REPO}#g" -e "s#@DATA@#${DATA}#g" -e "s#@RUN@#${RUN}#g" \
 if [[ "$P0" == 1 ]]; then
     python "${REPO}/scripts/run_tree.py" --config "${RUN}/tree_config${SFX}.yml" \
         --phase0 && touch "$DONE"
+elif [[ "$P0" == check ]]; then
+    python "${REPO}/scripts/run_tree.py" --config "${RUN}/tree_config${SFX}.yml" \
+        --phase0 --no-b
 else
     python "${REPO}/scripts/run_tree.py" --config "${RUN}/tree_config${SFX}.yml"
 fi

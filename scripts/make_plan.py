@@ -8,10 +8,14 @@ Each realization has its own r:
     default, as in the first validations).
 Each realization is analysed twice: with d9s4 and with a PySM sky chosen at
 random among d9/d10/d12 x s4/s5/s7 (d9s4 excluded).
+Blind run (--blind-sky): the random sky is drawn among all the 9 skies,
+d9s4 included, and it is written in truth/sky.csv, not in the plan (the
+column sky_rand of the plan says 'hidden'); run it with KINDS=rand only.
 
 Writes:
   plan/sets.csv     index, seed, sky_rand        (can be looked at)
   truth/r_true.csv  index, r                     (do NOT open until the end)
+  truth/sky.csv     index, sky                   (--blind-sky only; same)
 
 Usage: python scripts/make_plan.py <root> [--seed0 7000] [--rng-seed 20261024]
                                          [--r-min 1e-3]
@@ -22,6 +26,8 @@ Usage: python scripts/make_plan.py <root> [--seed0 7000] [--rng-seed 20261024]
   --r-min     lower edge of the log-uniform r (same rng sequence: with the
               same rng-seed only the values of r change, not the r = 0 sets
               nor the skies)
+  --blind-sky random sky among all the 9 skies (d9s4 included), kept in
+              truth/sky.csv
 """
 import argparse
 import csv
@@ -39,7 +45,10 @@ ap.add_argument('root')
 ap.add_argument('--seed0', type=int, default=7000)
 ap.add_argument('--rng-seed', type=int, default=20261024)
 ap.add_argument('--r-min', type=float, default=R_MIN)
+ap.add_argument('--blind-sky', action='store_true')
 a = ap.parse_args()
+if a.blind_sky:
+    SKIES = [f'{d}{s}' for d in ('d9', 'd10', 'd12') for s in ('s4', 's5', 's7')]
 root, SEED0, R_MIN = a.root, a.seed0, a.r_min
 rng = np.random.default_rng(a.rng_seed)
 r = 10 ** rng.uniform(np.log10(R_MIN), np.log10(R_MAX), N)
@@ -54,7 +63,13 @@ with open(os.path.join(root, 'plan', 'sets.csv'), 'w', newline='') as f:
     w = csv.writer(f, lineterminator='\n')
     w.writerow(['index', 'seed', 'sky_rand'])
     for i in range(N):
-        w.writerow([i, SEED0 + i, sky[i]])
+        w.writerow([i, SEED0 + i, 'hidden' if a.blind_sky else sky[i]])
+if a.blind_sky:
+    with open(os.path.join(root, 'truth', 'sky.csv'), 'w', newline='') as f:
+        w = csv.writer(f, lineterminator='\n')
+        w.writerow(['index', 'sky'])
+        for i in range(N):
+            w.writerow([i, sky[i]])
 with open(os.path.join(root, 'truth', 'r_true.csv'), 'w', newline='') as f:
     w = csv.writer(f, lineterminator='\n')
     w.writerow(['index', 'r'])
@@ -63,5 +78,6 @@ with open(os.path.join(root, 'truth', 'r_true.csv'), 'w', newline='') as f:
 print(f"written plan/sets.csv and truth/r_true.csv ({N} sets, seeds "
       f"{SEED0}-{SEED0 + N - 1}, "
       f"{N_R0} with r = 0, the others log-uniform in [{R_MIN:g}, {R_MAX:g}]); "
-      f"random skies: "
-      + ', '.join(f'{s} x{int((sky == s).sum())}' for s in SKIES))
+      + ("random skies among " + ', '.join(SKIES) + " in truth/sky.csv "
+         "(hidden)" if a.blind_sky else "random skies: "
+         + ', '.join(f'{s} x{int((sky == s).sum())}' for s in SKIES)))

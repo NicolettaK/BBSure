@@ -13,6 +13,8 @@
 #   sbatch -A <project> --export=ALL,TREE_TEMPLATE=<config>,TREE_DIR=tree_v2 <repo>/nersc/job_validation.slurm 0 99
 # Phase 0 check after the analysis (fits of an existing TREE_DIR reused):
 #   sbatch -A <project> --export=ALL,TREE_DIR=tree_v2,TREE_PHASE0=1 <repo>/nersc/job_validation.slurm 0 99
+# Blind run (make_plan.py --blind-sky), phase 0 only as a flag:
+#   sbatch -A <project> --export=ALL,KINDS=rand,TREE_PHASE0=check <repo>/nersc/job_validation.slurm 0 99
 #SBATCH -C cpu
 #SBATCH -q regular
 #SBATCH -N 1

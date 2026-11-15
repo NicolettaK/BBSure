@@ -12,6 +12,9 @@ profile scheme) starts from the model of the phase 0 alone, in
 <runs_dir>_p0. A stays the main result; conclusion.json gets a 'phase0'
 block with B (model, r, conclusion) and the flags model_differs /
 conclusion_changed.
+--phase0 --no-b: the phase 0 only as a check (flag): no analysis B, the
+'phase0' block of conclusion.json has the groups it keeps that are not in
+the final model (extra_groups).
 
 Output in paths: runs_dir: decision_log.{txt,json}, conclusion.json (and
 conclusion_tree.json + profile/ with the profile scheme), one directory per
@@ -39,6 +42,9 @@ def main():
     ap.add_argument('--phase0', action='store_true',
                     help='frequency-split screening after the analysis; '
                          'second analysis from its model if it finds more')
+    ap.add_argument('--no-b', action='store_true',
+                    help='with --phase0: no second analysis, the phase 0 '
+                         'is only a flag')
     args = ap.parse_args()
 
     tc = yaml.safe_load(open(args.config))
@@ -47,26 +53,28 @@ def main():
     log = DecisionLog(runs_dir)
     final = analyse(tc, args.config, runs_dir, log)
     if args.phase0 or (tc.get('phase0') or {}).get('enabled', False):
-        final['phase0'] = phase0_check(tc, args.config, runs_dir, log, final)
+        final['phase0'] = phase0_check(tc, args.config, runs_dir, log, final,
+                                       run_b=not args.no_b)
     # conclusion.json only at the very end (nersc/run_one.sh skips the sets
     # that have it)
     with open(os.path.join(runs_dir, 'conclusion.json'), 'w') as f:
         json.dump(final, f, indent=2, default=json_default)
 
 
-def phase0_check(tc, config, runs_dir, log, A):
+def phase0_check(tc, config, runs_dir, log, A, run_b=True):
     """Phase 0 after analysis A; analysis B from its model if it keeps a
-    group that is not in the final model of A. Returns the 'phase0' block
-    of conclusion.json."""
+    group that is not in the final model of A (and run_b). Returns the
+    'phase0' block of conclusion.json."""
     ph = Phase0(tc, log)
     S = ph.run()
     final_A = model_from_label(A['model'])
     extra = sorted(S.moments - final_A.moments)
-    out = dict(start=S.label, extra_groups=extra, run_b=bool(extra),
-               undecided=ph.undecided)
-    if not extra:
+    out = dict(start=S.label, extra_groups=extra,
+               run_b=bool(extra) and run_b, undecided=ph.undecided)
+    if not extra or not run_b:
         log.node('phase0_check', f'phase 0 ({S.label}): anything not in the '
-                 f"final model of the analysis ({A['model']})?", 'No')
+                 f"final model of the analysis ({A['model']})?",
+                 'Yes' if extra else 'No', **(dict(extra=extra) if extra else {}))
         return out
     log.node('phase0_check', f'phase 0 ({S.label}): anything not in the '
              f"final model of the analysis ({A['model']})?", 'Yes',
